@@ -34,3 +34,112 @@ html, body, #root {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
 }
+
+/* ─── CRM card flip ─────────────────────────────────────────────────────────── */
+
+.crm-card-scene {
+  perspective: 1200px;
+}
+
+.crm-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.4s ease-in-out;
+}
+
+.crm-card-inner.flipped {
+  transform: rotateY(180deg);
+}
+
+.crm-card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.crm-card-back {
+  transform: rotateY(180deg);
+}
+
+/* ─── context menu entrance ─────────────────────────────────────────────────── */
+
+@keyframes ctx-scale-in {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* r=22, circumference ≈ 138.23 */
+@keyframes ring-deplete {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: 138.23; }
+}
+
+@keyframes slide-out-left {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(-48px); opacity: 0; }
+}
+
+/* ─── form selects ───────────────────────────────────────────────────────────── */
+
+select option {
+  background: #1e1e1b;
+  color: #e8e6df;
+}
+
+.dev-brief-textarea::placeholder {
+  color: #7a786f;
+  opacity: 1;
+}
+
+/* ─── responsive layout ──────────────────────────────────────────────────────── */
+
+.mobile-header { display: none; }
+.bottom-nav-bar { display: none; }
+
+.page-content {
+  padding: 32px 32px 80px;
+}
+
+@media (max-width: 767px) {
+  .app-outer {
+    flex-direction: column !important;
+  }
+
+  .sidebar {
+    display: none !important;
+  }
+
+  .mobile-header {
+    display: flex;
+    height: 52px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--surface2);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .bottom-nav-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: 60px;
+    background: var(--surface);
+    border-top: 1px solid var(--surface2);
+    align-items: stretch;
+    justify-content: space-around;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .page-content {
+    padding: 24px 16px 80px;
+  }
+}

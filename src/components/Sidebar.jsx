@@ -6,15 +6,15 @@ const NAV_ITEMS = [
   { label: 'CRM',                path: '/crm' },
   { label: 'Project Wall',       path: '/projects' },
   { label: 'Consultation',       path: '/consultation' },
-  { label: 'Client Database',    path: '/clients' },
   { label: 'Session Prep',       path: '/session-prep' },
   { label: 'Finances',           path: '/finances' },
+  { label: 'Dev Queue',          path: '/dev-queue' },
   { label: 'Settings',           path: '/settings' },
 ]
 
 export default function Sidebar() {
   return (
-    <aside style={{
+    <aside className="sidebar" style={{
       width: '220px',
       flexShrink: 0,
       background: 'var(--surface)',
@@ -37,8 +37,20 @@ export default function Sidebar() {
           fontWeight: 700,
           letterSpacing: '0.08em',
           color: 'var(--gold)',
+          display: 'block',
+          marginBottom: '5px',
         }}>
           MACRI
+        </span>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '9px',
+          color: 'var(--muted)',
+          letterSpacing: '0.04em',
+          lineHeight: 1.5,
+          display: 'block',
+        }}>
+          Managing. Artist. Clients. Revenue. Intelligently.
         </span>
       </div>
 

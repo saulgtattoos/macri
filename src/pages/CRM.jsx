@@ -78,6 +78,7 @@ const TEMPLATES = {
 const MOVABLE_SECTIONS = [
   'clientStatus', 'projectDetails', 'pipelineStage',
   'journeyChecklist', 'aftercareChecklist', 'consultationLog', 'communications', 'activityNotes',
+  'paymentHistory',
 ]
 
 const SECTION_LABELS = {
@@ -89,6 +90,7 @@ const SECTION_LABELS = {
   consultationLog:    'Consultation Log',
   communications:     'Communications',
   activityNotes:      'Activity and Notes',
+  paymentHistory:     'Payment History',
 }
 
 // 10 sections for the card back jump menu
@@ -102,6 +104,7 @@ const ALL_JUMP_SECTIONS = [
   { id: 'consultationLog',    label: 'Consultation Log',          locked: false },
   { id: 'communications',     label: 'Communications',            locked: false },
   { id: 'activityNotes',      label: 'Activity and Notes',        locked: false },
+  { id: 'paymentHistory',     label: 'Payment History',           locked: false },
   { id: 'bottomActions',      label: 'Persistent Bottom Actions', locked: true },
 ]
 
@@ -119,8 +122,31 @@ export function mkClient(data = {}) {
     consultations:  [],
     activityLog:    [],
     communications: [],
+    sessions:       [],
     consultationCount: 0,
     createdAt: now, updatedAt: now,
+    ...data,
+  }
+}
+
+function mkSession(data = {}) {
+  return {
+    id:              crypto.randomUUID(),
+    date:            today(),
+    tattooDescription: '',
+    placement:       '',
+    isTouchUp:       false,
+    deposit:         '',
+    depositRefund:   '',
+    tattooPrice:     '',
+    amountPaid:      '',
+    tip:             '',
+    paymentMethod:   'Cash',
+    giftCardCode:    '',
+    discountCode:    '',
+    originalPrice:   '',
+    discountApplied: '',
+    notes:           '',
     ...data,
   }
 }
@@ -186,6 +212,13 @@ function loadSectionOrder() {
         const idx = stored.indexOf('activityNotes')
         const migrated = [...stored]
         migrated.splice(idx >= 0 ? idx : stored.length, 0, 'communications')
+        if (migrated.length === MOVABLE_SECTIONS.length && migrated.every(id => MOVABLE_SECTIONS.includes(id))) {
+          saveSectionOrder(migrated)
+          return migrated
+        }
+      }
+      if (!stored.includes('paymentHistory')) {
+        const migrated = [...stored, 'paymentHistory']
         if (migrated.length === MOVABLE_SECTIONS.length && migrated.every(id => MOVABLE_SECTIONS.includes(id))) {
           saveSectionOrder(migrated)
           return migrated
@@ -582,6 +615,8 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   const [expandedComms,        setExpandedComms]        = useState({})
   const [noteInput,            setNoteInput]            = useState('')
   const [isListening,          setIsListening]          = useState(false)
+  const [logSessionOpen,       setLogSessionOpen]       = useState(false)
+  const [expandedSessions,     setExpandedSessions]     = useState({})
   const [confirmDelete,  setConfirmDelete]  = useState(false)
   const [deleteFading,   setDeleteFading]   = useState(false)
   const [sectionOrder,   setSectionOrder]   = useState(loadSectionOrder)
@@ -606,6 +641,8 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       setCommLogOpen(false)
       setCommForm({ channel: 'Text Message', subject: '', body: '' })
       setExpandedComms({})
+      setLogSessionOpen(false)
+      setExpandedSessions({})
       setLayoutEditMode(false)
       setSectionOrder(loadSectionOrder())
     }
@@ -640,6 +677,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   const aftercare = client.aftercareChecklist || [false, false, false, false, false]
   const consults  = client.consultations      || []
   const activity  = client.activityLog        || []
+  const sessions  = client.sessions           || []
 
   function push(updated, logText) {
     const base = { ...updated, updatedAt: new Date().toISOString() }
@@ -763,6 +801,14 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
     push({ ...client, communications: [entry, ...(client.communications || [])] })
     setCommForm({ channel: 'Text Message', subject: '', body: '' })
     setCommLogOpen(false)
+  }
+
+  function handleSaveSession(session) {
+    push(
+      { ...client, sessions: [session, ...sessions] },
+      `Session logged: ${session.tattooDescription || 'Tattoo session'} on ${formatDate(session.date)}`
+    )
+    setLogSessionOpen(false)
   }
 
   function handleStartConsult() {
@@ -1425,6 +1471,146 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
           </>
         )
 
+      case 'paymentHistory': {
+        const fmt$ = v => (v !== '' && v != null && !isNaN(v)) ? `$${parseFloat(v).toFixed(2)}` : null
+        return (
+          <>
+            <DragHeader label="Payment History" badge={sessions.length || null} mono />
+
+            <button
+              onClick={() => setLogSessionOpen(true)}
+              style={{
+                width: '100%', minHeight: 44, borderRadius: 8,
+                background: 'transparent',
+                border: '1px solid var(--gold)',
+                fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
+                color: 'var(--gold)', cursor: 'pointer',
+                marginBottom: sessions.length ? 16 : 0,
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.75'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              + Log Session
+            </button>
+
+            {sessions.length === 0 && (
+              <div style={{
+                fontFamily: 'var(--font-body)', fontSize: 13,
+                color: 'var(--muted)', padding: '8px 0 4px',
+              }}>
+                No sessions logged yet.
+              </div>
+            )}
+
+            {sessions.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {sessions.map(s => {
+                  const expanded = expandedSessions[s.id]
+                  const paid = fmt$(s.amountPaid)
+                  const tip  = fmt$(s.tip)
+                  return (
+                    <div key={s.id} style={{ background: 'var(--surface2)', borderRadius: 10, overflow: 'hidden' }}>
+
+                      {/* Collapsed header row */}
+                      <div
+                        onClick={() => setExpandedSessions(p => ({ ...p, [s.id]: !p[s.id] }))}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '10px 14px', cursor: 'pointer', minHeight: 44,
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{
+                              fontFamily: 'var(--font-mono)', fontSize: 11,
+                              color: 'var(--muted)', whiteSpace: 'nowrap',
+                            }}>
+                              {formatDate(s.date)}
+                            </span>
+                            {s.isTouchUp && (
+                              <span style={{
+                                fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
+                                letterSpacing: '0.08em', textTransform: 'uppercase',
+                                color: 'var(--gold)', background: 'rgba(201,169,110,0.12)',
+                                border: '1px solid rgba(201,169,110,0.3)',
+                                borderRadius: 4, padding: '1px 5px',
+                              }}>
+                                Touch Up
+                              </span>
+                            )}
+                          </div>
+                          <div style={{
+                            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)',
+                            marginTop: 2,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {s.tattooDescription || '—'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+                          {paid && (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>
+                              {paid}{tip ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}> +{tip}</span> : null}
+                            </span>
+                          )}
+                          <span style={{
+                            fontFamily: 'var(--font-mono)', fontSize: 10,
+                            color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                          }}>
+                            {s.paymentMethod}
+                          </span>
+                        </div>
+                        <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 4, flexShrink: 0 }}>
+                          {expanded ? '▲' : '▼'}
+                        </span>
+                      </div>
+
+                      {/* Expanded details */}
+                      {expanded && (
+                        <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 10 }}>
+                            {[
+                              s.placement       && ['Placement',        s.placement],
+                              fmt$(s.tattooPrice)  && ['Tattoo Price',     fmt$(s.tattooPrice)],
+                              fmt$(s.deposit)      && ['Deposit',          fmt$(s.deposit)],
+                              fmt$(s.depositRefund)&& ['Deposit Refund',   fmt$(s.depositRefund)],
+                              fmt$(s.amountPaid)   && ['Amount Paid',      fmt$(s.amountPaid)],
+                              fmt$(s.tip)          && ['Tip',              fmt$(s.tip)],
+                              s.paymentMethod   && ['Payment Method',   s.paymentMethod],
+                              (s.paymentMethod === 'Gift Card' && s.giftCardCode) && ['Gift Card Code', s.giftCardCode],
+                              s.discountCode    && ['Discount Code',    s.discountCode],
+                              s.discountApplied && ['Discount Applied', s.discountApplied],
+                              fmt$(s.originalPrice) && ['Original Price', fmt$(s.originalPrice)],
+                              s.notes           && ['Notes',            s.notes],
+                            ].filter(Boolean).map(([label, val]) => (
+                              <div key={label} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                                <span style={{
+                                  fontFamily: 'var(--font-mono)', fontSize: 10,
+                                  color: 'var(--muted)', letterSpacing: '0.07em',
+                                  textTransform: 'uppercase', minWidth: 110, flexShrink: 0, paddingTop: 1,
+                                }}>
+                                  {label}
+                                </span>
+                                <span style={{
+                                  fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)', flex: 1,
+                                }}>
+                                  {val}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )
+      }
+
       default:
         return null
     }
@@ -1626,6 +1812,12 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         </div>
 
       </div>
+
+      <LogSessionModal
+        isOpen={logSessionOpen}
+        onSave={handleSaveSession}
+        onClose={() => setLogSessionOpen(false)}
+      />
     </>
   )
 }
@@ -1718,6 +1910,272 @@ function AddClientModal({ isOpen, onSave, onClose }) {
             }}
           >
             Add Client
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── LogSessionModal ─────────────────────────────────────────────────────────
+
+const PAYMENT_METHODS = ['Cash', 'Venmo', 'Zelle', 'CashApp', 'Card', 'Gift Card', 'Other']
+
+function LogSessionModal({ isOpen, onSave, onClose }) {
+  const blankForm = {
+    date: today(), tattooDescription: '', placement: '',
+    isTouchUp: false, deposit: '', depositRefund: '',
+    tattooPrice: '', amountPaid: '', tip: '',
+    paymentMethod: 'Cash', giftCardCode: '',
+    discountCode: '', originalPrice: '', discountApplied: '', notes: '',
+  }
+  const [form, setForm] = useState(blankForm)
+  const set = key => val => setForm(f => ({ ...f, [key]: val }))
+  const setE = key => e => set(key)(e.target.value)
+
+  const canSave = form.date.trim() && form.tattooDescription.trim()
+
+  function handleSave() {
+    if (!canSave) return
+    onSave(mkSession({ ...form }))
+    setForm(blankForm)
+  }
+
+  function handleClose() {
+    setForm(blankForm)
+    onClose()
+  }
+
+  if (!isOpen) return null
+
+  const fieldStyle = {
+    width: '100%', background: 'var(--surface2)',
+    border: '1px solid var(--surface2)', borderRadius: 8,
+    padding: '10px 12px', fontFamily: 'var(--font-body)',
+    fontSize: 14, color: 'var(--text)', outline: 'none', boxSizing: 'border-box',
+  }
+  const labelStyle = {
+    fontFamily: 'var(--font-mono)', fontSize: 10,
+    letterSpacing: '0.1em', textTransform: 'uppercase',
+    color: 'var(--muted)', marginBottom: 6, display: 'block',
+  }
+  const focus = e => { e.target.style.borderColor = 'var(--gold)' }
+  const blur  = e => { e.target.style.borderColor = 'var(--surface2)' }
+
+  const moneyField = (key, label) => (
+    <div>
+      <span style={labelStyle}>{label}</span>
+      <div style={{ position: 'relative' }}>
+        <span style={{
+          position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+          fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--muted)', pointerEvents: 'none',
+        }}>$</span>
+        <input
+          type="number" min="0" step="0.01" inputMode="decimal"
+          value={form[key]} onChange={setE(key)}
+          style={{ ...fieldStyle, paddingLeft: 24 }}
+          onFocus={focus} onBlur={blur}
+          placeholder="0.00"
+        />
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      <div
+        onClick={handleClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.75)' }}
+      />
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 401, background: 'var(--surface)',
+        borderRadius: 16, border: '1px solid var(--surface2)',
+        width: 440, maxWidth: '95vw',
+        maxHeight: '88vh', overflowY: 'auto',
+        padding: 24,
+      }}>
+        <div style={{
+          fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 700,
+          color: 'var(--text)', marginBottom: 20,
+        }}>
+          Log Session
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Date */}
+          <div>
+            <span style={labelStyle}>Date *</span>
+            <input
+              type="date" value={form.date} onChange={setE('date')}
+              style={{ ...fieldStyle, colorScheme: 'dark' }}
+              onFocus={focus} onBlur={blur}
+            />
+          </div>
+
+          {/* Tattoo Description */}
+          <div>
+            <span style={labelStyle}>Tattoo Description *</span>
+            <textarea
+              rows={2} value={form.tattooDescription} onChange={setE('tattooDescription')}
+              placeholder="Brief description of the tattoo"
+              style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5 }}
+              onFocus={focus} onBlur={blur}
+            />
+          </div>
+
+          {/* Placement */}
+          <div>
+            <span style={labelStyle}>Placement</span>
+            <input
+              type="text" value={form.placement} onChange={setE('placement')}
+              placeholder="e.g. Inner forearm"
+              style={fieldStyle} onFocus={focus} onBlur={blur}
+            />
+          </div>
+
+          {/* Is Touch Up toggle */}
+          <div>
+            <span style={labelStyle}>Session Type</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[false, true].map(val => {
+                const active = form.isTouchUp === val
+                return (
+                  <button
+                    key={String(val)}
+                    type="button"
+                    onClick={() => set('isTouchUp')(val)}
+                    style={{
+                      flex: 1, minHeight: 44, borderRadius: 8, cursor: 'pointer',
+                      background: active ? 'rgba(201,169,110,0.1)' : 'var(--surface2)',
+                      border: `1px solid ${active ? 'var(--gold)' : 'transparent'}`,
+                      fontFamily: 'var(--font-body)', fontSize: 13,
+                      color: active ? 'var(--gold)' : 'var(--muted)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {val ? 'Touch Up' : 'Normal'}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Money fields */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {moneyField('tattooPrice',  'Tattoo Price')}
+            {moneyField('deposit',      'Deposit')}
+            {moneyField('depositRefund','Deposit Refund')}
+            {moneyField('amountPaid',   'Amount Paid')}
+            {moneyField('tip',          'Tip')}
+          </div>
+
+          {/* Payment Method segmented */}
+          <div>
+            <span style={labelStyle}>Payment Method</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {PAYMENT_METHODS.map(m => {
+                const active = form.paymentMethod === m
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => set('paymentMethod')(m)}
+                    style={{
+                      minWidth: 'calc(33.33% - 4px)', flex: '1 0 auto',
+                      minHeight: 44, borderRadius: 8, cursor: 'pointer',
+                      background: active ? 'rgba(201,169,110,0.1)' : 'var(--surface2)',
+                      border: `1px solid ${active ? 'var(--gold)' : 'transparent'}`,
+                      fontFamily: 'var(--font-body)', fontSize: 13,
+                      color: active ? 'var(--gold)' : 'var(--muted)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {m}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Gift Card Code — conditional */}
+          {form.paymentMethod === 'Gift Card' && (
+            <div>
+              <span style={labelStyle}>Gift Card Code</span>
+              <input
+                type="text" value={form.giftCardCode} onChange={setE('giftCardCode')}
+                placeholder="Card code or last 4"
+                style={fieldStyle} onFocus={focus} onBlur={blur}
+              />
+            </div>
+          )}
+
+          {/* Discount Code */}
+          <div>
+            <span style={labelStyle}>Discount Code</span>
+            <input
+              type="text" value={form.discountCode} onChange={setE('discountCode')}
+              placeholder="Optional"
+              style={fieldStyle} onFocus={focus} onBlur={blur}
+            />
+          </div>
+
+          {/* Discount fields — conditional on discountCode */}
+          {form.discountCode.trim() && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {moneyField('originalPrice', 'Original Price')}
+              <div>
+                <span style={labelStyle}>Discount Applied</span>
+                <input
+                  type="text" value={form.discountApplied} onChange={setE('discountApplied')}
+                  placeholder="e.g. 10% or $20"
+                  style={fieldStyle} onFocus={focus} onBlur={blur}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <span style={labelStyle}>Notes</span>
+            <textarea
+              rows={3} value={form.notes} onChange={setE('notes')}
+              placeholder="Any additional notes"
+              style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5 }}
+              onFocus={focus} onBlur={blur}
+            />
+          </div>
+
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
+          <button
+            type="button"
+            onClick={handleClose}
+            style={{
+              flex: 1, minHeight: 44, borderRadius: 8,
+              border: '1px solid var(--surface2)', background: 'var(--surface2)',
+              fontFamily: 'var(--font-body)', fontSize: 13,
+              color: 'var(--muted)', cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            style={{
+              flex: 2, minHeight: 44, borderRadius: 8, border: 'none',
+              background: canSave ? 'var(--gold)' : 'rgba(201,169,110,0.25)',
+              fontFamily: 'var(--font-body)', fontSize: 13,
+              fontWeight: 600, color: 'var(--bg)',
+              cursor: canSave ? 'pointer' : 'not-allowed',
+            }}
+          >
+            Save Session
           </button>
         </div>
       </div>

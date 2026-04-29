@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { STAGES } from '../constants/stages'
 import { createPortal } from 'react-dom'
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
@@ -13,9 +14,6 @@ import { CSS } from '@dnd-kit/utilities'
 export const STORAGE_KEY = 'macri_crm_clients'
 const SECTION_ORDER_KEY = 'macri_drawer_section_order'
 
-export const STAGES = [
-  'Inquiry', 'Inquiry Response', 'Consultation', 'Design Phase', 'Approval', 'Scheduled', 'Completed', 'Archive',
-]
 
 const STAGE_STYLE = {
   'Inquiry':          { bg: 'rgba(91,141,184,0.18)',  color: '#78aed4' },
@@ -235,6 +233,79 @@ function loadSectionOrder() {
 
 function saveSectionOrder(order) {
   localStorage.setItem(SECTION_ORDER_KEY, JSON.stringify(order))
+}
+
+// ─── CSV helpers ──────────────────────────────────────────────────────────────
+
+const CSV_HEADERS = [
+  'Date', 'Client Name', 'Phone', 'Email', 'Tattoo Description', 'Placement',
+  'Touch Up', 'Deposit', 'Deposit Refund', 'Tattoo Price', 'Amount Paid', 'Tip',
+  'Payment Method', 'Gift Card Code', 'Discount Code', 'Original Price',
+  'Discount Applied', 'Notes', 'Pipeline Stage', 'Style', 'Source', 'Archived',
+]
+
+function csvEsc(val) {
+  const s = (val == null || val === false) ? '' : val === true ? 'true' : String(val)
+  return (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r'))
+    ? `"${s.replace(/"/g, '""')}"`
+    : s
+}
+
+function buildCSV(clients) {
+  const lines = [CSV_HEADERS.join(',')]
+  for (const c of clients) {
+    const archived = c.stage === 'Archive' ? 'true' : 'false'
+    const profileCells = [
+      '', c.name, c.phone || '', c.email || '',
+      '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+      c.stage || '', c.style || '', c.source || '', archived,
+    ]
+    const sessionCells = s => [
+      s.date || '', c.name, c.phone || '', c.email || '',
+      s.tattooDescription || '', s.placement || '',
+      s.isTouchUp ? 'true' : '',
+      s.deposit || '', s.depositRefund || '', s.tattooPrice || '',
+      s.amountPaid || '', s.tip || '', s.paymentMethod || '',
+      s.giftCardCode || '', s.discountCode || '', s.originalPrice || '',
+      s.discountApplied || '', s.notes || '',
+      c.stage || '', c.style || '', c.source || '', archived,
+    ]
+    const sessions = c.sessions || []
+    if (sessions.length === 0) {
+      lines.push(profileCells.map(csvEsc).join(','))
+    } else {
+      for (const s of sessions) lines.push(sessionCells(s).map(csvEsc).join(','))
+    }
+  }
+  return lines.join('\n')
+}
+
+function parseCSVText(raw) {
+  const src = raw.replace(/^﻿/, '')
+  const rows = []
+  let row = [], field = '', inQ = false
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    if (inQ) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { field += '"'; i++ }
+        else inQ = false
+      } else { field += ch }
+    } else if (ch === '"') {
+      inQ = true
+    } else if (ch === ',') {
+      row.push(field); field = ''
+    } else if (ch === '\n') {
+      row.push(field); field = ''
+      if (row.some(c => c !== '')) rows.push(row)
+      row = []
+    } else if (ch !== '\r') {
+      field += ch
+    }
+  }
+  row.push(field)
+  if (row.some(c => c !== '')) rows.push(row)
+  return rows
 }
 
 // ─── hooks ────────────────────────────────────────────────────────────────────
@@ -617,6 +688,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   const [isListening,          setIsListening]          = useState(false)
   const [logSessionOpen,       setLogSessionOpen]       = useState(false)
   const [expandedSessions,     setExpandedSessions]     = useState({})
+  const [deleteSessionTarget,  setDeleteSessionTarget]  = useState(null)
   const [confirmDelete,  setConfirmDelete]  = useState(false)
   const [deleteFading,   setDeleteFading]   = useState(false)
   const [sectionOrder,   setSectionOrder]   = useState(loadSectionOrder)
@@ -643,6 +715,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       setExpandedComms({})
       setLogSessionOpen(false)
       setExpandedSessions({})
+      setDeleteSessionTarget(null)
       setLayoutEditMode(false)
       setSectionOrder(loadSectionOrder())
     }
@@ -809,6 +882,11 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       `Session logged: ${session.tattooDescription || 'Tattoo session'} on ${formatDate(session.date)}`
     )
     setLogSessionOpen(false)
+  }
+
+  function handleDeleteSession(sessionId) {
+    push({ ...client, sessions: sessions.filter(s => s.id !== sessionId) })
+    setDeleteSessionTarget(null)
   }
 
   function handleStartConsult() {
@@ -1600,6 +1678,18 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                               </div>
                             ))}
                           </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); setDeleteSessionTarget(s.id) }}
+                            style={{
+                              marginTop: 12, width: '100%', minHeight: 36,
+                              background: 'transparent', border: '1px solid #f09595',
+                              color: '#f09595', borderRadius: 8, padding: '8px 14px',
+                              fontFamily: 'var(--font-mono)', fontSize: 11,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Delete Session
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1813,6 +1903,61 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
 
       </div>
 
+      {deleteSessionTarget && (
+        <>
+          <div
+            onClick={() => setDeleteSessionTarget(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.75)' }}
+          />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 501, background: '#161614',
+            borderRadius: 12, padding: 24,
+            width: 400, maxWidth: '92vw',
+            border: '1px solid var(--surface2)',
+          }}>
+            <div style={{
+              fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 700,
+              color: '#e8e6df', marginBottom: 12,
+            }}>
+              Delete Session?
+            </div>
+            <p style={{
+              fontFamily: 'var(--font-body)', fontSize: 14,
+              color: '#7a786f', marginBottom: 24, lineHeight: 1.5, margin: '0 0 24px',
+            }}>
+              This will permanently remove this session from the client record. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setDeleteSessionTarget(null)}
+                style={{
+                  flex: 1, padding: '10px 16px',
+                  background: 'transparent', border: '1px solid #2a2a27',
+                  color: '#7a786f', borderRadius: 8,
+                  fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteSession(deleteSessionTarget)}
+                style={{
+                  flex: 1, padding: '10px 16px',
+                  background: '#f09595', color: '#0e0e0d',
+                  border: 'none', borderRadius: 8,
+                  fontFamily: 'var(--font-body)', fontSize: 14,
+                  fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       <LogSessionModal
         isOpen={logSessionOpen}
         onSave={handleSaveSession}
@@ -1911,6 +2056,108 @@ function AddClientModal({ isOpen, onSave, onClose }) {
           >
             Add Client
           </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── ImportPreviewModal ───────────────────────────────────────────────────────
+
+function ImportPreviewModal({ isOpen, headers, rows, error, onConfirm, onClose }) {
+  if (!isOpen) return null
+  const previewRows = rows.slice(0, 5)
+  const thStyle = {
+    padding: '6px 10px', background: 'var(--surface2)',
+    color: 'var(--muted)', textAlign: 'left', whiteSpace: 'nowrap',
+    fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.06)',
+    fontFamily: 'var(--font-mono)', fontSize: 11,
+  }
+  const tdStyle = {
+    padding: '5px 10px', color: 'var(--text)',
+    borderBottom: '1px solid rgba(255,255,255,0.04)',
+    whiteSpace: 'nowrap', maxWidth: 180,
+    overflow: 'hidden', textOverflow: 'ellipsis',
+    fontFamily: 'var(--font-mono)', fontSize: 11,
+  }
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.75)' }}
+      />
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 401, background: '#161614',
+        borderRadius: 12, padding: 24,
+        width: 560, maxWidth: '95vw',
+        maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        border: '1px solid var(--surface2)',
+      }}>
+        <div style={{
+          fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 700,
+          color: '#e8e6df', marginBottom: 6,
+        }}>
+          Import Preview
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-mono)', fontSize: 11,
+          color: 'var(--muted)', marginBottom: 16,
+        }}>
+          {rows.length} row{rows.length !== 1 ? 's' : ''} found. Review before importing.
+        </div>
+
+        {error ? (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 12,
+            color: '#f09595', marginBottom: 20, flex: 1,
+          }}>
+            {error}
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', marginBottom: 20 }}>
+            <table style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
+              <thead>
+                <tr>{headers.map((h, i) => <th key={i} style={thStyle}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {previewRows.map((row, ri) => (
+                  <tr key={ri}>
+                    {headers.map((_, ci) => (
+                      <td key={ci} style={tdStyle}>{row[ci] ?? ''}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent', border: '1px solid #1e1e1b',
+              color: '#7a786f', borderRadius: 8, padding: '10px 16px',
+              fontFamily: 'var(--font-body)', fontSize: 13, cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          {!error && (
+            <button
+              onClick={onConfirm}
+              style={{
+                background: '#c9a96e', color: '#0e0e0d',
+                border: 'none', borderRadius: 8, padding: '10px 16px',
+                fontFamily: 'var(--font-body)', fontSize: 13,
+                fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Confirm Import
+            </button>
+          )}
         </div>
       </div>
     </>
@@ -2566,6 +2813,11 @@ export default function CRM() {
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [stageFilter,  setStageFilter]  = useState('All')
   const [jumpSection,  setJumpSection]  = useState(null)
+  const [importOpen,   setImportOpen]   = useState(false)
+  const [importRows,   setImportRows]   = useState([])
+  const [importHdrs,   setImportHdrs]   = useState([])
+  const [importError,  setImportError]  = useState('')
+  const importRef = useRef(null)
 
   function persist(list) {
     setClients(list)
@@ -2600,6 +2852,151 @@ export default function CRM() {
         ? { ...c, stage: 'Inquiry', updatedAt: new Date().toISOString() }
         : c
     ))
+  }
+
+  function handleExport() {
+    const csv  = buildCSV(clients)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `MACRI_Clients_${today()}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  function handleImportClick() {
+    importRef.current?.click()
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const allRows = parseCSVText(ev.target.result ?? '')
+        if (allRows.length < 2) throw new Error()
+        const headers = allRows[0].map(h => h.trim())
+        const lower   = headers.map(h => h.toLowerCase())
+        if (!lower.includes('client name') && !lower.includes('clients name')) throw new Error()
+        setImportHdrs(headers)
+        setImportRows(allRows.slice(1))
+        setImportError('')
+      } catch {
+        setImportHdrs([])
+        setImportRows([])
+        setImportError('This file could not be imported. Check that it is a valid MACRI CSV export.')
+      }
+      setImportOpen(true)
+    }
+    reader.onerror = () => {
+      setImportHdrs([])
+      setImportRows([])
+      setImportError('This file could not be imported. Check that it is a valid MACRI CSV export.')
+      setImportOpen(true)
+    }
+    reader.readAsText(file)
+  }
+
+  function handleImportConfirm() {
+    const lower = importHdrs.map(h => h.toLowerCase().trim())
+    const ci = (...names) => { for (const n of names) { const i = lower.indexOf(n); if (i >= 0) return i } return -1 }
+    const gc = (row, idx) => idx >= 0 ? (row[idx] ?? '').trim() : ''
+
+    const nameIdx  = ci('client name', 'clients name')
+    const phoneIdx = ci('phone')
+    const emailIdx = ci('email')
+    const stageIdx = ci('pipeline stage')
+    const styleIdx = ci('style')
+    const srcIdx   = ci('source')
+    const archIdx  = ci('archived')
+    const dateIdx  = ci('date')
+    const descIdx  = ci('tattoo description')
+    const placIdx  = ci('placement')
+    const touchIdx = ci('touch up')
+    const depIdx   = ci('deposit')
+    const refIdx   = ci('deposit refund')
+    const priceIdx = ci('tattoo price')
+    const paidIdx  = ci('amount paid')
+    const tipIdx   = ci('tip')
+    const pmIdx    = ci('payment method')
+    const gcIdx    = ci('gift card code')
+    const dcIdx    = ci('discount code')
+    const opIdx    = ci('original price')
+    const daIdx    = ci('discount applied')
+    const notesIdx = ci('notes')
+
+    const byName = new Map()
+    for (const row of importRows) {
+      const name = gc(row, nameIdx)
+      if (!name) continue
+      if (!byName.has(name)) byName.set(name, [])
+      byName.get(name).push(row)
+    }
+
+    let updated = [...clients]
+
+    for (const [name, rows] of byName) {
+      const profile = rows[0]
+      const newSessions = rows
+        .filter(r => gc(r, dateIdx) || gc(r, descIdx))
+        .map(r => mkSession({
+          date:              gc(r, dateIdx)  || today(),
+          tattooDescription: gc(r, descIdx),
+          placement:         gc(r, placIdx),
+          isTouchUp:         ['true', 'yes', '1'].includes(gc(r, touchIdx).toLowerCase()),
+          deposit:           gc(r, depIdx),
+          depositRefund:     gc(r, refIdx),
+          tattooPrice:       gc(r, priceIdx),
+          amountPaid:        gc(r, paidIdx),
+          tip:               gc(r, tipIdx),
+          paymentMethod:     gc(r, pmIdx) || 'Cash',
+          giftCardCode:      gc(r, gcIdx),
+          discountCode:      gc(r, dcIdx),
+          originalPrice:     gc(r, opIdx),
+          discountApplied:   gc(r, daIdx),
+          notes:             gc(r, notesIdx),
+        }))
+
+      const existingIdx = updated.findIndex(c => c.name.trim().toLowerCase() === name.toLowerCase())
+      if (existingIdx >= 0) {
+        const existing = updated[existingIdx].sessions || []
+        const deduped = newSessions.filter(ns =>
+          !existing.some(es =>
+            es.date.trim().toLowerCase() === ns.date.trim().toLowerCase() &&
+            es.tattooDescription.trim().toLowerCase() === ns.tattooDescription.trim().toLowerCase()
+          )
+        )
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          sessions:  [...existing, ...deduped],
+          updatedAt: new Date().toISOString(),
+        }
+      } else {
+        const archVal    = gc(profile, archIdx).toLowerCase()
+        const isArchived = archVal === 'true' || archVal === '1'
+        const csvStage   = gc(profile, stageIdx)
+        updated.push(mkClient({
+          name,
+          phone:   gc(profile, phoneIdx),
+          email:   gc(profile, emailIdx),
+          style:   gc(profile, styleIdx),
+          source:  gc(profile, srcIdx),
+          stage:   isArchived ? 'Archive' : (csvStage || 'Inquiry'),
+          sessions: newSessions,
+        }))
+      }
+    }
+
+    persist(updated)
+    setImportOpen(false)
+    setImportRows([])
+    setImportHdrs([])
+    setImportError('')
   }
 
   function openDrawer(client, section = null) {
@@ -2651,17 +3048,43 @@ export default function CRM() {
             {clients.length} {clients.length === 1 ? 'client' : 'clients'}
           </p>
         </div>
-        <button
-          onClick={() => setAddModalOpen(true)}
-          style={{
-            border: 'none', borderRadius: '6px', cursor: 'pointer',
-            background: 'var(--gold)', color: 'var(--bg)',
-            fontSize: '13px', padding: '10px 20px', fontWeight: 600,
-            fontFamily: 'var(--font-body)',
-          }}
-        >
-          + Add Client
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={handleExport}
+            style={{
+              background: '#1e1e1b', color: '#c9a96e',
+              border: '1px solid #2a2a27', borderRadius: 8,
+              padding: '8px 14px', minHeight: 36,
+              fontFamily: 'var(--font-mono)', fontSize: 11,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={handleImportClick}
+            style={{
+              background: '#1e1e1b', color: '#7a786f',
+              border: '1px solid #2a2a27', borderRadius: 8,
+              padding: '8px 14px', minHeight: 36,
+              fontFamily: 'var(--font-mono)', fontSize: 11,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            Import CSV
+          </button>
+          <button
+            onClick={() => setAddModalOpen(true)}
+            style={{
+              border: 'none', borderRadius: '6px', cursor: 'pointer',
+              background: 'var(--gold)', color: 'var(--bg)',
+              fontSize: '13px', padding: '10px 20px', fontWeight: 600,
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            + Add Client
+          </button>
+        </div>
       </div>
 
       {/* stage filter chips */}
@@ -2732,6 +3155,23 @@ export default function CRM() {
           ))}
         </div>
       )}
+
+      <input
+        ref={importRef}
+        type="file"
+        accept=".csv"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+
+      <ImportPreviewModal
+        isOpen={importOpen}
+        headers={importHdrs}
+        rows={importRows}
+        error={importError}
+        onConfirm={handleImportConfirm}
+        onClose={() => { setImportOpen(false); setImportError('') }}
+      />
 
       <AddClientModal
         isOpen={addModalOpen}

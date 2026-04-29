@@ -15,7 +15,8 @@ const defaultForm = {
   musicGenre: [], playlist: '', tvShows: '', comfortNotes: '',
   allergies: '', skinConditions: '', medications: '',
   previousReactions: '', medicalClearance: '',
-  pricingType: '', estimatedTotal: '',
+  pricingType: '', estimatedTotal: '', estimatedHours: '',
+  sessionEstimateNotes: 'Based on what we talked about, I estimate this piece will take approximately [X to Y] hours. Keep in mind this is an estimate. The final time depends on the finished design, your skin, and session flow.',
   depositAmount: '', depositStatus: '',
   consultationDate: '', appointmentDate: '',
   clientTier: 'Deposit Required',
@@ -39,8 +40,8 @@ const ORIENT_OPTIONS     = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
 const MUSIC_OPTIONS      = ['Hip Hop', 'Lo-Fi', 'Rock', 'R&B', 'Latin', 'Country', 'Silence', 'Other']
 const CLEARANCE_OPTIONS  = ['No Issues', 'Note on File', 'Needs Clearance']
 const PRICING_OPTIONS    = ['Hourly', 'Per Session', 'Full Day', 'Shop Minimum']
-const DEPOSIT_AMT        = ['$100', '$150', '$200', '$250', 'Waived']
-const DEPOSIT_STATUS     = ['Pending', 'Paid', 'Waived']
+const DEPOSIT_AMT        = ['$100', '$150', '$200', '$250', 'No Deposit Required']
+const DEPOSIT_STATUS     = ['Pending', 'Paid', 'No Deposit Required']
 const TIER_OPTIONS       = ['Deposit Required', 'Trusted Client']
 
 const DRAFT_KEY = 'macri_consultation_draft'
@@ -153,6 +154,9 @@ export default function Consultation() {
   const [nameError, setNameError]     = useState(false)
   const [showDupModal, setShowDupModal] = useState(false)
   const [dupClient, setDupClient]     = useState(null)
+  const [estW, setEstW]               = useState('')
+  const [estH, setEstH]               = useState('')
+  const [estApplied, setEstApplied]   = useState(false)
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
@@ -547,8 +551,127 @@ export default function Consultation() {
   }
 
   function renderStep5() {
+    const wNum = parseFloat(estW)
+    const hNum = parseFloat(estH)
+    const showCalc = estW && estH && wNum > 0 && hNum > 0
+    const estArea  = showCalc ? wNum * hNum : 0
+    const estHoursVal = estArea
+    const estCost  = estHoursVal * 250
+
+    function applyEstimate() {
+      if (!showCalc) return
+      set('estimatedTotal', String(Math.round(estCost)))
+      set('estimatedHours', String(Math.round(estHoursVal)))
+      setEstApplied(true)
+      setTimeout(() => setEstApplied(false), 2000)
+    }
+
+    const CARD_STYLE = {
+      background: '#1e1e1b',
+      border: '1px solid rgba(201,169,110,0.15)',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 20,
+    }
+
+    const CARD_LABEL = {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 11,
+      color: '#c9a96e',
+      letterSpacing: '0.08em',
+      marginBottom: 10,
+    }
+
     return (
       <>
+        {/* Studio pricing info */}
+        <div style={CARD_STYLE}>
+          <div style={CARD_LABEL}>STUDIO PRICING INFO</div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#7a786f', lineHeight: 1.8 }}>
+            <p style={{ margin: '0 0 10px 0' }}>
+              Saul charges $250 per hour. As a general guideline, plan approximately one hour for every one square inch of tattoo area.
+            </p>
+            <p style={{ margin: '0 0 10px 0' }}>
+              Consultations are always complimentary.
+            </p>
+            <p style={{ margin: 0 }}>
+              Tattoo sessions are considered full day events. Duration depends on design complexity and size. Please reserve your entire day and avoid scheduling any other commitments on your session date.
+            </p>
+          </div>
+        </div>
+
+        {/* Precision Estimator */}
+        <div style={CARD_STYLE}>
+          <div style={{ ...CARD_LABEL, marginBottom: 12 }}>PRECISION ESTIMATOR</div>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <span style={LABEL_STYLE}>Width (in)</span>
+              <input
+                type="number"
+                value={estW}
+                onChange={e => setEstW(e.target.value)}
+                placeholder="0"
+                style={{ ...INPUT_STYLE, fontFamily: 'var(--font-mono)' }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <span style={LABEL_STYLE}>Height (in)</span>
+              <input
+                type="number"
+                value={estH}
+                onChange={e => setEstH(e.target.value)}
+                placeholder="0"
+                style={{ ...INPUT_STYLE, fontFamily: 'var(--font-mono)' }}
+              />
+            </div>
+          </div>
+          {showCalc && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#7a786f', lineHeight: 1.8, marginBottom: 12 }}>
+              <span style={{ color: '#c9a96e' }}>{wNum}</span>
+              {' in × '}
+              <span style={{ color: '#c9a96e' }}>{hNum}</span>
+              {' in = '}
+              <span style={{ color: '#c9a96e' }}>{estArea % 1 === 0 ? estArea : estArea.toFixed(2)}</span>
+              {' sq in → ~'}
+              <span style={{ color: '#c9a96e' }}>{estHoursVal % 1 === 0 ? estHoursVal : estHoursVal.toFixed(2)}</span>
+              {' hours → ~$'}
+              <span style={{ color: '#c9a96e' }}>{Math.round(estCost).toLocaleString()}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              onClick={applyEstimate}
+              style={{
+                minHeight: 36,
+                padding: '0 16px',
+                background: 'transparent',
+                color: '#c9a96e',
+                border: '1px solid #c9a96e',
+                borderRadius: 8,
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Apply to Estimate
+            </button>
+            {estApplied && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
+                Applied
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Session Estimate Notes */}
+        <Field label="Session Estimate Notes">
+          <textarea
+            value={formData.sessionEstimateNotes}
+            onChange={e => set('sessionEstimateNotes', e.target.value)}
+            style={{ ...INPUT_STYLE, minHeight: 90, resize: 'vertical' }}
+          />
+        </Field>
+
         <Field label="Pricing Type">
           <PillToggle
             options={PRICING_OPTIONS}
@@ -561,7 +684,7 @@ export default function Consultation() {
             type="text"
             value={formData.estimatedTotal}
             onChange={e => set('estimatedTotal', e.target.value)}
-            placeholder="$500, two sessions, etc."
+            placeholder="e.g. 1500"
             style={INPUT_STYLE}
           />
         </Field>

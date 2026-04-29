@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { loadClients, saveClients, mkClient } from './CRM'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -33,18 +33,18 @@ const STEPS = [
   { emoji: '✍️', label: 'Artist Notes' },
 ]
 
-const REFERRAL_OPTIONS   = ['Instagram', 'Google', 'Word of Mouth', 'Existing Client', 'Other']
-const STYLE_OPTIONS      = ['Watercolor', 'Black and Gray Realism', 'Sketch Art', 'Abstract', 'Pointillism', 'Other']
-const COLOR_OPTIONS      = ['Full Color', 'Limited Color', 'Black and Gray', 'Black and White Only']
-const ORIENT_OPTIONS     = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
-const MUSIC_OPTIONS      = ['Hip Hop', 'Lo-Fi', 'Rock', 'R&B', 'Latin', 'Country', 'Silence', 'Other']
-const CLEARANCE_OPTIONS  = ['No Issues', 'Note on File', 'Needs Clearance']
-const PRICING_OPTIONS    = ['Hourly', 'Per Session', 'Full Day', 'Shop Minimum']
-const DEPOSIT_AMT        = ['$100', '$150', '$200', '$250', 'No Deposit Required']
-const DEPOSIT_STATUS     = ['Pending', 'Paid', 'No Deposit Required']
-const TIER_OPTIONS       = ['Deposit Required', 'Trusted Client']
+const REFERRAL_OPTIONS  = ['Instagram', 'Google', 'Word of Mouth', 'Existing Client', 'Other']
+const STYLE_OPTIONS     = ['Watercolor', 'Black and Gray Realism', 'Sketch Art', 'Abstract', 'Pointillism', 'Other']
+const COLOR_OPTIONS     = ['Full Color', 'Limited Color', 'Black and Gray', 'Black and White Only']
+const ORIENT_OPTIONS    = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
+const MUSIC_OPTIONS     = ['Hip Hop', 'Lo-Fi', 'Rock', 'R&B', 'Latin', 'Country', 'Silence', 'Other']
+const CLEARANCE_OPTIONS = ['No Issues', 'Note on File', 'Needs Clearance']
+const PRICING_OPTIONS   = ['Hourly', 'Per Session', 'Full Day', 'Shop Minimum']
+const DEPOSIT_AMT       = ['$100', '$150', '$200', '$250', 'No Deposit Required']
+const DEPOSIT_STATUS    = ['Pending', 'Paid', 'No Deposit Required']
+const TIER_OPTIONS      = ['Deposit Required', 'Trusted Client']
 
-const DRAFT_KEY = 'macri_consultation_draft'
+const DRAFT_KEY = 'macri_consultation_client_draft'
 const IOS_WAV   = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAEAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
 
 // ─── PillToggle ────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ function PillToggle({ options, value, onChange, multi = false }) {
   )
 }
 
-// ─── Field wrapper ─────────────────────────────────────────────────────────────
+// ─── Field ─────────────────────────────────────────────────────────────────────
 
 const LABEL_STYLE = {
   display: 'block',
@@ -141,9 +141,9 @@ function buildSummaryLines(f) {
   return lines
 }
 
-// ─── Consultation ──────────────────────────────────────────────────────────────
+// ─── ConsultationClient ────────────────────────────────────────────────────────
 
-export default function Consultation() {
+export default function ConsultationClient() {
   const [formData, setFormData] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(DRAFT_KEY))
@@ -154,38 +154,33 @@ export default function Consultation() {
   const [nameError, setNameError]     = useState(false)
   const [showDupModal, setShowDupModal] = useState(false)
   const [dupClient, setDupClient]     = useState(null)
+  const [showThankYou, setShowThankYou] = useState(false)
   const [estW, setEstW]               = useState('')
   const [estH, setEstH]               = useState('')
   const [estApplied, setEstApplied]   = useState(false)
-  const clientWin                     = useRef(null)
-  const [clientWinOpen, setClientWinOpen] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
   }, [formData])
 
   useEffect(() => {
-    if (!clientWinOpen) return
-    const id = setInterval(() => {
-      if (clientWin.current?.closed) setClientWinOpen(false)
-    }, 1000)
-    return () => clearInterval(id)
-  }, [clientWinOpen])
-
-  function openClientMode() {
-    const win = window.open('/consultation/client', '_blank')
-    if (!win) return
-    clientWin.current = win
-    setClientWinOpen(true)
-    try { win.document.documentElement.requestFullscreen() } catch {}
-  }
+    function handleMessage(e) {
+      if (e.data?.type === 'RESET_WIZARD') {
+        setFormData(defaultForm)
+        setCurrentStep(0)
+        setShowThankYou(false)
+        setEstW('')
+        setEstH('')
+      }
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
 
   function set(field, value) {
     setFormData(prev => ({ ...prev, [field]: value }))
     if (field === 'name') setNameError(false)
   }
-
-  // ── Navigation ────────────────────────────────────────────────────────────────
 
   function goNext() {
     if (currentStep === 0 && !formData.name.trim()) {
@@ -258,8 +253,7 @@ export default function Consultation() {
       }
     } catch {}
 
-    setFormData(defaultForm)
-    setCurrentStep(0)
+    setShowThankYou(true)
     setShowDupModal(false)
     setDupClient(null)
   }
@@ -572,9 +566,9 @@ export default function Consultation() {
     const wNum = parseFloat(estW)
     const hNum = parseFloat(estH)
     const showCalc = estW && estH && wNum > 0 && hNum > 0
-    const estArea  = showCalc ? wNum * hNum : 0
+    const estArea     = showCalc ? wNum * hNum : 0
     const estHoursVal = estArea
-    const estCost  = estHoursVal * 250
+    const estCost     = estHoursVal * 250
 
     function applyEstimate() {
       if (!showCalc) return
@@ -602,7 +596,6 @@ export default function Consultation() {
 
     return (
       <>
-        {/* Studio pricing info */}
         <div style={CARD_STYLE}>
           <div style={CARD_LABEL}>STUDIO PRICING INFO</div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#7a786f', lineHeight: 1.8 }}>
@@ -618,7 +611,6 @@ export default function Consultation() {
           </div>
         </div>
 
-        {/* Precision Estimator */}
         <div style={CARD_STYLE}>
           <div style={{ ...CARD_LABEL, marginBottom: 12 }}>PRECISION ESTIMATOR</div>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
@@ -681,7 +673,6 @@ export default function Consultation() {
           </div>
         </div>
 
-        {/* Session Estimate Notes */}
         <Field label="Session Estimate Notes">
           <textarea
             value={formData.sessionEstimateNotes}
@@ -807,37 +798,6 @@ export default function Consultation() {
           >
             Save and Add to Project Wall
           </button>
-          <button
-            onClick={() => console.log('PDF coming soon')}
-            style={{
-              minHeight: 44,
-              background: 'transparent',
-              color: '#e8e6df',
-              border: '1px solid rgba(122,120,111,0.3)',
-              borderRadius: 8,
-              fontFamily: 'var(--font-body)',
-              fontSize: 13,
-              cursor: 'pointer',
-            }}
-          >
-            Export Client PDF
-          </button>
-          <button
-            onClick={() => console.log('PDF coming soon')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#7a786f',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              cursor: 'pointer',
-              padding: '4px 0',
-              textAlign: 'center',
-              letterSpacing: '0.03em',
-            }}
-          >
-            Export Private Artist Sheet
-          </button>
         </div>
       </>
     )
@@ -856,172 +816,214 @@ export default function Consultation() {
     }
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────────
+  // ── Thank you screen ──────────────────────────────────────────────────────────
+
+  if (showThankYou) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#0e0e0d',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px 24px',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          color: '#c9a96e',
+          fontSize: 24,
+          marginBottom: 20,
+          lineHeight: 1,
+        }}>
+          ✦
+        </div>
+        <h1 style={{
+          fontFamily: 'var(--font-heading)',
+          fontSize: 28,
+          fontWeight: 700,
+          color: '#e8e6df',
+          margin: '0 0 20px',
+          lineHeight: 1.2,
+        }}>
+          Intake Complete
+        </h1>
+        <p style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: 15,
+          color: '#7a786f',
+          lineHeight: 1.8,
+          maxWidth: 360,
+          margin: '0 0 10px',
+        }}>
+          Saul has received your details.
+        </p>
+        <p style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: 15,
+          color: '#7a786f',
+          lineHeight: 1.8,
+          maxWidth: 360,
+          margin: '0 0 10px',
+        }}>
+          He will be in touch soon to confirm next steps.
+        </p>
+        <p style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: 15,
+          color: '#7a786f',
+          lineHeight: 1.8,
+          maxWidth: 360,
+          margin: 0,
+        }}>
+          Thank you for choosing Saul Gutierrez Private Studio.
+        </p>
+      </div>
+    )
+  }
+
+  // ── Wizard render ─────────────────────────────────────────────────────────────
 
   const step = STEPS[currentStep]
   const progressPct = ((currentStep + 1) / 7) * 100
 
   return (
-    <div style={{ padding: '24px 20px 100px', maxWidth: 600, margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', background: '#0e0e0d', display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, fontWeight: 700, color: '#e8e6df', marginBottom: 2 }}>
-          Consultation
-        </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', letterSpacing: '0.04em' }}>
-          Client intake wizard
-        </div>
-      </div>
-
-      {/* Client Mode */}
-      <div style={{ marginBottom: 16 }}>
-        <button
-          onClick={openClientMode}
-          style={{
-            minHeight: 44,
-            padding: '0 18px',
-            background: 'transparent',
-            color: '#c9a96e',
-            border: '1px solid #c9a96e',
-            borderRadius: 8,
-            fontFamily: 'var(--font-body)',
-            fontSize: 14,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 15, lineHeight: 1 }}>↗</span>
-          Client Mode
-        </button>
-        {clientWinOpen && (
-          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
-              Client view is open
-            </span>
-            <button
-              onClick={() => clientWin.current?.postMessage({ type: 'RESET_WIZARD' }, '*')}
-              style={{
-                minHeight: 28,
-                padding: '0 10px',
-                background: 'transparent',
-                color: '#7a786f',
-                border: '1px solid rgba(122,120,111,0.3)',
-                borderRadius: 6,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                cursor: 'pointer',
-              }}
-            >
-              Reset Client View
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Progress bar */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e' }}>
-            Step {currentStep + 1} of 7 &mdash; {step.label}
-          </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
-            {currentStep + 1} / 7
-          </span>
-        </div>
-        <div style={{ height: 4, background: '#1e1e1b', borderRadius: 2, overflow: 'hidden' }}>
-          <div style={{
-            height: '100%',
-            width: `${progressPct}%`,
-            background: 'linear-gradient(90deg, #c9a96e, #8fbcbb)',
-            borderRadius: 2,
-            transition: 'width 0.3s ease',
-          }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
-          {STEPS.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentStep(i)}
-              title={s.label}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 4,
-                cursor: 'pointer',
-                fontSize: 18,
-                lineHeight: 1,
-                borderRadius: 4,
-                outline: i === currentStep ? '2px solid #c9a96e' : 'none',
-                outlineOffset: 2,
-                opacity: i < currentStep ? 0.35 : 1,
-                transition: 'opacity 0.2s',
-              }}
-            >
-              {s.emoji}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Wizard card */}
       <div style={{
-        background: '#161614',
-        border: '1px solid #2a2a27',
-        borderRadius: 12,
-        overflow: 'hidden',
+        padding: '18px 24px 0',
+        flexShrink: 0,
       }}>
-        <div style={{ padding: '24px 20px 4px' }}>
-          {renderStep()}
+        <div style={{
+          fontFamily: 'var(--font-heading)',
+          fontSize: 15,
+          fontWeight: 600,
+          color: '#e8e6df',
+          paddingBottom: 18,
+        }}>
+          Saul Gutierrez&#8199;|&#8199;Private Studio, Elk Grove
+        </div>
+        <div style={{ height: 1, background: 'rgba(201,169,110,0.15)' }} />
+      </div>
+
+      {/* Wizard body */}
+      <div style={{ flex: 1, padding: '24px 20px 40px', maxWidth: 600, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+
+        {/* Progress bar */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e' }}>
+              Step {currentStep + 1} of 7 &mdash; {step.label}
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
+              {currentStep + 1} / 7
+            </span>
+          </div>
+          <div style={{ height: 4, background: '#1e1e1b', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${progressPct}%`,
+              background: 'linear-gradient(90deg, #c9a96e, #8fbcbb)',
+              borderRadius: 2,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
+            {STEPS.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentStep(i)}
+                title={s.label}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 4,
+                  cursor: 'pointer',
+                  fontSize: 18,
+                  lineHeight: 1,
+                  borderRadius: 4,
+                  outline: i === currentStep ? '2px solid #c9a96e' : 'none',
+                  outlineOffset: 2,
+                  opacity: i < currentStep ? 0.35 : 1,
+                  transition: 'opacity 0.2s',
+                }}
+              >
+                {s.emoji}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Nav buttons */}
+        {/* Wizard card */}
         <div style={{
-          borderTop: '1px solid rgba(255,255,255,0.07)',
-          display: 'flex',
-          gap: 10,
-          padding: '14px 20px',
+          background: '#161614',
+          border: '1px solid #2a2a27',
+          borderRadius: 12,
+          overflow: 'hidden',
         }}>
-          {currentStep > 0 && (
-            <button
-              onClick={goBack}
-              style={{
-                flex: 1,
-                minHeight: 44,
-                background: 'transparent',
-                color: '#7a786f',
-                border: '1px solid rgba(122,120,111,0.2)',
-                borderRadius: 8,
-                fontFamily: 'var(--font-body)',
-                fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              Back
-            </button>
-          )}
-          {currentStep < 6 && (
-            <button
-              onClick={goNext}
-              style={{
-                flex: currentStep === 0 ? 1 : 2,
-                minHeight: 44,
-                background: '#c9a96e',
-                color: '#0e0e0d',
-                border: 'none',
-                borderRadius: 8,
-                fontFamily: 'var(--font-body)',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Next
-            </button>
-          )}
+          <div style={{ padding: '24px 20px 4px' }}>
+            {renderStep()}
+          </div>
+
+          {/* Nav buttons */}
+          <div style={{
+            borderTop: '1px solid rgba(255,255,255,0.07)',
+            display: 'flex',
+            gap: 10,
+            padding: '14px 20px',
+          }}>
+            {currentStep > 0 && (
+              <button
+                onClick={goBack}
+                style={{
+                  flex: 1,
+                  minHeight: 44,
+                  background: 'transparent',
+                  color: '#7a786f',
+                  border: '1px solid rgba(122,120,111,0.2)',
+                  borderRadius: 8,
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 14,
+                  cursor: 'pointer',
+                }}
+              >
+                Back
+              </button>
+            )}
+            {currentStep < 6 && (
+              <button
+                onClick={goNext}
+                style={{
+                  flex: currentStep === 0 ? 1 : 2,
+                  minHeight: 44,
+                  background: '#c9a96e',
+                  color: '#0e0e0d',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Next
+              </button>
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        padding: '0 0 20px',
+        textAlign: 'center',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        color: 'rgba(232,230,223,0.2)',
+        flexShrink: 0,
+      }}>
+        Powered by MACRI
       </div>
 
       {/* Duplicate client modal */}

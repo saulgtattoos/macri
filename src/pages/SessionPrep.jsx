@@ -43,30 +43,6 @@ function saveItems(list) {
   localStorage.setItem(LS_KEY, JSON.stringify({ items: list }))
 }
 
-// ─── ElevenLabs TTS ───────────────────────────────────────────────────────────
-
-async function speakText(text) {
-  try {
-    const key = import.meta.env.VITE_ELEVENLABS_KEY
-    const voiceId = 'Q2Qd4P9qaDNuBFUcFCQr'
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_monolingual_v1',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
-    })
-    if (!res.ok) return
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const audio = new Audio(url)
-    audio.play()
-    audio.onended = () => URL.revokeObjectURL(url)
-  } catch {}
-}
-
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 function IconMic({ size = 28, color = 'currentColor' }) {
@@ -153,16 +129,17 @@ function SortableCheckItem({ item, onTextChange, onDelete }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SessionPrep() {
-  const [items, setItems]           = useState(() => loadItems())
-  const [editMode, setEditMode]     = useState(false)
+  const [items, setItems]             = useState(() => loadItems())
+  const [editMode, setEditMode]       = useState(false)
   const [newItemText, setNewItemText] = useState('')
-  const [micStatus, setMicStatus]   = useState('idle')
-  const [statusMsg, setStatusMsg]   = useState('Tap to speak')
-  const [narrow, setNarrow]         = useState(window.innerWidth < 600)
+  const [micStatus, setMicStatus]     = useState('idle')
+  const [statusMsg, setStatusMsg]     = useState('Tap to speak')
+  const [narrow, setNarrow]           = useState(window.innerWidth < 600)
 
   const recorderRef = useRef(null)
   const streamRef   = useRef(null)
   const chunksRef   = useRef([])
+  const mimeTypeRef = useRef('')
 
   useEffect(() => {
     const fn = () => setNarrow(window.innerWidth < 600)
@@ -227,18 +204,69 @@ export default function SessionPrep() {
     }
 
     try {
+      const unlockCtx = new (window.AudioContext || window.webkitAudioContext)()
+      const buf = unlockCtx.createBuffer(1, 1, 22050)
+      const src = unlockCtx.createBufferSource()
+      src.buffer = buf
+      src.connect(unlockCtx.destination)
+      src.start(0)
+      await unlockCtx.resume()
+    } catch(e) {}
+
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       chunksRef.current = []
 
-      const recorder = new MediaRecorder(stream)
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      recorder.onstop = processVoice
-      recorder.start(100)
-      recorderRef.current = recorder
+      const MIME_PRIORITIES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+      const mimeType = MIME_PRIORITIES.find(t => MediaRecorder.isTypeSupported(t)) ?? ''
+      mimeTypeRef.current = mimeType
+
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream)
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      recorderRef.current = mediaRecorder
+      mediaRecorder.start(100)
 
       setMicStatus('listening')
       setStatusMsg('Listening...')
+
+      const silenceCtx = new (window.AudioContext || window.webkitAudioContext)()
+      const silenceStream = stream
+      const silenceSource = silenceCtx.createMediaStreamSource(silenceStream)
+      const analyser = silenceCtx.createAnalyser()
+      analyser.fftSize = 256
+      silenceSource.connect(analyser)
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      let silenceStart = null
+      const silenceInterval = setInterval(() => {
+        analyser.getByteFrequencyData(dataArray)
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
+        if (avg < 8) {
+          if (!silenceStart) silenceStart = Date.now()
+          else if (Date.now() - silenceStart > 1500) {
+            clearInterval(silenceInterval)
+            silenceCtx.close()
+            mediaRecorder.stop()
+          }
+        } else {
+          silenceStart = null
+        }
+      }, 100)
+
+      const hardStop = setTimeout(() => {
+        clearInterval(silenceInterval)
+        silenceCtx.close()
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop()
+      }, 15000)
+
+      mediaRecorder.onstop = () => {
+        clearTimeout(hardStop)
+        clearInterval(silenceInterval)
+        processVoice()
+      }
+
     } catch {
       setMicStatus('error')
       setStatusMsg('Could not process voice. Try again.')
@@ -253,7 +281,12 @@ export default function SessionPrep() {
         streamRef.current = null
       }
 
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+      const mime     = mimeTypeRef.current
+      const isMP4    = mime.startsWith('audio/mp4')
+      const ext      = isMP4 ? 'mp4' : 'webm'
+      const blobType = isMP4 ? 'audio/mp4' : 'audio/webm'
+
+      const blob = new Blob(chunksRef.current, { type: blobType })
       chunksRef.current = []
       setMicStatus('processing')
       setStatusMsg('Checking off your list...')
@@ -261,7 +294,7 @@ export default function SessionPrep() {
       // STT via ElevenLabs Scribe V2
       const elKey = import.meta.env.VITE_ELEVENLABS_KEY
       const formData = new FormData()
-      formData.append('file', blob, 'recording.webm')
+      formData.append('file', blob, `recording.${ext}`)
       formData.append('model_id', 'scribe_v2')
       const sttRes = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
         method: 'POST',
@@ -310,12 +343,31 @@ export default function SessionPrep() {
       setItems(next)
       saveItems(next)
 
-      // TTS response
+      // TTS via AudioContext
       const remaining = parsed.remaining || []
       const ttsText = remaining.length === 0
         ? 'You are ready, Saul. Let us get to work.'
         : `Got it, Saul. You still need: ${remaining.join(', ')}.`
-      await speakText(ttsText)
+
+      const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/Q2Qd4P9qaDNuBFUcFCQr`, {
+        method: 'POST',
+        headers: { 'xi-api-key': import.meta.env.VITE_ELEVENLABS_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: ttsText,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      })
+      if (ttsRes.ok) {
+        const ttsBlob = await ttsRes.blob()
+        const arrayBuffer = await ttsBlob.arrayBuffer()
+        const playCtx = new (window.AudioContext || window.webkitAudioContext)()
+        const decoded = await playCtx.decodeAudioData(arrayBuffer)
+        const playSource = playCtx.createBufferSource()
+        playSource.buffer = decoded
+        playSource.connect(playCtx.destination)
+        playSource.start(0)
+      }
 
       const checkedNames = parsed.checkedItems || []
       setMicStatus('done')
@@ -377,7 +429,47 @@ export default function SessionPrep() {
         </p>
       </div>
 
-      {/* ── Section 1: Checklist ── */}
+      {/* ── Voice Assistant ── */}
+      <div style={{ ...CARD, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <div style={{ width: '100%' }}>
+          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e', marginBottom: 6 }}>
+            Hands Free Assistant
+          </div>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#7a786f', margin: 0 }}>
+            Speak what you have done. MACRI checks it off and tells you what is left.
+          </p>
+        </div>
+
+        <button
+          onClick={handleMicTap}
+          disabled={micStatus === 'processing'}
+          style={{
+            width: 72, height: 72, borderRadius: '50%',
+            background: '#1e1e1b',
+            border: isListening ? '2px solid #c9a96e' : '2px solid #2a2a27',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: micStatus === 'processing' ? 'default' : 'pointer',
+            outline: 'none',
+            animation: isListening ? 'micPulse 1.4s ease-in-out infinite' : 'none',
+            transition: 'border-color 0.2s',
+          }}
+        >
+          <IconMic size={28} color={isListening ? '#c9a96e' : '#7a786f'} />
+        </button>
+
+        <p style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          color: statusColor,
+          margin: 0,
+          textAlign: 'center',
+          minHeight: 16,
+        }}>
+          {statusMsg}
+        </p>
+      </div>
+
+      {/* ── Checklist ── */}
       <div style={CARD}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e' }}>
@@ -485,45 +577,6 @@ export default function SessionPrep() {
         )}
       </div>
 
-      {/* ── Section 2: Voice Assistant ── */}
-      <div style={{ ...CARD, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <div style={{ width: '100%' }}>
-          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e', marginBottom: 6 }}>
-            Hands Free Assistant
-          </div>
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#7a786f', margin: 0 }}>
-            Speak what you have done. MACRI checks it off and tells you what is left.
-          </p>
-        </div>
-
-        <button
-          onClick={handleMicTap}
-          disabled={micStatus === 'processing'}
-          style={{
-            width: 72, height: 72, borderRadius: '50%',
-            background: '#1e1e1b',
-            border: isListening ? '2px solid #c9a96e' : '2px solid #2a2a27',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: micStatus === 'processing' ? 'default' : 'pointer',
-            outline: 'none',
-            animation: isListening ? 'micPulse 1.4s ease-in-out infinite' : 'none',
-            transition: 'border-color 0.2s',
-          }}
-        >
-          <IconMic size={28} color={isListening ? '#c9a96e' : '#7a786f'} />
-        </button>
-
-        <p style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
-          color: statusColor,
-          margin: 0,
-          textAlign: 'center',
-          minHeight: 16,
-        }}>
-          {statusMsg}
-        </p>
-      </div>
     </div>
   )
 }

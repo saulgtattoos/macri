@@ -2529,7 +2529,7 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
             </div>
 
             {/* Stage badge + View Full Profile button */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="card-front-bottom-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <StageBadge stage={client.stage} />
               <button
                 onClick={e => { e.stopPropagation(); onOpen(client, null) }}

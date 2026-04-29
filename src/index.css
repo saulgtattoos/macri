@@ -105,6 +105,18 @@ select option {
   padding: 32px 32px 80px;
 }
 
+/* ─── card front bottom row — landscape stack ─────────────────────────────── */
+@media (orientation: landscape) and (max-width: 900px) {
+  .card-front-bottom-row {
+    flex-direction: column !important;
+    gap: 8px;
+  }
+  .card-front-bottom-row button {
+    width: 100%;
+    white-space: normal;
+  }
+}
+
 @media (max-width: 767px) {
   .app-outer {
     flex-direction: column !important;

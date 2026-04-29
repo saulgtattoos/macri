@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { STAGES } from '../constants/stages'
-import { createPortal } from 'react-dom'
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
@@ -2430,101 +2429,6 @@ function LogSessionModal({ isOpen, onSave, onClose }) {
   )
 }
 
-// ─── CardContextMenu ─────────────────────────────────────────────────────────
-
-function CardContextMenu({ x, y, onViewProfile, onArchive, onUnarchive, isArchived, onDelete, onDismiss }) {
-  const [confirmDelete, setConfirmDelete] = useState(false)
-
-  const menuW = 184
-  const menuH = 126 // estimated
-  const left  = Math.min(x, window.innerWidth  - menuW - 10)
-  const top   = Math.min(y, window.innerHeight - menuH - 10)
-
-  function handleArchive() {
-    try { navigator.vibrate(100) } catch {}
-    isArchived ? onUnarchive() : onArchive()
-  }
-
-  function handleDelete() {
-    if (confirmDelete) {
-      try { navigator.vibrate([100, 50, 100]) } catch {}
-      onDelete()
-    } else {
-      setConfirmDelete(true)
-    }
-  }
-
-  function item(danger, active) {
-    return {
-      display: 'block', width: '100%', textAlign: 'left',
-      padding: '11px 16px', background: 'none', border: 'none',
-      fontFamily: 'var(--font-mono)', fontSize: '12px', letterSpacing: '0.04em',
-      color: danger
-        ? (active ? '#ef4444' : 'rgba(239,68,68,0.65)')
-        : 'var(--text)',
-      cursor: 'pointer',
-      transition: 'background 0.1s, color 0.12s',
-    }
-  }
-
-  const divider = (
-    <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 12px' }} />
-  )
-
-  return createPortal(
-    <>
-      {/* Tap-outside backdrop */}
-      <div
-        onClick={onDismiss}
-        style={{ position: 'fixed', inset: 0, zIndex: 500, WebkitTapHighlightColor: 'transparent' }}
-      />
-
-      {/* Menu panel */}
-      <div style={{
-        position: 'fixed', top, left,
-        zIndex: 501,
-        background: 'var(--surface2)',
-        border: '1px solid rgba(255,255,255,0.07)',
-        borderTop: '1px solid var(--gold)',
-        borderRadius: 12,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.55)',
-        minWidth: menuW,
-        overflow: 'hidden',
-        animation: 'ctx-scale-in 0.2s ease-out',
-        transformOrigin: 'top left',
-      }}>
-        <button
-          onClick={() => { onDismiss(); onViewProfile() }}
-          style={item(false, false)}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'none'}
-        >
-          View Profile
-        </button>
-        {divider}
-        <button
-          onClick={handleArchive}
-          style={item(false, false)}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'none'}
-        >
-          {isArchived ? 'Unarchive' : 'Archive'}
-        </button>
-        {divider}
-        <button
-          onClick={handleDelete}
-          style={item(true, confirmDelete)}
-          onMouseEnter={e => { if (!confirmDelete) e.currentTarget.style.background = 'rgba(239,68,68,0.07)' }}
-          onMouseLeave={e => e.currentTarget.style.background = 'none'}
-        >
-          {confirmDelete ? 'Confirm Delete?' : 'Delete Permanently'}
-        </button>
-      </div>
-    </>,
-    document.body
-  )
-}
-
 // ─── ClientCard ───────────────────────────────────────────────────────────────
 
 function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
@@ -2532,58 +2436,14 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
   const [activeJump,        setActiveJump]        = useState(null)
   const [backConfirmDelete, setBackConfirmDelete] = useState(false)
   const [cardFading,        setCardFading]        = useState(false)
-  const [jumpSections,      setJumpSections]      = useState(loadSectionOrder)
-  const [contextMenu,       setContextMenu]       = useState(null) // { x, y } | null
-
-  const wrapperRef      = useRef(null)
-  const tapAllowed      = useRef(true)
-  const longPressTimer  = useRef(null)
+  const [jumpSections, setJumpSections] = useState(loadSectionOrder)
 
   // Refresh jump section order whenever the card flips to back
   useEffect(() => {
     if (flipped) setJumpSections(loadSectionOrder())
   }, [flipped])
 
-  // Native touch listeners — long press only
-  useEffect(() => {
-    const el = wrapperRef.current
-    if (!el) return
-
-    function onTouchStart(e) {
-      const t = e.touches[0]
-      tapAllowed.current = true
-      longPressTimer.current = setTimeout(() => {
-        tapAllowed.current = false
-        try { navigator.vibrate(50) } catch {}
-        setContextMenu({ x: t.clientX, y: t.clientY })
-      }, 500)
-    }
-
-    function onTouchMove() {
-      clearTimeout(longPressTimer.current)
-      tapAllowed.current = false
-    }
-
-    function onTouchEnd() {
-      clearTimeout(longPressTimer.current)
-    }
-
-    el.addEventListener('touchstart',  onTouchStart, { passive: true })
-    el.addEventListener('touchmove',   onTouchMove,  { passive: true })
-    el.addEventListener('touchend',    onTouchEnd,   { passive: true })
-    el.addEventListener('touchcancel', onTouchEnd,   { passive: true })
-
-    return () => {
-      clearTimeout(longPressTimer.current)
-      el.removeEventListener('touchstart',  onTouchStart)
-      el.removeEventListener('touchmove',   onTouchMove)
-      el.removeEventListener('touchend',    onTouchEnd)
-      el.removeEventListener('touchcancel', onTouchEnd)
-    }
-  }, [])
-
   function handleOuterClick() {
-    if (!tapAllowed.current) return
     setFlipped(f => !f)
   }
 
@@ -2618,25 +2478,9 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
         transition: cardFading ? 'opacity 0.3s' : 'none',
         pointerEvents: cardFading ? 'none' : 'auto',
       }}
-      onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }) }}
     >
-      {/* Context menu (portal — avoids perspective/transform containing-block issues) */}
-      {contextMenu && (
-        <CardContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          isArchived={client.stage === 'Archive'}
-          onViewProfile={() => { setContextMenu(null); onOpen(client, null) }}
-          onArchive={() => { setContextMenu(null); onArchive(client.id) }}
-          onUnarchive={() => { setContextMenu(null); onUnarchive(client.id) }}
-          onDelete={() => { setContextMenu(null); setCardFading(true); setTimeout(() => onDelete(client.id), 300) }}
-          onDismiss={() => setContextMenu(null)}
-        />
-      )}
-
       {/* Card wrapper */}
       <div
-        ref={wrapperRef}
         className="crm-card-scene"
         style={{ height: '100%', cursor: 'pointer' }}
         onClick={handleOuterClick}
@@ -2769,26 +2613,26 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
             </div>
 
             {/* Bottom bar — back + delete */}
-            <div style={{ padding: '6px 12px 10px', flexShrink: 0, borderTop: '1px solid var(--surface2)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
-                <button
-                  onClick={e => { e.stopPropagation(); setFlipped(false) }}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)',
-                    padding: '6px 8px', minHeight: 36,
-                  }}
-                >
-                  ← Back
-                </button>
-              </div>
+            <div style={{ padding: '10px 12px 12px', flexShrink: 0, borderTop: '1px solid var(--surface2)' }}>
+              <button
+                onClick={e => { e.stopPropagation(); setFlipped(false) }}
+                style={{
+                  width: '100%', minHeight: 48,
+                  background: 'transparent', border: '1px solid #c9a96e',
+                  color: '#c9a96e', borderRadius: 8, padding: '14px 16px',
+                  fontFamily: 'var(--font-mono)', fontSize: 13,
+                  cursor: 'pointer', textAlign: 'center',
+                }}
+              >
+                Back
+              </button>
               <button
                 onClick={handleDeleteBack}
                 style={{
                   width: '100%', background: 'none', border: 'none', cursor: 'pointer',
                   fontFamily: 'var(--font-body)', fontSize: 11,
                   color: backConfirmDelete ? '#ef4444' : 'rgba(239,68,68,0.4)',
-                  padding: '3px 0',
+                  padding: '3px 0', marginTop: 24,
                   transition: 'color 0.15s',
                   textAlign: 'center',
                 }}

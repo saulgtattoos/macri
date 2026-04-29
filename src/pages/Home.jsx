@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { STAGES } from '../constants/stages'
 
@@ -267,6 +267,15 @@ export default function Home() {
   const [welcomeOpen,   setWelcomeOpen]   = useState(false)
   const [briefingShown, setBriefingShown] = useState(false)
 
+  // Voice log
+  const [voiceStatus, setVoiceStatus] = useState('idle')
+  const [voiceMsg,    setVoiceMsg]    = useState('')
+  const voiceRecorderRef = useRef(null)
+  const voiceStreamRef   = useRef(null)
+  const voiceChunksRef   = useRef([])
+  const voiceMimeRef     = useRef('')
+  const voiceTtsRef      = useRef(null)
+
   useEffect(() => {
     const todayStr = todayISO()
     const last = localStorage.getItem(LS_WELCOME)
@@ -384,6 +393,15 @@ export default function Home() {
   // ── Handlers: log session ──
 
   function handleOpenLogSession() {
+    if (voiceRecorderRef.current && voiceRecorderRef.current.state === 'recording') {
+      voiceRecorderRef.current.stop()
+    }
+    if (voiceStreamRef.current) {
+      voiceStreamRef.current.getTracks().forEach(t => t.stop())
+      voiceStreamRef.current = null
+    }
+    setVoiceStatus('idle')
+    setVoiceMsg('')
     setLogForm({ ...LOG_FORM_INIT, date: todayISO() })
     setLogStep(1)
     setLogSelectedClient(null)
@@ -410,6 +428,158 @@ export default function Home() {
     saveClients(updated)
     setClients(updated)
     setLogOpen(false)
+  }
+
+  // ── Handlers: voice log ──
+
+  async function handleVoiceTap() {
+    if (voiceStatus === 'processing') return
+
+    if (voiceStatus === 'listening') {
+      if (voiceRecorderRef.current) voiceRecorderRef.current.stop()
+      return
+    }
+
+    const ttsPlayer = new Audio()
+    ttsPlayer.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAA' +
+      'EAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
+    ttsPlayer.play().catch(() => {})
+    voiceTtsRef.current = ttsPlayer
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      voiceStreamRef.current = stream
+      voiceChunksRef.current = []
+
+      const MIME_PRIORITIES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+      const mimeType = MIME_PRIORITIES.find(t => MediaRecorder.isTypeSupported(t)) ?? ''
+      voiceMimeRef.current = mimeType
+
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream)
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) voiceChunksRef.current.push(e.data) }
+      voiceRecorderRef.current = mediaRecorder
+      mediaRecorder.start(100)
+
+      setVoiceStatus('listening')
+      setVoiceMsg('Listening...')
+
+      const silenceCtx = new (window.AudioContext || window.webkitAudioContext)()
+      const silenceSource = silenceCtx.createMediaStreamSource(stream)
+      const analyser = silenceCtx.createAnalyser()
+      analyser.fftSize = 256
+      silenceSource.connect(analyser)
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      let silenceStart = null
+      const silenceInterval = setInterval(() => {
+        analyser.getByteFrequencyData(dataArray)
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
+        if (avg < 8) {
+          if (!silenceStart) silenceStart = Date.now()
+          else if (Date.now() - silenceStart > 1500) {
+            clearInterval(silenceInterval)
+            silenceCtx.close()
+            mediaRecorder.stop()
+          }
+        } else {
+          silenceStart = null
+        }
+      }, 100)
+
+      const hardStop = setTimeout(() => {
+        clearInterval(silenceInterval)
+        silenceCtx.close()
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop()
+      }, 15000)
+
+      mediaRecorder.onstop = () => {
+        clearTimeout(hardStop)
+        clearInterval(silenceInterval)
+        processVoiceLog()
+      }
+
+    } catch {
+      setVoiceStatus('error')
+      setVoiceMsg('Could not process voice. Fill in manually.')
+      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('') }, 3000)
+    }
+  }
+
+  async function processVoiceLog() {
+    try {
+      if (voiceStreamRef.current) {
+        voiceStreamRef.current.getTracks().forEach(t => t.stop())
+        voiceStreamRef.current = null
+      }
+
+      const mime     = voiceMimeRef.current
+      const isMP4    = mime.startsWith('audio/mp4')
+      const ext      = isMP4 ? 'mp4' : 'webm'
+      const blobType = isMP4 ? 'audio/mp4' : 'audio/webm'
+
+      const blob = new Blob(voiceChunksRef.current, { type: blobType })
+      voiceChunksRef.current = []
+      setVoiceStatus('processing')
+      setVoiceMsg('Processing...')
+
+      const elKey = import.meta.env.VITE_ELEVENLABS_KEY
+      const fd = new FormData()
+      fd.append('file', blob, `recording.${ext}`)
+      fd.append('model_id', 'scribe_v2')
+      const sttRes = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+        method: 'POST',
+        headers: { 'xi-api-key': elKey },
+        body: fd,
+      })
+      if (!sttRes.ok) throw new Error('stt')
+      const sttData = await sttRes.json()
+      const transcript = sttData.text?.trim()
+      if (!transcript) throw new Error('empty')
+
+      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 512,
+          system: 'You are a session log parser for a tattoo studio. Extract session details from the spoken input and return ONLY valid JSON with these exact keys: tattooDescription, placement, isTouchUp, tattooPrice, amountPaid, tip, paymentMethod, notes. isTouchUp is true if the person says touch up. paymentMethod must be one of: Cash, Venmo, Zelle, CashApp, Card, Gift Card, Other. All numeric fields as numbers not strings. Notes captures anything not covered by other fields.',
+          messages: [{ role: 'user', content: transcript }],
+        }),
+      })
+      if (!claudeRes.ok) throw new Error('claude')
+      const claudeData = await claudeRes.json()
+      const raw = claudeData.content[0].text
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/```\s*$/, '')
+      const parsed = JSON.parse(raw)
+
+      setLogForm(f => ({
+        ...f,
+        ...(parsed.tattooDescription != null && { tattooDescription: String(parsed.tattooDescription) }),
+        ...(parsed.placement         != null && { placement:         String(parsed.placement) }),
+        ...(parsed.isTouchUp         != null && { isTouchUp:         Boolean(parsed.isTouchUp) }),
+        ...(parsed.tattooPrice       != null && { tattooPrice:       String(parsed.tattooPrice) }),
+        ...(parsed.amountPaid        != null && { amountPaid:        String(parsed.amountPaid) }),
+        ...(parsed.tip               != null && { tip:               String(parsed.tip) }),
+        ...(parsed.paymentMethod     != null && { paymentMethod:     parsed.paymentMethod }),
+        ...(parsed.notes             != null && { notes:             String(parsed.notes) }),
+      }))
+
+      setVoiceStatus('done')
+      setVoiceMsg('Fields filled. Review and save.')
+      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('') }, 5000)
+
+    } catch {
+      setVoiceStatus('error')
+      setVoiceMsg('Could not process voice. Fill in manually.')
+      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('') }, 3000)
+    }
   }
 
   // ── Derived: log session client list ──
@@ -1050,6 +1220,56 @@ export default function Home() {
 
             {logStep === 2 && (
               <>
+                {/* Voice Log Card */}
+                <div style={{
+                  background: '#1e1e1b',
+                  border: '1px solid rgba(201,169,110,0.25)',
+                  borderRadius: 10,
+                  padding: '14px 16px',
+                  marginBottom: 16,
+                }}>
+                  <p style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
+                    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8,
+                  }}>
+                    VOICE LOG — HANDS FREE
+                  </p>
+                  <p style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: '#7a786f', marginBottom: 10 }}>
+                    Tap Speak and say the session details. Example:{' '}
+                    <span style={{ fontStyle: 'italic', color: '#c9a96e' }}>
+                      Maria, watercolor, left shoulder, 4 hours, $1000, cash, $100 tip
+                    </span>
+                  </p>
+                  <button
+                    onClick={handleVoiceTap}
+                    disabled={voiceStatus === 'processing'}
+                    style={{
+                      background: '#161614',
+                      border: voiceStatus === 'listening'
+                        ? '1px solid rgba(220,80,60,0.5)'
+                        : '1px solid rgba(255,255,255,0.14)',
+                      borderRadius: 6,
+                      padding: '8px 14px',
+                      minHeight: 48,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 12,
+                      color: voiceStatus === 'listening' ? '#e07055' : '#7a786f',
+                      cursor: voiceStatus === 'processing' ? 'default' : 'pointer',
+                    }}
+                  >
+                    {voiceStatus === 'listening' ? 'Stop' : '🎙 Speak session'}
+                  </button>
+                  {voiceMsg ? (
+                    <p style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 11,
+                      color: voiceStatus === 'error' ? '#f09595' : '#c9a96e',
+                      marginTop: 8, marginBottom: 0,
+                    }}>
+                      {voiceMsg}
+                    </p>
+                  ) : null}
+                </div>
+
                 {[
                   { field: 'date',              label: 'Date',              type: 'date',   placeholder: '' },
                   { field: 'tattooDescription', label: 'Tattoo Description',type: 'text',   placeholder: 'e.g. Floral sleeve' },

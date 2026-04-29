@@ -136,10 +136,11 @@ export default function SessionPrep() {
   const [statusMsg, setStatusMsg]     = useState('Tap to speak')
   const [narrow, setNarrow]           = useState(window.innerWidth < 600)
 
-  const recorderRef = useRef(null)
-  const streamRef   = useRef(null)
-  const chunksRef   = useRef([])
-  const mimeTypeRef = useRef('')
+  const recorderRef  = useRef(null)
+  const streamRef    = useRef(null)
+  const chunksRef    = useRef([])
+  const mimeTypeRef  = useRef('')
+  const ttsPlayerRef = useRef(null)
 
   useEffect(() => {
     const fn = () => setNarrow(window.innerWidth < 600)
@@ -203,15 +204,11 @@ export default function SessionPrep() {
       return
     }
 
-    try {
-      const unlockCtx = new (window.AudioContext || window.webkitAudioContext)()
-      const buf = unlockCtx.createBuffer(1, 1, 22050)
-      const src = unlockCtx.createBufferSource()
-      src.buffer = buf
-      src.connect(unlockCtx.destination)
-      src.start(0)
-      await unlockCtx.resume()
-    } catch(e) {}
+    const ttsPlayer = new Audio()
+    ttsPlayer.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAA' +
+      'EAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
+    ttsPlayer.play().catch(() => {})
+    ttsPlayerRef.current = ttsPlayer
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -360,13 +357,9 @@ export default function SessionPrep() {
       })
       if (ttsRes.ok) {
         const ttsBlob = await ttsRes.blob()
-        const arrayBuffer = await ttsBlob.arrayBuffer()
-        const playCtx = new (window.AudioContext || window.webkitAudioContext)()
-        const decoded = await playCtx.decodeAudioData(arrayBuffer)
-        const playSource = playCtx.createBufferSource()
-        playSource.buffer = decoded
-        playSource.connect(playCtx.destination)
-        playSource.start(0)
+        const ttsUrl = URL.createObjectURL(ttsBlob)
+        ttsPlayerRef.current.src = ttsUrl
+        ttsPlayerRef.current.play()
       }
 
       const checkedNames = parsed.checkedItems || []

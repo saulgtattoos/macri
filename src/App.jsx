@@ -7,6 +7,7 @@ import InquiryAssistant from './pages/InquiryAssistant'
 import CRM from './pages/CRM'
 import DevQueue from './pages/DevQueue'
 import SessionPrep from './pages/SessionPrep'
+import Consultation from './pages/Consultation'
 
 export default function App() {
   return (
@@ -49,7 +50,7 @@ export default function App() {
             <Route path="/inquiry"      element={<InquiryAssistant />} />
             <Route path="/crm"          element={<CRM />} />
             <Route path="/projects"     element={<Placeholder name="Project Wall" />} />
-            <Route path="/consultation" element={<Placeholder name="Consultation" />} />
+            <Route path="/consultation" element={<Consultation />} />
             <Route path="/clients"      element={<Placeholder name="Client Database" />} />
             <Route path="/session-prep" element={<SessionPrep />} />
             <Route path="/finances"     element={<Placeholder name="Finances" />} />

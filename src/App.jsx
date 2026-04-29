@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import BottomNav from './components/BottomNav'
+import Home from './pages/Home'
 import Placeholder from './pages/Placeholder'
 import InquiryAssistant from './pages/InquiryAssistant'
 import CRM from './pages/CRM'
@@ -43,7 +44,7 @@ export default function App() {
           background: 'var(--bg)',
         }}>
           <Routes>
-            <Route path="/"             element={<Placeholder name="Home" />} />
+            <Route path="/"             element={<Home />} />
             <Route path="/inquiry"      element={<InquiryAssistant />} />
             <Route path="/crm"          element={<CRM />} />
             <Route path="/projects"     element={<Placeholder name="Project Wall" />} />

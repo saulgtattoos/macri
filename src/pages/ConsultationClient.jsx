@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
-import { loadClients, saveClients, mkClient } from './CRM'
+import { useState, useEffect, useRef } from 'react'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const defaultForm = {
   name: '', phone: '', email: '',
+  socialPlatform: 'Instagram', socialHandle: '',
   referralSource: '', firstTimeClient: null,
   concept: '', inspirationNotes: '',
+  referenceImages: [],
   isCoverUp: false, coverUpDescription: '',
   isMeaningful: false, meaningStory: '',
   placement: '', size: '',
@@ -30,10 +31,11 @@ const STEPS = [
   { emoji: '🎵', label: 'The Experience' },
   { emoji: '🏥', label: 'Health and Skin' },
   { emoji: '💰', label: 'Pricing and Deposit' },
-  { emoji: '✍️', label: 'Artist Notes' },
+  { emoji: '📋', label: 'Client Summary' },
 ]
 
 const REFERRAL_OPTIONS  = ['Instagram', 'Google', 'Word of Mouth', 'Existing Client', 'Other']
+const SOCIAL_PLATFORMS  = ['Instagram', 'TikTok', 'Facebook']
 const STYLE_OPTIONS     = ['Watercolor', 'Black and Gray Realism', 'Sketch Art', 'Abstract', 'Pointillism', 'Other']
 const COLOR_OPTIONS     = ['Full Color', 'Limited Color', 'Black and Gray', 'Black and White Only']
 const ORIENT_OPTIONS    = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
@@ -42,10 +44,8 @@ const CLEARANCE_OPTIONS = ['No Issues', 'Note on File', 'Needs Clearance']
 const PRICING_OPTIONS   = ['Hourly', 'Per Session', 'Full Day', 'Shop Minimum']
 const DEPOSIT_AMT       = ['$100', '$150', '$200', '$250', 'No Deposit Required']
 const DEPOSIT_STATUS    = ['Pending', 'Paid', 'No Deposit Required']
-const TIER_OPTIONS      = ['Deposit Required', 'Trusted Client']
 
 const DRAFT_KEY = 'macri_consultation_client_draft'
-const IOS_WAV   = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAEAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
 
 // ─── PillToggle ────────────────────────────────────────────────────────────────
 
@@ -123,24 +123,6 @@ function Field({ label, children }) {
   )
 }
 
-// ─── Summary ───────────────────────────────────────────────────────────────────
-
-function buildSummaryLines(f) {
-  const lines = []
-  if (f.name)            lines.push(['Client',          f.name])
-  if (f.concept)         lines.push(['Concept',         f.concept])
-  if (f.placement)       lines.push(['Placement',       f.placement])
-  if (f.size)            lines.push(['Size',            f.size])
-  if (f.style?.length)   lines.push(['Style',           f.style.join(', ')])
-  if (f.colorProfile)    lines.push(['Color Profile',   f.colorProfile])
-  if (f.pricingType)     lines.push(['Pricing',         f.pricingType])
-  if (f.estimatedTotal)  lines.push(['Estimated Total', f.estimatedTotal])
-  if (f.depositAmount)   lines.push(['Deposit Amount',  f.depositAmount])
-  if (f.depositStatus)   lines.push(['Deposit Status',  f.depositStatus])
-  if (f.appointmentDate) lines.push(['Appointment',     f.appointmentDate])
-  return lines
-}
-
 // ─── ConsultationClient ────────────────────────────────────────────────────────
 
 export default function ConsultationClient() {
@@ -152,27 +134,42 @@ export default function ConsultationClient() {
   })
   const [currentStep, setCurrentStep] = useState(0)
   const [nameError, setNameError]     = useState(false)
-  const [showDupModal, setShowDupModal] = useState(false)
-  const [dupClient, setDupClient]     = useState(null)
   const [showThankYou, setShowThankYou] = useState(false)
+  const [showWaiting, setShowWaiting]   = useState(false)
   const [estW, setEstW]               = useState('')
   const [estH, setEstH]               = useState('')
   const [estApplied, setEstApplied]   = useState(false)
   const [estStyle, setEstStyle]       = useState('')
+  const [isDragging, setIsDragging]   = useState(false)
+  const imageURLs                     = useRef({})
+  const fileInputRef                  = useRef(null)
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
   }, [formData])
 
   useEffect(() => {
+    return () => {
+      Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [])
+
+  useEffect(() => {
     function handleMessage(e) {
       if (e.data?.type === 'RESET_WIZARD') {
+        Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
+        imageURLs.current = {}
         setFormData(defaultForm)
         setCurrentStep(0)
         setShowThankYou(false)
+        setShowWaiting(false)
         setEstW('')
         setEstH('')
         setEstStyle('')
+      }
+      if (e.data?.type === 'CONSULTATION_SAVED') {
+        setShowThankYou(true)
+        setShowWaiting(false)
       }
     }
     window.addEventListener('message', handleMessage)
@@ -196,111 +193,32 @@ export default function ConsultationClient() {
     setCurrentStep(s => Math.max(s - 1, 0))
   }
 
-  // ── Save logic ────────────────────────────────────────────────────────────────
+  // ── Image helpers ─────────────────────────────────────────────────────────────
 
-  async function doSave(clients, existingId, ttsPlayer) {
-    const now = new Date().toISOString()
-    const consultationObj = { id: 'consult_' + Date.now(), date: now, ...formData }
-
-    if (existingId !== null) {
-      const idx = clients.findIndex(c => c.id === existingId)
-      if (idx >= 0) {
-        clients[idx] = {
-          ...clients[idx],
-          stage: 'Design Phase',
-          updatedAt: now,
-          consultations: [consultationObj, ...(clients[idx].consultations || [])],
-        }
-      }
-    } else {
-      const newClient = mkClient({
-        id: 'crm_' + Date.now(),
-        name: formData.name.trim(),
-        phone: formData.phone,
-        email: formData.email,
-        referralSource: formData.referralSource,
-        firstTimeClient: formData.firstTimeClient,
-        stage: 'Design Phase',
-        clientTier: formData.clientTier,
-        updatedAt: now,
-        consultations: [consultationObj],
-        sessions: [],
-      })
-      clients.unshift(newClient)
-    }
-
-    saveClients(clients)
-    localStorage.removeItem(DRAFT_KEY)
-
-    const firstName = formData.name.trim().split(' ')[0]
-    try {
-      const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/Q2Qd4P9qaDNuBFUcFCQr', {
-        method: 'POST',
-        headers: {
-          'xi-api-key': import.meta.env.VITE_ELEVENLABS_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: `${firstName} consultation saved. They are now on your Project Wall.`,
-          model_id: 'eleven_monolingual_v1',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-      })
-      if (res.ok) {
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        ttsPlayer.src = url
-        ttsPlayer.play()
-        ttsPlayer.onended = () => URL.revokeObjectURL(url)
-      }
-    } catch {}
-
-    setShowThankYou(true)
-    setShowDupModal(false)
-    setDupClient(null)
-  }
-
-  async function saveConsultation() {
-    const ttsPlayer = new Audio()
-    ttsPlayer.src = IOS_WAV
-    ttsPlayer.play().catch(() => {})
-
-    if (!formData.name.trim()) {
-      setNameError(true)
-      setCurrentStep(0)
-      return
-    }
-
-    const clients = loadClients()
-    const existing = clients.find(c => {
-      const nameMatch = c.name?.toLowerCase() === formData.name.trim().toLowerCase()
-      const emailMatch = formData.email && c.email?.toLowerCase() === formData.email.toLowerCase()
-      return nameMatch || emailMatch
+  function addImages(files) {
+    const newImages = []
+    Array.from(files).forEach(file => {
+      if (!file.type.startsWith('image/')) return
+      const id = 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2)
+      imageURLs.current[id] = URL.createObjectURL(file)
+      newImages.push({ id, fileName: file.name, note: '' })
     })
+    if (!newImages.length) return
+    set('referenceImages', [...(formData.referenceImages || []), ...newImages])
+  }
 
-    if (existing) {
-      setDupClient(existing)
-      setShowDupModal(true)
-      return
+  function removeImage(id) {
+    if (imageURLs.current[id]) {
+      URL.revokeObjectURL(imageURLs.current[id])
+      delete imageURLs.current[id]
     }
-
-    await doSave(clients, null, ttsPlayer)
+    set('referenceImages', (formData.referenceImages || []).filter(img => img.id !== id))
   }
 
-  async function handleAddToExisting() {
-    const ttsPlayer = new Audio()
-    ttsPlayer.src = IOS_WAV
-    ttsPlayer.play().catch(() => {})
-    const clients = loadClients()
-    await doSave(clients, dupClient.id, ttsPlayer)
-  }
-
-  async function handleCreateNew() {
-    const ttsPlayer = new Audio()
-    ttsPlayer.src = IOS_WAV
-    ttsPlayer.play().catch(() => {})
-    const clients = loadClients()
-    await doSave(clients, null, ttsPlayer)
+  function updateImageNote(id, note) {
+    set('referenceImages', (formData.referenceImages || []).map(img =>
+      img.id === id ? { ...img, note } : img
+    ))
   }
 
   // ── Step renders ──────────────────────────────────────────────────────────────
@@ -357,6 +275,28 @@ export default function ConsultationClient() {
             onChange={v => set('firstTimeClient', v === 'Yes')}
           />
         </Field>
+        <div style={{ marginBottom: 20 }}>
+          <span style={LABEL_STYLE}>Social Media</span>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ flexShrink: 0 }}>
+              <PillToggle
+                options={SOCIAL_PLATFORMS}
+                value={formData.socialPlatform}
+                onChange={v => set('socialPlatform', v)}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <span style={LABEL_STYLE}>Handle or profile link</span>
+              <input
+                type="text"
+                value={formData.socialHandle}
+                onChange={e => set('socialHandle', e.target.value)}
+                placeholder="e.g. @saulgtattoos"
+                style={INPUT_STYLE}
+              />
+            </div>
+          </div>
+        </div>
       </>
     )
   }
@@ -415,6 +355,95 @@ export default function ConsultationClient() {
             />
           </Field>
         )}
+
+        {/* Visual Reference Manager */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={{ ...LABEL_STYLE, marginBottom: 10 }}>Visual References</span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => { addImages(e.target.files); e.target.value = '' }}
+          />
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+            onDragEnter={e => { e.preventDefault(); setIsDragging(true) }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={e => {
+              e.preventDefault()
+              setIsDragging(false)
+              addImages(e.dataTransfer.files)
+            }}
+            style={{
+              border: isDragging
+                ? '1.5px dashed rgba(201,169,110,0.5)'
+                : '1.5px dashed rgba(201,169,110,0.2)',
+              borderRadius: 12,
+              padding: 24,
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'border-color 0.15s',
+              marginBottom: (formData.referenceImages?.length > 0) ? 14 : 0,
+            }}
+          >
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#7a786f' }}>
+              Drag reference photos here or tap to browse
+            </span>
+          </div>
+          {(formData.referenceImages || []).map(img => (
+            <div
+              key={img.id}
+              style={{
+                display: 'flex',
+                gap: 12,
+                marginBottom: 12,
+                alignItems: 'flex-start',
+              }}
+            >
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <img
+                  src={imageURLs.current[img.id]}
+                  alt={img.fileName}
+                  style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', display: 'block' }}
+                />
+                <button
+                  onClick={() => removeImage(img.id)}
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.7)',
+                    border: 'none',
+                    color: '#e8e6df',
+                    fontSize: 11,
+                    lineHeight: 1,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ flex: 1 }}>
+                <span style={LABEL_STYLE}>What elements do you like about this reference?</span>
+                <textarea
+                  value={img.note}
+                  onChange={e => updateImageNote(img.id, e.target.value)}
+                  style={{ ...INPUT_STYLE, minHeight: 60, resize: 'vertical' }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       </>
     )
   }
@@ -777,56 +806,116 @@ export default function ConsultationClient() {
   }
 
   function renderStep6() {
-    const summaryLines = buildSummaryLines(formData)
+    const f = formData
+
+    const SECTION_CARD = {
+      background: 'rgba(201,169,110,0.04)',
+      border: '1px solid rgba(201,169,110,0.12)',
+      borderRadius: 12,
+      padding: '16px 18px',
+      marginBottom: 16,
+    }
+    const SECTION_LABEL = {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 10,
+      color: '#c9a96e',
+      letterSpacing: '0.08em',
+      marginBottom: 10,
+      display: 'block',
+    }
+    const ROW_KEY = {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 11,
+      color: '#7a786f',
+      minWidth: 120,
+      flexShrink: 0,
+    }
+    const ROW_VAL = {
+      fontFamily: 'var(--font-body)',
+      fontSize: 13,
+      color: '#e8e6df',
+      lineHeight: 1.4,
+    }
+
+    function row(label, value) {
+      if (!value) return null
+      return (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+          <span style={ROW_KEY}>{label}</span>
+          <span style={ROW_VAL}>{value}</span>
+        </div>
+      )
+    }
+
     return (
       <>
-        <Field label="Private Notes: Not visible in the client summary">
-          <textarea
-            value={formData.artistNotes}
-            onChange={e => set('artistNotes', e.target.value)}
-            placeholder="Notes for your eyes only..."
-            style={{ ...INPUT_STYLE, minHeight: 80, resize: 'vertical' }}
-          />
-        </Field>
+        <div style={SECTION_CARD}>
+          <span style={SECTION_LABEL}>PROJECT OVERVIEW</span>
+          {row('Client', f.name)}
+          {row('Concept', f.concept)}
+          {row('Placement', f.placement)}
+          {row('Size', f.size)}
+          {row('Style', f.style?.length ? f.style.join(', ') : '')}
+          {row('Color Profile', f.colorProfile)}
+          {row('Orientation', f.orientation)}
+        </div>
 
-        {summaryLines.length > 0 && (
-          <div style={{
-            background: 'rgba(201,169,110,0.05)',
-            border: '1px solid rgba(201,169,110,0.15)',
-            borderRadius: 12,
-            padding: '16px 18px',
-            marginBottom: 20,
-          }}>
-            <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: '#c9a96e',
-              letterSpacing: '0.08em',
-              marginBottom: 12,
-            }}>
-              CLIENT SUMMARY
+        {(f.referenceImages?.length > 0) && (
+          <div style={SECTION_CARD}>
+            <span style={SECTION_LABEL}>REFERENCE GALLERY</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              {f.referenceImages.map(img => (
+                <div key={img.id} style={{ width: 120 }}>
+                  <img
+                    src={imageURLs.current[img.id]}
+                    alt={img.fileName}
+                    style={{ width: 120, height: 120, borderRadius: 8, objectFit: 'cover', display: 'block', marginBottom: 6 }}
+                  />
+                  {img.note && (
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: '#7a786f', lineHeight: 1.4, display: 'block' }}>
+                      {img.note}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-            {summaryLines.map(([key, val], i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', minWidth: 110, flexShrink: 0 }}>
-                  {key}
-                </span>
-                <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#e8e6df', lineHeight: 1.4 }}>
-                  {val}
-                </span>
-              </div>
-            ))}
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={SECTION_CARD}>
+          <span style={SECTION_LABEL}>PRICING AND DEPOSIT TERMS</span>
+          {row('Pricing Type', f.pricingType)}
+          {f.estimatedTotal && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+              <span style={ROW_KEY}>Estimated Total</span>
+              <span style={ROW_VAL}>${f.estimatedTotal}</span>
+            </div>
+          )}
+          {row('Deposit Amount', f.depositAmount)}
+          {row('Deposit Status', f.depositStatus)}
+          {row('Appointment', f.appointmentDate)}
+          <div style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 12,
+            color: '#7a786f',
+            lineHeight: 1.7,
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: '1px solid rgba(122,120,111,0.15)',
+          }}>
+            This estimate is a ballpark figure based on size and your specific style choice. Simpler designs may be more efficient, while complex and intricate pieces may require more time. This serves as a flexible guide to provide a clear idea of the investment involved.
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', paddingTop: 8 }}>
           <button
-            onClick={saveConsultation}
+            onClick={() => setShowWaiting(true)}
             style={{
               minHeight: 48,
-              background: '#c9a96e',
-              color: '#0e0e0d',
-              border: 'none',
+              padding: '0 32px',
+              background: 'transparent',
+              color: '#c9a96e',
+              border: '1px solid #c9a96e',
               borderRadius: 8,
               fontFamily: 'var(--font-body)',
               fontSize: 14,
@@ -834,7 +923,7 @@ export default function ConsultationClient() {
               cursor: 'pointer',
             }}
           >
-            Save and Add to Project Wall
+            Ready to Finalize
           </button>
         </div>
       </>
@@ -868,12 +957,7 @@ export default function ConsultationClient() {
         padding: '40px 24px',
         textAlign: 'center',
       }}>
-        <div style={{
-          color: '#c9a96e',
-          fontSize: 24,
-          marginBottom: 20,
-          lineHeight: 1,
-        }}>
+        <div style={{ color: '#c9a96e', fontSize: 24, marginBottom: 20, lineHeight: 1 }}>
           ✦
         </div>
         <h1 style={{
@@ -886,34 +970,50 @@ export default function ConsultationClient() {
         }}>
           Intake Complete
         </h1>
-        <p style={{
-          fontFamily: 'var(--font-body)',
-          fontSize: 15,
-          color: '#7a786f',
-          lineHeight: 1.8,
-          maxWidth: 360,
-          margin: '0 0 10px',
-        }}>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: '#7a786f', lineHeight: 1.8, maxWidth: 360, margin: '0 0 10px' }}>
           Saul has received your details.
         </p>
-        <p style={{
-          fontFamily: 'var(--font-body)',
-          fontSize: 15,
-          color: '#7a786f',
-          lineHeight: 1.8,
-          maxWidth: 360,
-          margin: '0 0 10px',
-        }}>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: '#7a786f', lineHeight: 1.8, maxWidth: 360, margin: '0 0 10px' }}>
           He will be in touch soon to confirm next steps.
         </p>
-        <p style={{
-          fontFamily: 'var(--font-body)',
-          fontSize: 15,
-          color: '#7a786f',
-          lineHeight: 1.8,
-          maxWidth: 360,
-          margin: 0,
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: '#7a786f', lineHeight: 1.8, maxWidth: 360, margin: 0 }}>
+          Thank you for choosing Saul Gutierrez Private Studio.
+        </p>
+      </div>
+    )
+  }
+
+  // ── Waiting screen ────────────────────────────────────────────────────────────
+
+  if (showWaiting) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#0e0e0d',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px 24px',
+        textAlign: 'center',
+      }}>
+        <div style={{ color: '#c9a96e', fontSize: 24, marginBottom: 20, lineHeight: 1 }}>
+          ✦
+        </div>
+        <h1 style={{
+          fontFamily: 'var(--font-heading)',
+          fontSize: 24,
+          fontWeight: 700,
+          color: '#e8e6df',
+          margin: '0 0 20px',
+          lineHeight: 1.2,
         }}>
+          Your details have been received.
+        </h1>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', lineHeight: 1.8, maxWidth: 360, margin: '0 0 10px' }}>
+          Waiting for Saul to finalize your project...
+        </p>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', lineHeight: 1.8, maxWidth: 360, margin: 0 }}>
           Thank you for choosing Saul Gutierrez Private Studio.
         </p>
       </div>
@@ -929,10 +1029,7 @@ export default function ConsultationClient() {
     <div style={{ minHeight: '100vh', background: '#0e0e0d', display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{
-        padding: '18px 24px 0',
-        flexShrink: 0,
-      }}>
+      <div style={{ padding: '18px 24px 0', flexShrink: 0 }}>
         <div style={{
           fontFamily: 'var(--font-heading)',
           fontSize: 15,
@@ -1063,97 +1160,6 @@ export default function ConsultationClient() {
       }}>
         Powered by MACRI
       </div>
-
-      {/* Duplicate client modal */}
-      {showDupModal && dupClient && (
-        <div
-          onClick={() => setShowDupModal(false)}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.75)',
-            zIndex: 400,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: '#1e1e1b',
-              border: '1px solid rgba(201,169,110,0.2)',
-              borderRadius: 12,
-              padding: 24,
-              maxWidth: 360,
-              width: '90vw',
-              position: 'relative',
-            }}
-          >
-            <button
-              onClick={() => setShowDupModal(false)}
-              style={{
-                position: 'absolute', top: 12, right: 16,
-                background: 'none', border: 'none',
-                color: '#7a786f', fontSize: 20, lineHeight: 1,
-                cursor: 'pointer', padding: 0,
-              }}
-            >
-              &times;
-            </button>
-            <div style={{
-              fontFamily: 'var(--font-heading)',
-              fontSize: 15,
-              fontWeight: 600,
-              color: '#e8e6df',
-              marginBottom: 10,
-            }}>
-              Existing profile found for {dupClient.name}.
-            </div>
-            <div style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: 13,
-              color: '#7a786f',
-              lineHeight: 1.6,
-              marginBottom: 20,
-            }}>
-              Would you like to add this consultation to their existing profile, or create a new profile?
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button
-                onClick={handleAddToExisting}
-                style={{
-                  minHeight: 44,
-                  background: '#c9a96e',
-                  color: '#0e0e0d',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Add to Existing Profile
-              </button>
-              <button
-                onClick={handleCreateNew}
-                style={{
-                  minHeight: 44,
-                  background: 'transparent',
-                  color: '#e8e6df',
-                  border: '1px solid rgba(122,120,111,0.3)',
-                  borderRadius: 8,
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 14,
-                  cursor: 'pointer',
-                }}
-              >
-                Create New Profile
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

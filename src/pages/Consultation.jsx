@@ -5,8 +5,10 @@ import { loadClients, saveClients, mkClient } from './CRM'
 
 const defaultForm = {
   name: '', phone: '', email: '',
+  socialPlatform: 'Instagram', socialHandle: '',
   referralSource: '', firstTimeClient: null,
   concept: '', inspirationNotes: '',
+  referenceImages: [],
   isCoverUp: false, coverUpDescription: '',
   isMeaningful: false, meaningStory: '',
   placement: '', size: '',
@@ -21,6 +23,9 @@ const defaultForm = {
   consultationDate: '', appointmentDate: '',
   clientTier: 'Deposit Required',
   artistNotes: '',
+  projectRating: '',
+  strategyNotes: '',
+  postSessionDebrief: '',
 }
 
 const STEPS = [
@@ -30,10 +35,12 @@ const STEPS = [
   { emoji: '🎵', label: 'The Experience' },
   { emoji: '🏥', label: 'Health and Skin' },
   { emoji: '💰', label: 'Pricing and Deposit' },
-  { emoji: '✍️', label: 'Artist Notes' },
+  { emoji: '📋', label: 'Client Summary' },
+  { emoji: '🔐', label: 'Artist Vault' },
 ]
 
 const REFERRAL_OPTIONS   = ['Instagram', 'Google', 'Word of Mouth', 'Existing Client', 'Other']
+const SOCIAL_PLATFORMS   = ['Instagram', 'TikTok', 'Facebook']
 const STYLE_OPTIONS      = ['Watercolor', 'Black and Gray Realism', 'Sketch Art', 'Abstract', 'Pointillism', 'Other']
 const COLOR_OPTIONS      = ['Full Color', 'Limited Color', 'Black and Gray', 'Black and White Only']
 const ORIENT_OPTIONS     = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
@@ -123,24 +130,6 @@ function Field({ label, children }) {
   )
 }
 
-// ─── Summary ───────────────────────────────────────────────────────────────────
-
-function buildSummaryLines(f) {
-  const lines = []
-  if (f.name)            lines.push(['Client',          f.name])
-  if (f.concept)         lines.push(['Concept',         f.concept])
-  if (f.placement)       lines.push(['Placement',       f.placement])
-  if (f.size)            lines.push(['Size',            f.size])
-  if (f.style?.length)   lines.push(['Style',           f.style.join(', ')])
-  if (f.colorProfile)    lines.push(['Color Profile',   f.colorProfile])
-  if (f.pricingType)     lines.push(['Pricing',         f.pricingType])
-  if (f.estimatedTotal)  lines.push(['Estimated Total', f.estimatedTotal])
-  if (f.depositAmount)   lines.push(['Deposit Amount',  f.depositAmount])
-  if (f.depositStatus)   lines.push(['Deposit Status',  f.depositStatus])
-  if (f.appointmentDate) lines.push(['Appointment',     f.appointmentDate])
-  return lines
-}
-
 // ─── Consultation ──────────────────────────────────────────────────────────────
 
 export default function Consultation() {
@@ -157,9 +146,12 @@ export default function Consultation() {
   const [estW, setEstW]               = useState('')
   const [estH, setEstH]               = useState('')
   const [estApplied, setEstApplied]   = useState(false)
+  const [isDragging, setIsDragging]   = useState(false)
   const clientWin                     = useRef(null)
   const [clientWinOpen, setClientWinOpen] = useState(false)
   const [estStyle, setEstStyle]           = useState('')
+  const imageURLs                         = useRef({})
+  const fileInputRef                      = useRef(null)
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
@@ -172,6 +164,12 @@ export default function Consultation() {
     }, 1000)
     return () => clearInterval(id)
   }, [clientWinOpen])
+
+  useEffect(() => {
+    return () => {
+      Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [])
 
   function openClientMode() {
     const win = window.open('/consultation/client', '_blank')
@@ -193,18 +191,57 @@ export default function Consultation() {
       setNameError(true)
       return
     }
-    setCurrentStep(s => Math.min(s + 1, 6))
+    setCurrentStep(s => Math.min(s + 1, 7))
   }
 
   function goBack() {
     setCurrentStep(s => Math.max(s - 1, 0))
   }
 
+  // ── Image helpers ─────────────────────────────────────────────────────────────
+
+  function addImages(files) {
+    const newImages = []
+    Array.from(files).forEach(file => {
+      if (!file.type.startsWith('image/')) return
+      const id = 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2)
+      imageURLs.current[id] = URL.createObjectURL(file)
+      newImages.push({ id, fileName: file.name, note: '' })
+    })
+    if (!newImages.length) return
+    set('referenceImages', [...(formData.referenceImages || []), ...newImages])
+  }
+
+  function removeImage(id) {
+    if (imageURLs.current[id]) {
+      URL.revokeObjectURL(imageURLs.current[id])
+      delete imageURLs.current[id]
+    }
+    set('referenceImages', (formData.referenceImages || []).filter(img => img.id !== id))
+  }
+
+  function updateImageNote(id, note) {
+    set('referenceImages', (formData.referenceImages || []).map(img =>
+      img.id === id ? { ...img, note } : img
+    ))
+  }
+
   // ── Save logic ────────────────────────────────────────────────────────────────
 
   async function doSave(clients, existingId, ttsPlayer) {
     const now = new Date().toISOString()
-    const consultationObj = { id: 'consult_' + Date.now(), date: now, ...formData }
+    const hasImages = (formData.referenceImages || []).length > 0
+    const imagesForRecord = hasImages
+      ? formData.referenceImages.map(img => ({ ...img, persistencePending: true }))
+      : []
+
+    const consultationObj = {
+      id: 'consult_' + Date.now(),
+      date: now,
+      ...formData,
+      referenceImages: imagesForRecord,
+      ...(hasImages ? { imagesPendingMigration: true } : {}),
+    }
 
     if (existingId !== null) {
       const idx = clients.findIndex(c => c.id === existingId)
@@ -222,6 +259,8 @@ export default function Consultation() {
         name: formData.name.trim(),
         phone: formData.phone,
         email: formData.email,
+        socialPlatform: formData.socialPlatform,
+        socialHandle: formData.socialHandle,
         referralSource: formData.referralSource,
         firstTimeClient: formData.firstTimeClient,
         stage: 'Design Phase',
@@ -235,6 +274,10 @@ export default function Consultation() {
 
     saveClients(clients)
     localStorage.removeItem(DRAFT_KEY)
+
+    if (clientWin.current && !clientWin.current.closed) {
+      clientWin.current.postMessage({ type: 'CONSULTATION_SAVED' }, '*')
+    }
 
     const firstName = formData.name.trim().split(' ')[0]
     try {
@@ -362,6 +405,28 @@ export default function Consultation() {
             onChange={v => set('firstTimeClient', v === 'Yes')}
           />
         </Field>
+        <div style={{ marginBottom: 20 }}>
+          <span style={LABEL_STYLE}>Social Media</span>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ flexShrink: 0 }}>
+              <PillToggle
+                options={SOCIAL_PLATFORMS}
+                value={formData.socialPlatform}
+                onChange={v => set('socialPlatform', v)}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <span style={LABEL_STYLE}>Handle or profile link</span>
+              <input
+                type="text"
+                value={formData.socialHandle}
+                onChange={e => set('socialHandle', e.target.value)}
+                placeholder="e.g. @saulgtattoos"
+                style={INPUT_STYLE}
+              />
+            </div>
+          </div>
+        </div>
       </>
     )
   }
@@ -420,6 +485,95 @@ export default function Consultation() {
             />
           </Field>
         )}
+
+        {/* Visual Reference Manager */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={{ ...LABEL_STYLE, marginBottom: 10 }}>Visual References</span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => { addImages(e.target.files); e.target.value = '' }}
+          />
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+            onDragEnter={e => { e.preventDefault(); setIsDragging(true) }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={e => {
+              e.preventDefault()
+              setIsDragging(false)
+              addImages(e.dataTransfer.files)
+            }}
+            style={{
+              border: isDragging
+                ? '1.5px dashed rgba(201,169,110,0.5)'
+                : '1.5px dashed rgba(201,169,110,0.2)',
+              borderRadius: 12,
+              padding: 24,
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'border-color 0.15s',
+              marginBottom: (formData.referenceImages?.length > 0) ? 14 : 0,
+            }}
+          >
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#7a786f' }}>
+              Drag reference photos here or tap to browse
+            </span>
+          </div>
+          {(formData.referenceImages || []).map(img => (
+            <div
+              key={img.id}
+              style={{
+                display: 'flex',
+                gap: 12,
+                marginBottom: 12,
+                alignItems: 'flex-start',
+              }}
+            >
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <img
+                  src={imageURLs.current[img.id]}
+                  alt={img.fileName}
+                  style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', display: 'block' }}
+                />
+                <button
+                  onClick={() => removeImage(img.id)}
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.7)',
+                    border: 'none',
+                    color: '#e8e6df',
+                    fontSize: 11,
+                    lineHeight: 1,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ flex: 1 }}>
+                <span style={LABEL_STYLE}>What elements do you like about this reference?</span>
+                <textarea
+                  value={img.note}
+                  onChange={e => updateImageNote(img.id, e.target.value)}
+                  style={{ ...INPUT_STYLE, minHeight: 60, resize: 'vertical' }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       </>
     )
   }
@@ -617,7 +771,6 @@ export default function Consultation() {
 
     return (
       <>
-        {/* Studio pricing info */}
         <div style={CARD_STYLE}>
           <div style={CARD_LABEL}>STUDIO PRICING INFO</div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#7a786f', lineHeight: 1.8 }}>
@@ -633,7 +786,6 @@ export default function Consultation() {
           </div>
         </div>
 
-        {/* Precision Estimator */}
         <div style={CARD_STYLE}>
           <div style={{ ...CARD_LABEL, marginBottom: 12 }}>PRECISION ESTIMATOR</div>
           <div style={{ marginBottom: 12 }}>
@@ -714,7 +866,6 @@ export default function Consultation() {
           </div>
         </div>
 
-        {/* Session Estimate Notes */}
         <Field label="Session Estimate Notes">
           <textarea
             value={formData.sessionEstimateNotes}
@@ -781,97 +932,264 @@ export default function Consultation() {
   }
 
   function renderStep6() {
-    const summaryLines = buildSummaryLines(formData)
+    const f = formData
+
+    const SECTION_CARD = {
+      background: 'rgba(201,169,110,0.04)',
+      border: '1px solid rgba(201,169,110,0.12)',
+      borderRadius: 12,
+      padding: '16px 18px',
+      marginBottom: 16,
+    }
+    const SECTION_LABEL = {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 10,
+      color: '#c9a96e',
+      letterSpacing: '0.08em',
+      marginBottom: 10,
+      display: 'block',
+    }
+    const ROW_KEY = {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 11,
+      color: '#7a786f',
+      minWidth: 120,
+      flexShrink: 0,
+    }
+    const ROW_VAL = {
+      fontFamily: 'var(--font-body)',
+      fontSize: 13,
+      color: '#e8e6df',
+      lineHeight: 1.4,
+    }
+
+    function row(label, value) {
+      if (!value) return null
+      return (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+          <span style={ROW_KEY}>{label}</span>
+          <span style={ROW_VAL}>{value}</span>
+        </div>
+      )
+    }
+
     return (
       <>
-        <Field label="Private Notes: Not visible in the client summary">
+        <div style={SECTION_CARD}>
+          <span style={SECTION_LABEL}>PROJECT OVERVIEW</span>
+          {row('Client', f.name)}
+          {row('Concept', f.concept)}
+          {row('Placement', f.placement)}
+          {row('Size', f.size)}
+          {row('Style', f.style?.length ? f.style.join(', ') : '')}
+          {row('Color Profile', f.colorProfile)}
+          {row('Orientation', f.orientation)}
+        </div>
+
+        {(f.referenceImages?.length > 0) && (
+          <div style={SECTION_CARD}>
+            <span style={SECTION_LABEL}>REFERENCE GALLERY</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              {f.referenceImages.map(img => (
+                <div key={img.id} style={{ width: 120 }}>
+                  <img
+                    src={imageURLs.current[img.id]}
+                    alt={img.fileName}
+                    style={{ width: 120, height: 120, borderRadius: 8, objectFit: 'cover', display: 'block', marginBottom: 6 }}
+                  />
+                  {img.note && (
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: '#7a786f', lineHeight: 1.4, display: 'block' }}>
+                      {img.note}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={SECTION_CARD}>
+          <span style={SECTION_LABEL}>PRICING AND DEPOSIT TERMS</span>
+          {row('Pricing Type', f.pricingType)}
+          {f.estimatedTotal && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+              <span style={ROW_KEY}>Estimated Total</span>
+              <span style={ROW_VAL}>${f.estimatedTotal}</span>
+            </div>
+          )}
+          {row('Deposit Amount', f.depositAmount)}
+          {row('Deposit Status', f.depositStatus)}
+          {row('Appointment', f.appointmentDate)}
+          <div style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 12,
+            color: '#7a786f',
+            lineHeight: 1.7,
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: '1px solid rgba(122,120,111,0.15)',
+          }}>
+            This estimate is a ballpark figure based on size and your specific style choice. Simpler designs may be more efficient, while complex and intricate pieces may require more time. This serves as a flexible guide to provide a clear idea of the investment involved.
+          </div>
+        </div>
+
+        <button
+          onClick={() => console.log('Export Artistic Agreement coming soon')}
+          style={{
+            minHeight: 44,
+            width: '100%',
+            background: 'transparent',
+            color: '#c9a96e',
+            border: '1px solid #c9a96e',
+            borderRadius: 8,
+            fontFamily: 'var(--font-body)',
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          Export Artistic Agreement
+        </button>
+      </>
+    )
+  }
+
+  function renderStep7() {
+    const VAULT_LABEL = {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 11,
+      color: '#c9a96e',
+      letterSpacing: '0.08em',
+      marginBottom: 8,
+      display: 'block',
+    }
+
+    const ratingOptions = [
+      {
+        key: 'Hot',
+        active: { background: '#c9a96e', color: '#0e0e0d', border: '1px solid #c9a96e' },
+      },
+      {
+        key: 'Warm',
+        active: { background: 'rgba(201,150,80,0.2)', color: '#c99650', border: '1px solid #c99650' },
+      },
+      {
+        key: 'Cool',
+        active: { background: 'rgba(143,188,187,0.15)', color: '#8fbcbb', border: '1px solid #8fbcbb' },
+      },
+      {
+        key: 'Red Flag',
+        active: { background: 'transparent', color: '#f09595', border: '1px solid #f09595' },
+      },
+    ]
+
+    const healthRows = [
+      ['Allergies', formData.allergies],
+      ['Skin Conditions', formData.skinConditions],
+      ['Medications', formData.medications],
+      ['Previous Reactions', formData.previousReactions],
+      ['Medical Clearance', formData.medicalClearance],
+    ].filter(([, v]) => v)
+
+    return (
+      <>
+        <div style={{ marginBottom: 24 }}>
+          <span style={VAULT_LABEL}>INTERNAL PROJECT RATING</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {ratingOptions.map(({ key, active }) => {
+              const isActive = formData.projectRating === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => set('projectRating', formData.projectRating === key ? '' : key)}
+                  style={{
+                    minHeight: 36,
+                    padding: '0 14px',
+                    borderRadius: 8,
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    ...(isActive
+                      ? active
+                      : { background: 'transparent', color: '#7a786f', border: '1px solid rgba(122,120,111,0.3)' }
+                    ),
+                  }}
+                >
+                  {key}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <span style={VAULT_LABEL}>TECHNIQUE AND STRATEGY</span>
           <textarea
-            value={formData.artistNotes}
-            onChange={e => set('artistNotes', e.target.value)}
-            placeholder="Notes for your eyes only..."
+            value={formData.strategyNotes}
+            onChange={e => set('strategyNotes', e.target.value)}
+            placeholder="Needle groupings, voltage, pigment notes, approach for this specific piece."
             style={{ ...INPUT_STYLE, minHeight: 80, resize: 'vertical' }}
           />
-        </Field>
+        </div>
 
-        {summaryLines.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <span style={VAULT_LABEL}>POST SESSION DEBRIEF</span>
+          <textarea
+            value={formData.postSessionDebrief}
+            onChange={e => set('postSessionDebrief', e.target.value)}
+            placeholder="Log observations after the session. Skin behavior, healing notes, anything to remember for the next visit."
+            style={{ ...INPUT_STYLE, minHeight: 80, resize: 'vertical' }}
+          />
+        </div>
+
+        {healthRows.length > 0 && (
           <div style={{
-            background: 'rgba(201,169,110,0.05)',
-            border: '1px solid rgba(201,169,110,0.15)',
+            background: '#1e1e1b',
+            border: '1px solid #2a2a27',
             borderRadius: 12,
-            padding: '16px 18px',
-            marginBottom: 20,
+            padding: '14px 16px',
+            marginBottom: 24,
           }}>
-            <div style={{
+            <span style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: '#c9a96e',
+              fontSize: 11,
+              color: '#7a786f',
               letterSpacing: '0.08em',
-              marginBottom: 12,
+              display: 'block',
+              marginBottom: 10,
             }}>
-              CLIENT SUMMARY
-            </div>
-            {summaryLines.map(([key, val], i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', minWidth: 110, flexShrink: 0 }}>
-                  {key}
+              HEALTH REFERENCE
+            </span>
+            {healthRows.map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', minWidth: 130, flexShrink: 0 }}>
+                  {label}
                 </span>
                 <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#e8e6df', lineHeight: 1.4 }}>
-                  {val}
+                  {value}
                 </span>
               </div>
             ))}
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button
-            onClick={saveConsultation}
-            style={{
-              minHeight: 48,
-              background: '#c9a96e',
-              color: '#0e0e0d',
-              border: 'none',
-              borderRadius: 8,
-              fontFamily: 'var(--font-body)',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Save and Add to Project Wall
-          </button>
-          <button
-            onClick={() => console.log('PDF coming soon')}
-            style={{
-              minHeight: 44,
-              background: 'transparent',
-              color: '#e8e6df',
-              border: '1px solid rgba(122,120,111,0.3)',
-              borderRadius: 8,
-              fontFamily: 'var(--font-body)',
-              fontSize: 13,
-              cursor: 'pointer',
-            }}
-          >
-            Export Client PDF
-          </button>
-          <button
-            onClick={() => console.log('PDF coming soon')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#7a786f',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              cursor: 'pointer',
-              padding: '4px 0',
-              textAlign: 'center',
-              letterSpacing: '0.03em',
-            }}
-          >
-            Export Private Artist Sheet
-          </button>
-        </div>
+        <button
+          onClick={saveConsultation}
+          style={{
+            minHeight: 48,
+            width: '100%',
+            background: '#c9a96e',
+            color: '#0e0e0d',
+            border: 'none',
+            borderRadius: 8,
+            fontFamily: 'var(--font-body)',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Save to Studio Database
+        </button>
       </>
     )
   }
@@ -885,6 +1203,7 @@ export default function Consultation() {
       case 4: return renderStep4()
       case 5: return renderStep5()
       case 6: return renderStep6()
+      case 7: return renderStep7()
       default: return null
     }
   }
@@ -892,7 +1211,7 @@ export default function Consultation() {
   // ── Render ─────────────────────────────────────────────────────────────────────
 
   const step = STEPS[currentStep]
-  const progressPct = ((currentStep + 1) / 7) * 100
+  const progressPct = ((currentStep + 1) / 8) * 100
 
   return (
     <div style={{ padding: '24px 20px 100px', maxWidth: 600, margin: '0 auto' }}>
@@ -958,10 +1277,10 @@ export default function Consultation() {
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e' }}>
-            Step {currentStep + 1} of 7: {step.label}
+            Step {currentStep + 1} of 8: {step.label}
           </span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
-            {currentStep + 1} / 7
+            {currentStep + 1} / 8
           </span>
         </div>
         <div style={{ height: 4, background: '#1e1e1b', borderRadius: 2, overflow: 'hidden' }}>
@@ -984,7 +1303,7 @@ export default function Consultation() {
                 border: 'none',
                 padding: 4,
                 cursor: 'pointer',
-                fontSize: 18,
+                fontSize: 16,
                 lineHeight: 1,
                 borderRadius: 4,
                 outline: i === currentStep ? '2px solid #c9a96e' : 'none',
@@ -1035,7 +1354,7 @@ export default function Consultation() {
               Back
             </button>
           )}
-          {currentStep < 6 && (
+          {currentStep < 7 && (
             <button
               onClick={goNext}
               style={{

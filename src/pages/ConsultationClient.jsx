@@ -22,7 +22,6 @@ const defaultForm = {
   consultationDate: '', appointmentDate: '',
   clientTier: 'Deposit Required',
   artistNotes: '',
-  placementZones: [],
   tattooCount: '',
   sittingEndurance: '',
 }
@@ -39,54 +38,22 @@ const STEPS = [
 
 const REFERRAL_OPTIONS  = ['Instagram', 'Google', 'Word of Mouth', 'Existing Client', 'Other']
 const SOCIAL_PLATFORMS  = ['Instagram', 'TikTok', 'Facebook']
-const STYLE_OPTIONS     = ['Watercolor', 'Black and Gray Realism', 'Sketch Art', 'Abstract', 'Pointillism', 'Other']
-const COLOR_OPTIONS     = ['Full Color', 'Limited Color', 'Black and Gray', 'Black and White Only']
+const STYLE_OPTIONS     = ['Watercolor', 'Black and Gray Realism', 'Sketch Art', 'Abstract', 'Stippled Shading', 'Color Realism', 'Black and Gray Portrait', 'Other']
+const COLOR_OPTIONS     = ['Full Color', 'Limited Color', 'Black and Gray']
 const ORIENT_OPTIONS    = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
 const MUSIC_OPTIONS     = ['Hip Hop', 'Lo-Fi', 'Rock', 'R&B', 'Latin', 'Country', 'Silence', 'Other']
 const CLEARANCE_OPTIONS = ['No Issues', 'Note on File', 'Needs Clearance']
 const PRICING_OPTIONS   = ['Hourly', 'Per Session', 'Full Day', 'Shop Minimum']
 const DEPOSIT_AMT       = ['$100', '$150', '$200', '$250', 'No Deposit Required']
 const DEPOSIT_STATUS    = ['Pending', 'Paid', 'No Deposit Required']
+const SIZE_OPTIONS      = ['Small (1 to 3 inches)', 'Medium (3.5 to 6 inches)', 'Large (6.6 inches and above)']
+const EST_STYLE_OPTIONS = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading', 'Per Session', 'Fine Line', 'Simple Design']
+const HOURLY_STYLES     = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading']
 
 const DRAFT_KEY = 'macri_consultation_client_draft'
 
-const BODY_ZONES = [
-  { id: 'Head',                   shape: 'ellipse', cx: 52,  cy: 20,  rx: 19, ry: 19 },
-  { id: 'Neck',                   shape: 'rect',    x: 45,   y: 37,   w: 14,  h: 13,  rx: 3 },
-  { id: 'Left Shoulder',          shape: 'rect',    x: 14,   y: 41,   w: 28,  h: 20,  rx: 4 },
-  { id: 'Right Shoulder',         shape: 'rect',    x: 62,   y: 41,   w: 28,  h: 20,  rx: 4 },
-  { id: 'Left Chest',             shape: 'rect',    x: 31,   y: 59,   w: 21,  h: 32,  rx: 3 },
-  { id: 'Right Chest',            shape: 'rect',    x: 52,   y: 59,   w: 21,  h: 32,  rx: 3 },
-  { id: 'Left Upper Arm',         shape: 'rect',    x: 6,    y: 59,   w: 19,  h: 36,  rx: 4 },
-  { id: 'Right Upper Arm',        shape: 'rect',    x: 79,   y: 59,   w: 19,  h: 36,  rx: 4 },
-  { id: 'Upper Abdomen',          shape: 'rect',    x: 33,   y: 89,   w: 38,  h: 24,  rx: 3 },
-  { id: 'Left Inner Arm',         shape: 'rect',    x: 4,    y: 93,   w: 17,  h: 26,  rx: 3 },
-  { id: 'Right Inner Arm',        shape: 'rect',    x: 83,   y: 93,   w: 17,  h: 26,  rx: 3 },
-  { id: 'Lower Abdomen',          shape: 'rect',    x: 33,   y: 111,  w: 38,  h: 24,  rx: 3 },
-  { id: 'Left Forearm',           shape: 'rect',    x: 2,    y: 117,  w: 15,  h: 26,  rx: 3 },
-  { id: 'Right Forearm',          shape: 'rect',    x: 87,   y: 117,  w: 15,  h: 26,  rx: 3 },
-  { id: 'Left Hip',               shape: 'rect',    x: 22,   y: 133,  w: 23,  h: 22,  rx: 3 },
-  { id: 'Right Hip',              shape: 'rect',    x: 59,   y: 133,  w: 23,  h: 22,  rx: 3 },
-  { id: 'Left Hand',              shape: 'rect',    x: 0,    y: 141,  w: 14,  h: 18,  rx: 4 },
-  { id: 'Right Hand',             shape: 'rect',    x: 90,   y: 141,  w: 14,  h: 18,  rx: 4 },
-  { id: 'Left Upper Thigh',       shape: 'rect',    x: 23,   y: 153,  w: 23,  h: 30,  rx: 3 },
-  { id: 'Right Upper Thigh',      shape: 'rect',    x: 58,   y: 153,  w: 23,  h: 30,  rx: 3 },
-  { id: 'Left Lower Leg',         shape: 'rect',    x: 25,   y: 181,  w: 20,  h: 28,  rx: 3 },
-  { id: 'Right Lower Leg',        shape: 'rect',    x: 59,   y: 181,  w: 20,  h: 28,  rx: 3 },
-  { id: 'Left Foot',              shape: 'rect',    x: 22,   y: 207,  w: 22,  h: 14,  rx: 5 },
-  { id: 'Right Foot',             shape: 'rect',    x: 61,   y: 207,  w: 22,  h: 14,  rx: 5 },
-  { id: 'Upper Back',             shape: 'rect',    x: 143,  y: 56,   w: 30,  h: 28,  rx: 3 },
-  { id: 'Mid Back',               shape: 'rect',    x: 143,  y: 82,   w: 30,  h: 26,  rx: 3 },
-  { id: 'Lower Back',             shape: 'rect',    x: 143,  y: 106,  w: 30,  h: 22,  rx: 3 },
-  { id: 'Left Shoulder Blade',    shape: 'rect',    x: 119,  y: 56,   w: 22,  h: 28,  rx: 3 },
-  { id: 'Right Shoulder Blade',   shape: 'rect',    x: 175,  y: 56,   w: 22,  h: 28,  rx: 3 },
-  { id: 'Left Glute',             shape: 'rect',    x: 122,  y: 130,  w: 23,  h: 24,  rx: 3 },
-  { id: 'Right Glute',            shape: 'rect',    x: 169,  y: 130,  w: 23,  h: 24,  rx: 3 },
-  { id: 'Left Upper Thigh Back',  shape: 'rect',    x: 123,  y: 152,  w: 22,  h: 28,  rx: 3 },
-  { id: 'Right Upper Thigh Back', shape: 'rect',    x: 169,  y: 152,  w: 22,  h: 28,  rx: 3 },
-  { id: 'Left Calf',              shape: 'rect',    x: 124,  y: 178,  w: 20,  h: 26,  rx: 3 },
-  { id: 'Right Calf',             shape: 'rect',    x: 168,  y: 178,  w: 20,  h: 26,  rx: 3 },
-]
+const roundTo50 = (n) => Math.ceil(n / 50) * 50
+const shopMin   = (n) => Math.max(100, n)
 
 // ─── PillToggle ────────────────────────────────────────────────────────────────
 
@@ -170,21 +137,24 @@ export default function ConsultationClient() {
   const [formData, setFormData] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(DRAFT_KEY))
+      if (saved?.saved === true) {
+        localStorage.removeItem(DRAFT_KEY)
+        return defaultForm
+      }
       return saved ? { ...defaultForm, ...saved } : defaultForm
     } catch { return defaultForm }
   })
-  const [currentStep, setCurrentStep] = useState(0)
-  const [nameError, setNameError]     = useState(false)
-  const [showThankYou, setShowThankYou] = useState(false)
-  const [showWaiting, setShowWaiting]   = useState(false)
-  const [estW, setEstW]               = useState('')
-  const [estH, setEstH]               = useState('')
-  const [estApplied, setEstApplied]   = useState(false)
-  const [estStyle, setEstStyle]       = useState('')
-  const [isDragging, setIsDragging]   = useState(false)
-  const [dotPositions, setDotPositions] = useState({})
-  const imageURLs                     = useRef({})
-  const fileInputRef                  = useRef(null)
+  const [currentStep, setCurrentStep]       = useState(0)
+  const [nameError, setNameError]           = useState(false)
+  const [showThankYou, setShowThankYou]     = useState(false)
+  const [showWaiting, setShowWaiting]       = useState(false)
+  const [estW, setEstW]                     = useState('')
+  const [estH, setEstH]                     = useState('')
+  const [estApplied, setEstApplied]         = useState(false)
+  const [estStyle, setEstStyle]             = useState('')
+  const [isDragging, setIsDragging]         = useState(false)
+  const imageURLs                           = useRef({})
+  const fileInputRef                        = useRef(null)
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
@@ -205,7 +175,6 @@ export default function ConsultationClient() {
         setCurrentStep(0)
         setShowThankYou(false)
         setShowWaiting(false)
-        setDotPositions({})
         setEstW('')
         setEstH('')
         setEstStyle('')
@@ -492,33 +461,6 @@ export default function ConsultationClient() {
   }
 
   function renderStep2() {
-    const selectedZones = formData.placementZones || []
-
-    function handleZoneClick(e, zoneName) {
-      const svgEl = e.currentTarget.ownerSVGElement || e.currentTarget.closest('svg')
-      let svgX = 0, svgY = 0
-      try {
-        const pt = svgEl.createSVGPoint()
-        pt.x = e.clientX
-        pt.y = e.clientY
-        const svgP = pt.matrixTransform(svgEl.getScreenCTM().inverse())
-        svgX = svgP.x
-        svgY = svgP.y
-      } catch {}
-      if (selectedZones.includes(zoneName)) {
-        set('placementZones', selectedZones.filter(z => z !== zoneName))
-        setDotPositions(prev => { const n = { ...prev }; delete n[zoneName]; return n })
-      } else {
-        set('placementZones', [...selectedZones, zoneName])
-        setDotPositions(prev => ({ ...prev, [zoneName]: { x: svgX, y: svgY } }))
-      }
-    }
-
-    function removeZone(zoneName) {
-      set('placementZones', selectedZones.filter(z => z !== zoneName))
-      setDotPositions(prev => { const n = { ...prev }; delete n[zoneName]; return n })
-    }
-
     return (
       <>
         <Field label="Placement">
@@ -530,80 +472,11 @@ export default function ConsultationClient() {
             style={INPUT_STYLE}
           />
         </Field>
-
-        {/* Body Placement Map */}
-        <div style={{ marginBottom: 20 }}>
-          <span style={LABEL_STYLE}>Placement Map</span>
-          <svg
-            viewBox="0 0 210 240"
-            width="100%"
-            style={{ maxWidth: 420, display: 'block', margin: '4px auto 0' }}
-          >
-            <text x="52" y="234" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="7" fill="rgba(122,120,111,0.5)" letterSpacing="0.06em">FRONT</text>
-            <text x="158" y="234" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="7" fill="rgba(122,120,111,0.5)" letterSpacing="0.06em">BACK</text>
-            <line x1="105" y1="8" x2="105" y2="226" stroke="rgba(122,120,111,0.2)" strokeWidth="0.5" />
-            <ellipse cx={158} cy={20} rx={19} ry={19} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
-            <rect x={151} y={37} width={14} height={13} rx={3} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
-            <rect x={119} y={41} width={22} height={17} rx={4} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
-            <rect x={173} y={41} width={22} height={17} rx={4} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
-            {BODY_ZONES.map(zone => {
-              const isSelected = selectedZones.includes(zone.id)
-              const props = {
-                fill: isSelected ? 'rgba(201,169,110,0.4)' : 'transparent',
-                stroke: '#7a786f',
-                strokeOpacity: 0.4,
-                strokeWidth: 0.8,
-                style: { cursor: 'pointer' },
-                onClick: e => handleZoneClick(e, zone.id),
-              }
-              return zone.shape === 'ellipse'
-                ? <ellipse key={zone.id} cx={zone.cx} cy={zone.cy} rx={zone.rx} ry={zone.ry} {...props} />
-                : <rect key={zone.id} x={zone.x} y={zone.y} width={zone.w} height={zone.h} rx={zone.rx || 0} {...props} />
-            })}
-            {BODY_ZONES.map(zone => {
-              const dot = dotPositions[zone.id]
-              if (!dot) return null
-              return <circle key={'d' + zone.id} cx={dot.x} cy={dot.y} r={2.5} fill="#c9a96e" style={{ pointerEvents: 'none' }} />
-            })}
-          </svg>
-          {selectedZones.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-              {selectedZones.map(zone => (
-                <div
-                  key={zone}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    padding: '3px 8px',
-                    background: 'rgba(201,169,110,0.1)',
-                    border: '1px solid rgba(201,169,110,0.3)',
-                    borderRadius: 6,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: '#c9a96e',
-                  }}
-                >
-                  {zone}
-                  <button
-                    onClick={() => removeZone(zone)}
-                    style={{ background: 'none', border: 'none', color: '#c9a96e', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         <Field label="Approximate Size">
-          <input
-            type="text"
+          <PillToggle
+            options={SIZE_OPTIONS}
             value={formData.size}
-            onChange={e => set('size', e.target.value)}
-            placeholder="e.g. 4x6 inches, palm sized"
-            style={INPUT_STYLE}
+            onChange={v => set('size', v)}
           />
         </Field>
         <Field label="Style">
@@ -763,29 +636,35 @@ export default function ConsultationClient() {
   function renderStep5() {
     const wNum = parseFloat(estW)
     const hNum = parseFloat(estH)
-    const showCalc  = estW && estH && wNum > 0 && hNum > 0
-    const baseHours = showCalc ? (wNum + hNum) / 2 : 0
-    const lowHours  = showCalc ? Math.max(1, baseHours - 1) : 0
-    const highHours = showCalc ? baseHours + 1 : 0
-    const rate = 250
+    const showCalc = !!(estW && estH && wNum > 0 && hNum > 0)
+    const average  = showCalc ? (wNum + hNum) / 2 : 0
+    const plus     = showCalc ? average + 1 : 0
+    const minus    = showCalc ? Math.max(0.5, Math.min(wNum, hNum) - 1) : 0
 
-    const isHourly = estStyle === 'Watercolor' || estStyle === 'Black and Gray Realism'
-    const isFlat   = estStyle === 'Fine Line' || estStyle === 'Simple Design'
+    const isHourly  = HOURLY_STYLES.includes(estStyle)
+    const isPerSess = estStyle === 'Per Session'
+    const isFlat    = estStyle === 'Fine Line' || estStyle === 'Simple Design'
 
-    const lowTotal   = Math.round(lowHours * rate)
-    const highTotal  = Math.round(highHours * rate)
-    const flatAmount = Math.max(100, Math.round(baseHours * rate))
-    const sizeTier   = baseHours <= 1.5
-      ? 'Small (1 to 3 inches)'
-      : baseHours <= 3
-      ? 'Medium (3.5 to 6 inches)'
-      : 'Large (6.6 inches and above)'
+    const fmtHours = (n) => n % 1 === 0 ? String(n) : n.toFixed(1)
+
+    const showShopMinNote = showCalc && (
+      (isHourly && minus * 250 < 100) ||
+      (isPerSess && average * 250 < 100)
+    )
 
     function applyEstimate() {
-      if (!showCalc) return
-      const total = isFlat ? Math.max(100, Math.round(baseHours * rate)) : Math.round(baseHours * rate)
-      set('estimatedHours', baseHours.toFixed(1))
-      set('estimatedTotal', String(total))
+      if (isFlat && showCalc) {
+        set('estimatedTotal', String(roundTo50(shopMin(average * 250))))
+        set('estimatedHours', '')
+      } else if (isHourly && showCalc) {
+        set('estimatedHours', fmtHours(average))
+        set('estimatedTotal', String(roundTo50(shopMin(average * 250))))
+      } else if (isPerSess && showCalc) {
+        set('estimatedTotal', String(roundTo50(shopMin(average * 250))))
+        set('estimatedHours', '')
+      } else {
+        return
+      }
       setEstApplied(true)
       setTimeout(() => setEstApplied(false), 2000)
     }
@@ -828,11 +707,12 @@ export default function ConsultationClient() {
           <div style={{ marginBottom: 12 }}>
             <span style={LABEL_STYLE}>Style</span>
             <PillToggle
-              options={['Watercolor', 'Black and Gray Realism', 'Fine Line', 'Simple Design']}
+              options={EST_STYLE_OPTIONS}
               value={estStyle}
               onChange={v => setEstStyle(v)}
             />
           </div>
+
           <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
             <div style={{ flex: 1 }}>
               <span style={LABEL_STYLE}>Width (in)</span>
@@ -855,29 +735,35 @@ export default function ConsultationClient() {
               />
             </div>
           </div>
-          {showCalc && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#c9a96e', lineHeight: 1.8, marginBottom: 12 }}>
-              {(isHourly || !estStyle) && (
-                <div>
-                  {'Ballpark '}{lowHours.toFixed(1)}{' to '}{highHours.toFixed(1)}{' hours (Goal: '}{baseHours.toFixed(1)}{' hours)'}
-                </div>
-              )}
-              {isHourly && (
-                <div>
-                  {'Estimated investment: $'}{lowTotal.toLocaleString()}{' to $'}{highTotal.toLocaleString()}
-                </div>
-              )}
-              {isFlat && (
-                <>
-                  <div>{'Size tier: '}{sizeTier}</div>
-                  <div>{'Estimated investment: $'}{flatAmount.toLocaleString()}</div>
-                  <div style={{ color: '#7a786f', fontSize: 12 }}>
-                    Shop minimum applies if total falls below $100.
-                  </div>
-                </>
+
+          {showCalc && isHourly && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#c9a96e', lineHeight: 2, marginBottom: 12 }}>
+              <div>{fmtHours(minus)} to {fmtHours(plus)} hours</div>
+              <div>${roundTo50(shopMin(minus * 250)).toLocaleString()} to ${roundTo50(shopMin(plus * 250)).toLocaleString()}</div>
+              {showShopMinNote && (
+                <div style={{ color: '#7a786f', fontSize: 11 }}>Shop minimum applies.</div>
               )}
             </div>
           )}
+
+          {showCalc && isPerSess && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#c9a96e', lineHeight: 2, marginBottom: 12 }}>
+              <div>${roundTo50(shopMin(average * 250)).toLocaleString()} to ${roundTo50(shopMin(plus * 250)).toLocaleString()}</div>
+              {showShopMinNote && (
+                <div style={{ color: '#7a786f', fontSize: 11 }}>Shop minimum applies.</div>
+              )}
+            </div>
+          )}
+
+          {showCalc && isFlat && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#c9a96e', lineHeight: 2, marginBottom: 12 }}>
+              <div>${roundTo50(shopMin(average * 250)).toLocaleString()}</div>
+              {average * 250 < 100 && (
+                <div style={{ color: '#7a786f', fontSize: 11 }}>Shop minimum applies.</div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
               onClick={applyEstimate}
@@ -1076,7 +962,12 @@ export default function ConsultationClient() {
 
         <div style={{ textAlign: 'center', paddingTop: 8 }}>
           <button
-            onClick={() => setShowWaiting(true)}
+            onClick={() => {
+              if (window.opener) {
+                window.opener.postMessage({ type: 'CLIENT_FORM_DATA', payload: formData }, '*')
+              }
+              setShowWaiting(true)
+            }}
             style={{
               minHeight: 48,
               padding: '0 32px',

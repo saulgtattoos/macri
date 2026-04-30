@@ -26,7 +26,6 @@ const defaultForm = {
   projectRating: '',
   strategyNotes: '',
   postSessionDebrief: '',
-  placementZones: [],
   tattooCount: '',
   sittingEndurance: '',
   technicalDifficulty: '',
@@ -44,58 +43,26 @@ const STEPS = [
   { emoji: '🔐', label: 'Artist Vault' },
 ]
 
-const REFERRAL_OPTIONS   = ['Instagram', 'Google', 'Word of Mouth', 'Existing Client', 'Other']
-const SOCIAL_PLATFORMS   = ['Instagram', 'TikTok', 'Facebook']
-const STYLE_OPTIONS      = ['Watercolor', 'Black and Gray Realism', 'Sketch Art', 'Abstract', 'Pointillism', 'Other']
-const COLOR_OPTIONS      = ['Full Color', 'Limited Color', 'Black and Gray', 'Black and White Only']
-const ORIENT_OPTIONS     = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
-const MUSIC_OPTIONS      = ['Hip Hop', 'Lo-Fi', 'Rock', 'R&B', 'Latin', 'Country', 'Silence', 'Other']
-const CLEARANCE_OPTIONS  = ['No Issues', 'Note on File', 'Needs Clearance']
-const PRICING_OPTIONS    = ['Hourly', 'Per Session', 'Full Day', 'Shop Minimum']
-const DEPOSIT_AMT        = ['$100', '$150', '$200', '$250', 'No Deposit Required']
-const DEPOSIT_STATUS     = ['Pending', 'Paid', 'No Deposit Required']
-const TIER_OPTIONS       = ['Deposit Required', 'Trusted Client']
+const REFERRAL_OPTIONS  = ['Instagram', 'Google', 'Word of Mouth', 'Existing Client', 'Other']
+const SOCIAL_PLATFORMS  = ['Instagram', 'TikTok', 'Facebook']
+const STYLE_OPTIONS     = ['Watercolor', 'Black and Gray Realism', 'Sketch Art', 'Abstract', 'Stippled Shading', 'Color Realism', 'Black and Gray Portrait', 'Other']
+const COLOR_OPTIONS     = ['Full Color', 'Limited Color', 'Black and Gray']
+const ORIENT_OPTIONS    = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
+const MUSIC_OPTIONS     = ['Hip Hop', 'Lo-Fi', 'Rock', 'R&B', 'Latin', 'Country', 'Silence', 'Other']
+const CLEARANCE_OPTIONS = ['No Issues', 'Note on File', 'Needs Clearance']
+const PRICING_OPTIONS   = ['Hourly', 'Per Session', 'Full Day', 'Shop Minimum']
+const DEPOSIT_AMT       = ['$100', '$150', '$200', '$250', 'No Deposit Required']
+const DEPOSIT_STATUS    = ['Pending', 'Paid', 'No Deposit Required']
+const TIER_OPTIONS      = ['Deposit Required', 'Trusted Client']
+const SIZE_OPTIONS      = ['Small (1 to 3 inches)', 'Medium (3.5 to 6 inches)', 'Large (6.6 inches and above)']
+const EST_STYLE_OPTIONS = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading', 'Per Session', 'Fine Line', 'Simple Design']
+const HOURLY_STYLES     = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading']
 
 const DRAFT_KEY = 'macri_consultation_draft'
 const IOS_WAV   = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAEAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
 
-const BODY_ZONES = [
-  { id: 'Head',                   shape: 'ellipse', cx: 52,  cy: 20,  rx: 19, ry: 19 },
-  { id: 'Neck',                   shape: 'rect',    x: 45,   y: 37,   w: 14,  h: 13,  rx: 3 },
-  { id: 'Left Shoulder',          shape: 'rect',    x: 14,   y: 41,   w: 28,  h: 20,  rx: 4 },
-  { id: 'Right Shoulder',         shape: 'rect',    x: 62,   y: 41,   w: 28,  h: 20,  rx: 4 },
-  { id: 'Left Chest',             shape: 'rect',    x: 31,   y: 59,   w: 21,  h: 32,  rx: 3 },
-  { id: 'Right Chest',            shape: 'rect',    x: 52,   y: 59,   w: 21,  h: 32,  rx: 3 },
-  { id: 'Left Upper Arm',         shape: 'rect',    x: 6,    y: 59,   w: 19,  h: 36,  rx: 4 },
-  { id: 'Right Upper Arm',        shape: 'rect',    x: 79,   y: 59,   w: 19,  h: 36,  rx: 4 },
-  { id: 'Upper Abdomen',          shape: 'rect',    x: 33,   y: 89,   w: 38,  h: 24,  rx: 3 },
-  { id: 'Left Inner Arm',         shape: 'rect',    x: 4,    y: 93,   w: 17,  h: 26,  rx: 3 },
-  { id: 'Right Inner Arm',        shape: 'rect',    x: 83,   y: 93,   w: 17,  h: 26,  rx: 3 },
-  { id: 'Lower Abdomen',          shape: 'rect',    x: 33,   y: 111,  w: 38,  h: 24,  rx: 3 },
-  { id: 'Left Forearm',           shape: 'rect',    x: 2,    y: 117,  w: 15,  h: 26,  rx: 3 },
-  { id: 'Right Forearm',          shape: 'rect',    x: 87,   y: 117,  w: 15,  h: 26,  rx: 3 },
-  { id: 'Left Hip',               shape: 'rect',    x: 22,   y: 133,  w: 23,  h: 22,  rx: 3 },
-  { id: 'Right Hip',              shape: 'rect',    x: 59,   y: 133,  w: 23,  h: 22,  rx: 3 },
-  { id: 'Left Hand',              shape: 'rect',    x: 0,    y: 141,  w: 14,  h: 18,  rx: 4 },
-  { id: 'Right Hand',             shape: 'rect',    x: 90,   y: 141,  w: 14,  h: 18,  rx: 4 },
-  { id: 'Left Upper Thigh',       shape: 'rect',    x: 23,   y: 153,  w: 23,  h: 30,  rx: 3 },
-  { id: 'Right Upper Thigh',      shape: 'rect',    x: 58,   y: 153,  w: 23,  h: 30,  rx: 3 },
-  { id: 'Left Lower Leg',         shape: 'rect',    x: 25,   y: 181,  w: 20,  h: 28,  rx: 3 },
-  { id: 'Right Lower Leg',        shape: 'rect',    x: 59,   y: 181,  w: 20,  h: 28,  rx: 3 },
-  { id: 'Left Foot',              shape: 'rect',    x: 22,   y: 207,  w: 22,  h: 14,  rx: 5 },
-  { id: 'Right Foot',             shape: 'rect',    x: 61,   y: 207,  w: 22,  h: 14,  rx: 5 },
-  { id: 'Upper Back',             shape: 'rect',    x: 143,  y: 56,   w: 30,  h: 28,  rx: 3 },
-  { id: 'Mid Back',               shape: 'rect',    x: 143,  y: 82,   w: 30,  h: 26,  rx: 3 },
-  { id: 'Lower Back',             shape: 'rect',    x: 143,  y: 106,  w: 30,  h: 22,  rx: 3 },
-  { id: 'Left Shoulder Blade',    shape: 'rect',    x: 119,  y: 56,   w: 22,  h: 28,  rx: 3 },
-  { id: 'Right Shoulder Blade',   shape: 'rect',    x: 175,  y: 56,   w: 22,  h: 28,  rx: 3 },
-  { id: 'Left Glute',             shape: 'rect',    x: 122,  y: 130,  w: 23,  h: 24,  rx: 3 },
-  { id: 'Right Glute',            shape: 'rect',    x: 169,  y: 130,  w: 23,  h: 24,  rx: 3 },
-  { id: 'Left Upper Thigh Back',  shape: 'rect',    x: 123,  y: 152,  w: 22,  h: 28,  rx: 3 },
-  { id: 'Right Upper Thigh Back', shape: 'rect',    x: 169,  y: 152,  w: 22,  h: 28,  rx: 3 },
-  { id: 'Left Calf',              shape: 'rect',    x: 124,  y: 178,  w: 20,  h: 26,  rx: 3 },
-  { id: 'Right Calf',             shape: 'rect',    x: 168,  y: 178,  w: 20,  h: 26,  rx: 3 },
-]
+const roundTo50 = (n) => Math.ceil(n / 50) * 50
+const shopMin   = (n) => Math.max(100, n)
 
 // ─── PillToggle ────────────────────────────────────────────────────────────────
 
@@ -173,29 +140,93 @@ function Field({ label, children }) {
   )
 }
 
+// ─── PDF helpers ───────────────────────────────────────────────────────────────
+
+function generateClientPDF(c) {
+  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  function row(key, val) {
+    if (!val) return ''
+    return `<div class="row"><span class="key">${key}</span><span class="val">${val}</span></div>`
+  }
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Consultation Summary</title><style>
+    body{font-family:Georgia,serif;margin:48px;color:#1a1a1a;max-width:680px}
+    h1{font-size:22px;font-weight:700;margin:0 0 4px}
+    .sub{font-size:13px;color:#888;margin:0 0 28px}
+    .sec{margin-bottom:22px}
+    .sectitle{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#aaa;border-bottom:1px solid #eee;padding-bottom:5px;margin-bottom:12px}
+    .row{display:flex;gap:12px;margin-bottom:7px;align-items:flex-start}
+    .key{font-size:12px;color:#888;min-width:140px;flex-shrink:0}
+    .val{font-size:13px;color:#1a1a1a;line-height:1.4}
+    .disclaimer{font-size:12px;color:#777;line-height:1.8;border-top:1px solid #eee;padding-top:16px;margin-top:28px}
+    .footer{font-size:11px;color:#aaa;text-align:center;margin-top:40px;padding-top:16px;border-top:1px solid #eee}
+    @media print{body{margin:20px}}
+  </style></head><body>
+    <h1>Saul Gutierrez | Private Studio, Elk Grove</h1>
+    <div class="sub">Consultation Summary | ${dateStr}</div>
+    <div class="sec">
+      <div class="sectitle">PROJECT OVERVIEW</div>
+      ${row('Client', c.name)}
+      ${row('Concept', c.concept)}
+      ${row('Placement', c.placement)}
+      ${row('Size', c.size)}
+      ${row('Style', c.style?.length ? c.style.join(', ') : '')}
+      ${row('Color Profile', c.colorProfile)}
+      ${row('Orientation', c.orientation)}
+    </div>
+    <div class="sec">
+      <div class="sectitle">PRICING AND DEPOSIT</div>
+      ${row('Pricing Type', c.pricingType)}
+      ${c.estimatedTotal ? row('Estimated Total', '$' + c.estimatedTotal) : ''}
+      ${row('Deposit Amount', c.depositAmount)}
+      ${row('Deposit Status', c.depositStatus)}
+      ${row('Appointment Date', c.appointmentDate)}
+      ${row('Session Notes', c.sessionEstimateNotes)}
+    </div>
+    <div class="disclaimer">
+      This estimate is a ballpark figure based on size and your specific style choice. Simpler designs may be more efficient, while complex and intricate pieces may require more time. This serves as a flexible guide to provide a clear idea of the investment involved.
+    </div>
+    <div class="footer">This document serves as a flexible artistic agreement and estimate. Final pricing may vary based on design complexity and session duration.</div>
+  </body></html>`
+  const win = window.open('', '_blank', 'width=800,height=900')
+  if (!win) return
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  setTimeout(() => win.print(), 500)
+}
+
+// sendPDFByEmail — wire to Supabase email delivery in June
+// function sendPDFByEmail(consultationData, recipientEmail) { }
+
 // ─── Consultation ──────────────────────────────────────────────────────────────
 
 export default function Consultation() {
   const [formData, setFormData] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(DRAFT_KEY))
+      if (saved?.saved === true) {
+        localStorage.removeItem(DRAFT_KEY)
+        return defaultForm
+      }
       return saved ? { ...defaultForm, ...saved } : defaultForm
     } catch { return defaultForm }
   })
-  const [currentStep, setCurrentStep] = useState(0)
-  const [nameError, setNameError]     = useState(false)
-  const [showDupModal, setShowDupModal] = useState(false)
-  const [dupClient, setDupClient]     = useState(null)
-  const [estW, setEstW]               = useState('')
-  const [estH, setEstH]               = useState('')
-  const [estApplied, setEstApplied]   = useState(false)
-  const [isDragging, setIsDragging]   = useState(false)
-  const [dotPositions, setDotPositions] = useState({})
-  const clientWin                     = useRef(null)
-  const [clientWinOpen, setClientWinOpen] = useState(false)
-  const [estStyle, setEstStyle]           = useState('')
-  const imageURLs                         = useRef({})
-  const fileInputRef                      = useRef(null)
+  const [currentStep, setCurrentStep]       = useState(0)
+  const [nameError, setNameError]           = useState(false)
+  const [showDupModal, setShowDupModal]     = useState(false)
+  const [dupClient, setDupClient]           = useState(null)
+  const [estW, setEstW]                     = useState('')
+  const [estH, setEstH]                     = useState('')
+  const [estApplied, setEstApplied]         = useState(false)
+  const [isDragging, setIsDragging]         = useState(false)
+  const [estStyle, setEstStyle]             = useState('')
+  const [manualEstPrice, setManualEstPrice] = useState('')
+  const [manualAtMin, setManualAtMin]       = useState(false)
+  const [savedConsult, setSavedConsult]     = useState(null)
+  const clientWin                           = useRef(null)
+  const [clientWinOpen, setClientWinOpen]   = useState(false)
+  const imageURLs                           = useRef({})
+  const fileInputRef                        = useRef(null)
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
@@ -213,6 +244,16 @@ export default function Consultation() {
     return () => {
       Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
     }
+  }, [])
+
+  useEffect(() => {
+    function handleMessage(e) {
+      if (e.data?.type === 'CLIENT_FORM_DATA') {
+        setFormData(prev => ({ ...prev, ...e.data.payload }))
+      }
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
   }, [])
 
   function openClientMode() {
@@ -317,11 +358,14 @@ export default function Consultation() {
     }
 
     saveClients(clients)
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ saved: true }))
     localStorage.removeItem(DRAFT_KEY)
 
     if (clientWin.current && !clientWin.current.closed) {
       clientWin.current.postMessage({ type: 'CONSULTATION_SAVED' }, '*')
     }
+
+    const snapshot = { ...formData }
 
     const firstName = formData.name.trim().split(' ')[0]
     try {
@@ -350,7 +394,7 @@ export default function Consultation() {
     setCurrentStep(0)
     setShowDupModal(false)
     setDupClient(null)
-    setDotPositions({})
+    setSavedConsult(snapshot)
   }
 
   async function saveConsultation() {
@@ -624,33 +668,6 @@ export default function Consultation() {
   }
 
   function renderStep2() {
-    const selectedZones = formData.placementZones || []
-
-    function handleZoneClick(e, zoneName) {
-      const svgEl = e.currentTarget.ownerSVGElement || e.currentTarget.closest('svg')
-      let svgX = 0, svgY = 0
-      try {
-        const pt = svgEl.createSVGPoint()
-        pt.x = e.clientX
-        pt.y = e.clientY
-        const svgP = pt.matrixTransform(svgEl.getScreenCTM().inverse())
-        svgX = svgP.x
-        svgY = svgP.y
-      } catch {}
-      if (selectedZones.includes(zoneName)) {
-        set('placementZones', selectedZones.filter(z => z !== zoneName))
-        setDotPositions(prev => { const n = { ...prev }; delete n[zoneName]; return n })
-      } else {
-        set('placementZones', [...selectedZones, zoneName])
-        setDotPositions(prev => ({ ...prev, [zoneName]: { x: svgX, y: svgY } }))
-      }
-    }
-
-    function removeZone(zoneName) {
-      set('placementZones', selectedZones.filter(z => z !== zoneName))
-      setDotPositions(prev => { const n = { ...prev }; delete n[zoneName]; return n })
-    }
-
     return (
       <>
         <Field label="Placement">
@@ -662,80 +679,11 @@ export default function Consultation() {
             style={INPUT_STYLE}
           />
         </Field>
-
-        {/* Body Placement Map */}
-        <div style={{ marginBottom: 20 }}>
-          <span style={LABEL_STYLE}>Placement Map</span>
-          <svg
-            viewBox="0 0 210 240"
-            width="100%"
-            style={{ maxWidth: 420, display: 'block', margin: '4px auto 0' }}
-          >
-            <text x="52" y="234" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="7" fill="rgba(122,120,111,0.5)" letterSpacing="0.06em">FRONT</text>
-            <text x="158" y="234" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="7" fill="rgba(122,120,111,0.5)" letterSpacing="0.06em">BACK</text>
-            <line x1="105" y1="8" x2="105" y2="226" stroke="rgba(122,120,111,0.2)" strokeWidth="0.5" />
-            <ellipse cx={158} cy={20} rx={19} ry={19} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
-            <rect x={151} y={37} width={14} height={13} rx={3} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
-            <rect x={119} y={41} width={22} height={17} rx={4} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
-            <rect x={173} y={41} width={22} height={17} rx={4} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
-            {BODY_ZONES.map(zone => {
-              const isSelected = selectedZones.includes(zone.id)
-              const props = {
-                fill: isSelected ? 'rgba(201,169,110,0.4)' : 'transparent',
-                stroke: '#7a786f',
-                strokeOpacity: 0.4,
-                strokeWidth: 0.8,
-                style: { cursor: 'pointer' },
-                onClick: e => handleZoneClick(e, zone.id),
-              }
-              return zone.shape === 'ellipse'
-                ? <ellipse key={zone.id} cx={zone.cx} cy={zone.cy} rx={zone.rx} ry={zone.ry} {...props} />
-                : <rect key={zone.id} x={zone.x} y={zone.y} width={zone.w} height={zone.h} rx={zone.rx || 0} {...props} />
-            })}
-            {BODY_ZONES.map(zone => {
-              const dot = dotPositions[zone.id]
-              if (!dot) return null
-              return <circle key={'d' + zone.id} cx={dot.x} cy={dot.y} r={2.5} fill="#c9a96e" style={{ pointerEvents: 'none' }} />
-            })}
-          </svg>
-          {selectedZones.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-              {selectedZones.map(zone => (
-                <div
-                  key={zone}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    padding: '3px 8px',
-                    background: 'rgba(201,169,110,0.1)',
-                    border: '1px solid rgba(201,169,110,0.3)',
-                    borderRadius: 6,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: '#c9a96e',
-                  }}
-                >
-                  {zone}
-                  <button
-                    onClick={() => removeZone(zone)}
-                    style={{ background: 'none', border: 'none', color: '#c9a96e', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         <Field label="Approximate Size">
-          <input
-            type="text"
+          <PillToggle
+            options={SIZE_OPTIONS}
             value={formData.size}
-            onChange={e => set('size', e.target.value)}
-            placeholder="e.g. 4x6 inches, palm sized"
-            style={INPUT_STYLE}
+            onChange={v => set('size', v)}
           />
         </Field>
         <Field label="Style">
@@ -895,29 +843,46 @@ export default function Consultation() {
   function renderStep5() {
     const wNum = parseFloat(estW)
     const hNum = parseFloat(estH)
-    const showCalc  = estW && estH && wNum > 0 && hNum > 0
-    const baseHours = showCalc ? (wNum + hNum) / 2 : 0
-    const lowHours  = showCalc ? Math.max(1, baseHours - 1) : 0
-    const highHours = showCalc ? baseHours + 1 : 0
-    const rate = 250
+    const showCalc = !!(estW && estH && wNum > 0 && hNum > 0)
+    const average  = showCalc ? (wNum + hNum) / 2 : 0
+    const plus     = showCalc ? average + 1 : 0
+    const minus    = showCalc ? Math.max(0.5, Math.min(wNum, hNum) - 1) : 0
 
-    const isHourly = estStyle === 'Watercolor' || estStyle === 'Black and Gray Realism'
-    const isFlat   = estStyle === 'Fine Line' || estStyle === 'Simple Design'
+    const isHourly  = HOURLY_STYLES.includes(estStyle)
+    const isPerSess = estStyle === 'Per Session'
+    const isFlat    = estStyle === 'Fine Line' || estStyle === 'Simple Design'
 
-    const lowTotal   = Math.round(lowHours * rate)
-    const highTotal  = Math.round(highHours * rate)
-    const flatAmount = Math.max(100, Math.round(baseHours * rate))
-    const sizeTier   = baseHours <= 1.5
-      ? 'Small (1 to 3 inches)'
-      : baseHours <= 3
-      ? 'Medium (3.5 to 6 inches)'
-      : 'Large (6.6 inches and above)'
+    const fmtHours = (n) => n % 1 === 0 ? String(n) : n.toFixed(1)
+
+    const showShopMinNote = showCalc && (
+      (isHourly && minus * 250 < 100) ||
+      (isPerSess && average * 250 < 100)
+    )
+
+    function handleManualBlur() {
+      const n = parseFloat(manualEstPrice)
+      if (!isNaN(n) && n < 100) {
+        setManualEstPrice('100')
+        setManualAtMin(true)
+      } else {
+        setManualAtMin(false)
+      }
+    }
 
     function applyEstimate() {
-      if (!showCalc) return
-      const total = isFlat ? Math.max(100, Math.round(baseHours * rate)) : Math.round(baseHours * rate)
-      set('estimatedHours', baseHours.toFixed(1))
-      set('estimatedTotal', String(total))
+      if (isFlat) {
+        if (!manualEstPrice) return
+        set('estimatedTotal', manualEstPrice)
+        set('estimatedHours', '')
+      } else if (isHourly && showCalc) {
+        set('estimatedHours', fmtHours(average))
+        set('estimatedTotal', String(roundTo50(shopMin(average * 250))))
+      } else if (isPerSess && showCalc) {
+        set('estimatedTotal', String(roundTo50(shopMin(average * 250))))
+        set('estimatedHours', '')
+      } else {
+        return
+      }
       setEstApplied(true)
       setTimeout(() => setEstApplied(false), 2000)
     }
@@ -960,56 +925,82 @@ export default function Consultation() {
           <div style={{ marginBottom: 12 }}>
             <span style={LABEL_STYLE}>Style</span>
             <PillToggle
-              options={['Watercolor', 'Black and Gray Realism', 'Fine Line', 'Simple Design']}
+              options={EST_STYLE_OPTIONS}
               value={estStyle}
               onChange={v => setEstStyle(v)}
             />
           </div>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <span style={LABEL_STYLE}>Width (in)</span>
-              <input
-                type="number"
-                value={estW}
-                onChange={e => setEstW(e.target.value)}
-                placeholder="0"
-                style={{ ...INPUT_STYLE, fontFamily: 'var(--font-mono)' }}
-              />
+
+          {!isFlat && (
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <span style={LABEL_STYLE}>Width (in)</span>
+                <input
+                  type="number"
+                  value={estW}
+                  onChange={e => setEstW(e.target.value)}
+                  placeholder="0"
+                  style={{ ...INPUT_STYLE, fontFamily: 'var(--font-mono)' }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <span style={LABEL_STYLE}>Height (in)</span>
+                <input
+                  type="number"
+                  value={estH}
+                  onChange={e => setEstH(e.target.value)}
+                  placeholder="0"
+                  style={{ ...INPUT_STYLE, fontFamily: 'var(--font-mono)' }}
+                />
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <span style={LABEL_STYLE}>Height (in)</span>
-              <input
-                type="number"
-                value={estH}
-                onChange={e => setEstH(e.target.value)}
-                placeholder="0"
-                style={{ ...INPUT_STYLE, fontFamily: 'var(--font-mono)' }}
-              />
-            </div>
-          </div>
-          {showCalc && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#c9a96e', lineHeight: 1.8, marginBottom: 12 }}>
-              {(isHourly || !estStyle) && (
-                <div>
-                  {'Ballpark '}{lowHours.toFixed(1)}{' to '}{highHours.toFixed(1)}{' hours (Goal: '}{baseHours.toFixed(1)}{' hours)'}
-                </div>
-              )}
-              {isHourly && (
-                <div>
-                  {'Estimated investment: $'}{lowTotal.toLocaleString()}{' to $'}{highTotal.toLocaleString()}
-                </div>
-              )}
-              {isFlat && (
-                <>
-                  <div>{'Size tier: '}{sizeTier}</div>
-                  <div>{'Estimated investment: $'}{flatAmount.toLocaleString()}</div>
-                  <div style={{ color: '#7a786f', fontSize: 12 }}>
-                    Shop minimum applies if total falls below $100.
-                  </div>
-                </>
+          )}
+
+          {showCalc && isHourly && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#c9a96e', lineHeight: 2, marginBottom: 12 }}>
+              <div>{fmtHours(minus)} to {fmtHours(plus)} hours</div>
+              <div>${roundTo50(shopMin(minus * 250)).toLocaleString()} to ${roundTo50(shopMin(plus * 250)).toLocaleString()}</div>
+              {showShopMinNote && (
+                <div style={{ color: '#7a786f', fontSize: 11 }}>Shop minimum applies.</div>
               )}
             </div>
           )}
+
+          {showCalc && isPerSess && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#c9a96e', lineHeight: 2, marginBottom: 12 }}>
+              <div>${roundTo50(shopMin(average * 250)).toLocaleString()} to ${roundTo50(shopMin(plus * 250)).toLocaleString()}</div>
+              {showShopMinNote && (
+                <div style={{ color: '#7a786f', fontSize: 11 }}>Shop minimum applies.</div>
+              )}
+            </div>
+          )}
+
+          {isFlat && (
+            <div style={{ marginBottom: 12 }}>
+              <span style={{
+                display: 'block',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: '#c9a96e',
+                letterSpacing: '0.08em',
+                marginBottom: 6,
+              }}>SET YOUR PRICE</span>
+              <input
+                type="number"
+                value={manualEstPrice}
+                onChange={e => { setManualEstPrice(e.target.value); setManualAtMin(false) }}
+                onBlur={handleManualBlur}
+                placeholder="100"
+                style={{ ...INPUT_STYLE, fontFamily: 'var(--font-mono)' }}
+              />
+              {manualAtMin && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginTop: 4, display: 'block' }}>
+                  Shop minimum applied.
+                </span>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
               onClick={applyEstimate}
@@ -1488,6 +1479,61 @@ export default function Consultation() {
           </div>
         )}
       </div>
+
+      {/* PDF button — shown after a successful save */}
+      {savedConsult && (
+        <div style={{
+          background: 'rgba(201,169,110,0.06)',
+          border: '1px solid rgba(201,169,110,0.25)',
+          borderRadius: 12,
+          padding: '14px 16px',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#c9a96e' }}>
+            {savedConsult.name.trim().split(' ')[0]} saved to studio database.
+          </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={() => { generateClientPDF(savedConsult); setSavedConsult(null) }}
+              style={{
+                minHeight: 36,
+                padding: '0 14px',
+                background: '#c9a96e',
+                color: '#0e0e0d',
+                border: 'none',
+                borderRadius: 8,
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Send Client PDF
+            </button>
+            <button
+              onClick={() => setSavedConsult(null)}
+              style={{
+                minHeight: 36,
+                padding: '0 10px',
+                background: 'transparent',
+                color: '#7a786f',
+                border: '1px solid rgba(122,120,111,0.3)',
+                borderRadius: 8,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Progress bar */}
       <div style={{ marginBottom: 24 }}>

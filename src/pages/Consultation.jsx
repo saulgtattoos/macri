@@ -16,7 +16,7 @@ const defaultForm = {
   allergies: '', skinConditions: '', medications: '',
   previousReactions: '', medicalClearance: '',
   pricingType: '', estimatedTotal: '', estimatedHours: '',
-  sessionEstimateNotes: 'Based on what we talked about, I estimate this piece will take approximately [X to Y] hours. Keep in mind this is an estimate. The final time depends on the finished design, your skin, and session flow.',
+  sessionEstimateNotes: '',
   depositAmount: '', depositStatus: '',
   consultationDate: '', appointmentDate: '',
   clientTier: 'Deposit Required',
@@ -159,6 +159,7 @@ export default function Consultation() {
   const [estApplied, setEstApplied]   = useState(false)
   const clientWin                     = useRef(null)
   const [clientWinOpen, setClientWinOpen] = useState(false)
+  const [estStyle, setEstStyle]           = useState('')
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
@@ -571,15 +572,29 @@ export default function Consultation() {
   function renderStep5() {
     const wNum = parseFloat(estW)
     const hNum = parseFloat(estH)
-    const showCalc = estW && estH && wNum > 0 && hNum > 0
-    const estArea  = showCalc ? wNum * hNum : 0
-    const estHoursVal = estArea
-    const estCost  = estHoursVal * 250
+    const showCalc  = estW && estH && wNum > 0 && hNum > 0
+    const baseHours = showCalc ? (wNum + hNum) / 2 : 0
+    const lowHours  = showCalc ? Math.max(1, baseHours - 1) : 0
+    const highHours = showCalc ? baseHours + 1 : 0
+    const rate = 250
+
+    const isHourly = estStyle === 'Watercolor' || estStyle === 'Black and Gray Realism'
+    const isFlat   = estStyle === 'Fine Line' || estStyle === 'Simple Design'
+
+    const lowTotal   = Math.round(lowHours * rate)
+    const highTotal  = Math.round(highHours * rate)
+    const flatAmount = Math.max(100, Math.round(baseHours * rate))
+    const sizeTier   = baseHours <= 1.5
+      ? 'Small (1 to 3 inches)'
+      : baseHours <= 3
+      ? 'Medium (3.5 to 6 inches)'
+      : 'Large (6.6 inches and above)'
 
     function applyEstimate() {
       if (!showCalc) return
-      set('estimatedTotal', String(Math.round(estCost)))
-      set('estimatedHours', String(Math.round(estHoursVal)))
+      const total = isFlat ? Math.max(100, Math.round(baseHours * rate)) : Math.round(baseHours * rate)
+      set('estimatedHours', baseHours.toFixed(1))
+      set('estimatedTotal', String(total))
       setEstApplied(true)
       setTimeout(() => setEstApplied(false), 2000)
     }
@@ -621,6 +636,14 @@ export default function Consultation() {
         {/* Precision Estimator */}
         <div style={CARD_STYLE}>
           <div style={{ ...CARD_LABEL, marginBottom: 12 }}>PRECISION ESTIMATOR</div>
+          <div style={{ marginBottom: 12 }}>
+            <span style={LABEL_STYLE}>Style</span>
+            <PillToggle
+              options={['Watercolor', 'Black and Gray Realism', 'Fine Line', 'Simple Design']}
+              value={estStyle}
+              onChange={v => setEstStyle(v)}
+            />
+          </div>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
             <div style={{ flex: 1 }}>
               <span style={LABEL_STYLE}>Width (in)</span>
@@ -644,16 +667,26 @@ export default function Consultation() {
             </div>
           </div>
           {showCalc && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#7a786f', lineHeight: 1.8, marginBottom: 12 }}>
-              <span style={{ color: '#c9a96e' }}>{wNum}</span>
-              {' in × '}
-              <span style={{ color: '#c9a96e' }}>{hNum}</span>
-              {' in = '}
-              <span style={{ color: '#c9a96e' }}>{estArea % 1 === 0 ? estArea : estArea.toFixed(2)}</span>
-              {' sq in → ~'}
-              <span style={{ color: '#c9a96e' }}>{estHoursVal % 1 === 0 ? estHoursVal : estHoursVal.toFixed(2)}</span>
-              {' hours → ~$'}
-              <span style={{ color: '#c9a96e' }}>{Math.round(estCost).toLocaleString()}</span>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#c9a96e', lineHeight: 1.8, marginBottom: 12 }}>
+              {(isHourly || !estStyle) && (
+                <div>
+                  {'Ballpark '}{lowHours.toFixed(1)}{' to '}{highHours.toFixed(1)}{' hours (Goal: '}{baseHours.toFixed(1)}{' hours)'}
+                </div>
+              )}
+              {isHourly && (
+                <div>
+                  {'Estimated investment: $'}{lowTotal.toLocaleString()}{' to $'}{highTotal.toLocaleString()}
+                </div>
+              )}
+              {isFlat && (
+                <>
+                  <div>{'Size tier: '}{sizeTier}</div>
+                  <div>{'Estimated investment: $'}{flatAmount.toLocaleString()}</div>
+                  <div style={{ color: '#7a786f', fontSize: 12 }}>
+                    Shop minimum applies if total falls below $100.
+                  </div>
+                </>
+              )}
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -702,7 +735,7 @@ export default function Consultation() {
             type="text"
             value={formData.estimatedTotal}
             onChange={e => set('estimatedTotal', e.target.value)}
-            placeholder="e.g. 1500"
+            placeholder="Dollar amount"
             style={INPUT_STYLE}
           />
         </Field>
@@ -751,7 +784,7 @@ export default function Consultation() {
     const summaryLines = buildSummaryLines(formData)
     return (
       <>
-        <Field label="Private Notes — These do not appear in the client summary">
+        <Field label="Private Notes: Not visible in the client summary">
           <textarea
             value={formData.artistNotes}
             onChange={e => set('artistNotes', e.target.value)}
@@ -925,7 +958,7 @@ export default function Consultation() {
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e' }}>
-            Step {currentStep + 1} of 7 &mdash; {step.label}
+            Step {currentStep + 1} of 7: {step.label}
           </span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
             {currentStep + 1} / 7

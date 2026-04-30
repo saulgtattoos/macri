@@ -26,6 +26,11 @@ const defaultForm = {
   projectRating: '',
   strategyNotes: '',
   postSessionDebrief: '',
+  placementZones: [],
+  tattooCount: '',
+  sittingEndurance: '',
+  technicalDifficulty: '',
+  executionPlan: '',
 }
 
 const STEPS = [
@@ -53,6 +58,44 @@ const TIER_OPTIONS       = ['Deposit Required', 'Trusted Client']
 
 const DRAFT_KEY = 'macri_consultation_draft'
 const IOS_WAV   = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAEAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
+
+const BODY_ZONES = [
+  { id: 'Head',                   shape: 'ellipse', cx: 52,  cy: 20,  rx: 19, ry: 19 },
+  { id: 'Neck',                   shape: 'rect',    x: 45,   y: 37,   w: 14,  h: 13,  rx: 3 },
+  { id: 'Left Shoulder',          shape: 'rect',    x: 14,   y: 41,   w: 28,  h: 20,  rx: 4 },
+  { id: 'Right Shoulder',         shape: 'rect',    x: 62,   y: 41,   w: 28,  h: 20,  rx: 4 },
+  { id: 'Left Chest',             shape: 'rect',    x: 31,   y: 59,   w: 21,  h: 32,  rx: 3 },
+  { id: 'Right Chest',            shape: 'rect',    x: 52,   y: 59,   w: 21,  h: 32,  rx: 3 },
+  { id: 'Left Upper Arm',         shape: 'rect',    x: 6,    y: 59,   w: 19,  h: 36,  rx: 4 },
+  { id: 'Right Upper Arm',        shape: 'rect',    x: 79,   y: 59,   w: 19,  h: 36,  rx: 4 },
+  { id: 'Upper Abdomen',          shape: 'rect',    x: 33,   y: 89,   w: 38,  h: 24,  rx: 3 },
+  { id: 'Left Inner Arm',         shape: 'rect',    x: 4,    y: 93,   w: 17,  h: 26,  rx: 3 },
+  { id: 'Right Inner Arm',        shape: 'rect',    x: 83,   y: 93,   w: 17,  h: 26,  rx: 3 },
+  { id: 'Lower Abdomen',          shape: 'rect',    x: 33,   y: 111,  w: 38,  h: 24,  rx: 3 },
+  { id: 'Left Forearm',           shape: 'rect',    x: 2,    y: 117,  w: 15,  h: 26,  rx: 3 },
+  { id: 'Right Forearm',          shape: 'rect',    x: 87,   y: 117,  w: 15,  h: 26,  rx: 3 },
+  { id: 'Left Hip',               shape: 'rect',    x: 22,   y: 133,  w: 23,  h: 22,  rx: 3 },
+  { id: 'Right Hip',              shape: 'rect',    x: 59,   y: 133,  w: 23,  h: 22,  rx: 3 },
+  { id: 'Left Hand',              shape: 'rect',    x: 0,    y: 141,  w: 14,  h: 18,  rx: 4 },
+  { id: 'Right Hand',             shape: 'rect',    x: 90,   y: 141,  w: 14,  h: 18,  rx: 4 },
+  { id: 'Left Upper Thigh',       shape: 'rect',    x: 23,   y: 153,  w: 23,  h: 30,  rx: 3 },
+  { id: 'Right Upper Thigh',      shape: 'rect',    x: 58,   y: 153,  w: 23,  h: 30,  rx: 3 },
+  { id: 'Left Lower Leg',         shape: 'rect',    x: 25,   y: 181,  w: 20,  h: 28,  rx: 3 },
+  { id: 'Right Lower Leg',        shape: 'rect',    x: 59,   y: 181,  w: 20,  h: 28,  rx: 3 },
+  { id: 'Left Foot',              shape: 'rect',    x: 22,   y: 207,  w: 22,  h: 14,  rx: 5 },
+  { id: 'Right Foot',             shape: 'rect',    x: 61,   y: 207,  w: 22,  h: 14,  rx: 5 },
+  { id: 'Upper Back',             shape: 'rect',    x: 143,  y: 56,   w: 30,  h: 28,  rx: 3 },
+  { id: 'Mid Back',               shape: 'rect',    x: 143,  y: 82,   w: 30,  h: 26,  rx: 3 },
+  { id: 'Lower Back',             shape: 'rect',    x: 143,  y: 106,  w: 30,  h: 22,  rx: 3 },
+  { id: 'Left Shoulder Blade',    shape: 'rect',    x: 119,  y: 56,   w: 22,  h: 28,  rx: 3 },
+  { id: 'Right Shoulder Blade',   shape: 'rect',    x: 175,  y: 56,   w: 22,  h: 28,  rx: 3 },
+  { id: 'Left Glute',             shape: 'rect',    x: 122,  y: 130,  w: 23,  h: 24,  rx: 3 },
+  { id: 'Right Glute',            shape: 'rect',    x: 169,  y: 130,  w: 23,  h: 24,  rx: 3 },
+  { id: 'Left Upper Thigh Back',  shape: 'rect',    x: 123,  y: 152,  w: 22,  h: 28,  rx: 3 },
+  { id: 'Right Upper Thigh Back', shape: 'rect',    x: 169,  y: 152,  w: 22,  h: 28,  rx: 3 },
+  { id: 'Left Calf',              shape: 'rect',    x: 124,  y: 178,  w: 20,  h: 26,  rx: 3 },
+  { id: 'Right Calf',             shape: 'rect',    x: 168,  y: 178,  w: 20,  h: 26,  rx: 3 },
+]
 
 // ─── PillToggle ────────────────────────────────────────────────────────────────
 
@@ -147,6 +190,7 @@ export default function Consultation() {
   const [estH, setEstH]               = useState('')
   const [estApplied, setEstApplied]   = useState(false)
   const [isDragging, setIsDragging]   = useState(false)
+  const [dotPositions, setDotPositions] = useState({})
   const clientWin                     = useRef(null)
   const [clientWinOpen, setClientWinOpen] = useState(false)
   const [estStyle, setEstStyle]           = useState('')
@@ -306,6 +350,7 @@ export default function Consultation() {
     setCurrentStep(0)
     setShowDupModal(false)
     setDupClient(null)
+    setDotPositions({})
   }
 
   async function saveConsultation() {
@@ -579,6 +624,33 @@ export default function Consultation() {
   }
 
   function renderStep2() {
+    const selectedZones = formData.placementZones || []
+
+    function handleZoneClick(e, zoneName) {
+      const svgEl = e.currentTarget.ownerSVGElement || e.currentTarget.closest('svg')
+      let svgX = 0, svgY = 0
+      try {
+        const pt = svgEl.createSVGPoint()
+        pt.x = e.clientX
+        pt.y = e.clientY
+        const svgP = pt.matrixTransform(svgEl.getScreenCTM().inverse())
+        svgX = svgP.x
+        svgY = svgP.y
+      } catch {}
+      if (selectedZones.includes(zoneName)) {
+        set('placementZones', selectedZones.filter(z => z !== zoneName))
+        setDotPositions(prev => { const n = { ...prev }; delete n[zoneName]; return n })
+      } else {
+        set('placementZones', [...selectedZones, zoneName])
+        setDotPositions(prev => ({ ...prev, [zoneName]: { x: svgX, y: svgY } }))
+      }
+    }
+
+    function removeZone(zoneName) {
+      set('placementZones', selectedZones.filter(z => z !== zoneName))
+      setDotPositions(prev => { const n = { ...prev }; delete n[zoneName]; return n })
+    }
+
     return (
       <>
         <Field label="Placement">
@@ -590,6 +662,73 @@ export default function Consultation() {
             style={INPUT_STYLE}
           />
         </Field>
+
+        {/* Body Placement Map */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={LABEL_STYLE}>Placement Map</span>
+          <svg
+            viewBox="0 0 210 240"
+            width="100%"
+            style={{ maxWidth: 420, display: 'block', margin: '4px auto 0' }}
+          >
+            <text x="52" y="234" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="7" fill="rgba(122,120,111,0.5)" letterSpacing="0.06em">FRONT</text>
+            <text x="158" y="234" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="7" fill="rgba(122,120,111,0.5)" letterSpacing="0.06em">BACK</text>
+            <line x1="105" y1="8" x2="105" y2="226" stroke="rgba(122,120,111,0.2)" strokeWidth="0.5" />
+            <ellipse cx={158} cy={20} rx={19} ry={19} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
+            <rect x={151} y={37} width={14} height={13} rx={3} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
+            <rect x={119} y={41} width={22} height={17} rx={4} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
+            <rect x={173} y={41} width={22} height={17} rx={4} fill="transparent" stroke="#7a786f" strokeOpacity={0.3} strokeWidth={0.8} />
+            {BODY_ZONES.map(zone => {
+              const isSelected = selectedZones.includes(zone.id)
+              const props = {
+                fill: isSelected ? 'rgba(201,169,110,0.4)' : 'transparent',
+                stroke: '#7a786f',
+                strokeOpacity: 0.4,
+                strokeWidth: 0.8,
+                style: { cursor: 'pointer' },
+                onClick: e => handleZoneClick(e, zone.id),
+              }
+              return zone.shape === 'ellipse'
+                ? <ellipse key={zone.id} cx={zone.cx} cy={zone.cy} rx={zone.rx} ry={zone.ry} {...props} />
+                : <rect key={zone.id} x={zone.x} y={zone.y} width={zone.w} height={zone.h} rx={zone.rx || 0} {...props} />
+            })}
+            {BODY_ZONES.map(zone => {
+              const dot = dotPositions[zone.id]
+              if (!dot) return null
+              return <circle key={'d' + zone.id} cx={dot.x} cy={dot.y} r={2.5} fill="#c9a96e" style={{ pointerEvents: 'none' }} />
+            })}
+          </svg>
+          {selectedZones.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {selectedZones.map(zone => (
+                <div
+                  key={zone}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '3px 8px',
+                    background: 'rgba(201,169,110,0.1)',
+                    border: '1px solid rgba(201,169,110,0.3)',
+                    borderRadius: 6,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    color: '#c9a96e',
+                  }}
+                >
+                  {zone}
+                  <button
+                    onClick={() => removeZone(zone)}
+                    style={{ background: 'none', border: 'none', color: '#c9a96e', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <Field label="Approximate Size">
           <input
             type="text"
@@ -670,6 +809,36 @@ export default function Consultation() {
             style={{ ...INPUT_STYLE, minHeight: 60, resize: 'vertical' }}
           />
         </Field>
+        <div style={{ marginBottom: 20 }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: '#c9a96e',
+            letterSpacing: '0.08em',
+            display: 'block',
+            marginBottom: 8,
+          }}>TATTOO EXPERIENCE</span>
+          <PillToggle
+            options={['None', '1 to 5', '5 or more']}
+            value={formData.tattooCount}
+            onChange={v => set('tattooCount', v)}
+          />
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: '#c9a96e',
+            letterSpacing: '0.08em',
+            display: 'block',
+            marginBottom: 8,
+          }}>SITTING ENDURANCE</span>
+          <PillToggle
+            options={['2 hours', '4 hours', '6 hours', 'Full Day']}
+            value={formData.sittingEndurance}
+            onChange={v => set('sittingEndurance', v)}
+          />
+        </div>
       </>
     )
   }
@@ -1138,6 +1307,53 @@ export default function Consultation() {
             value={formData.postSessionDebrief}
             onChange={e => set('postSessionDebrief', e.target.value)}
             placeholder="Log observations after the session. Skin behavior, healing notes, anything to remember for the next visit."
+            style={{ ...INPUT_STYLE, minHeight: 80, resize: 'vertical' }}
+          />
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <span style={VAULT_LABEL}>TECHNICAL DIFFICULTY</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[
+              { n: '1', active: { border: '1px solid #7aab8f', color: '#7aab8f' } },
+              { n: '2', active: { border: '1px solid #8fbcbb', color: '#8fbcbb' } },
+              { n: '3', active: { border: '1px solid #c9a96e', color: '#c9a96e' } },
+              { n: '4', active: { border: '1px solid #c99650', color: '#c99650' } },
+              { n: '5', active: { border: '1px solid #f09595', color: '#f09595' } },
+            ].map(({ n, active }) => {
+              const isActive = formData.technicalDifficulty === n
+              return (
+                <button
+                  key={n}
+                  onClick={() => set('technicalDifficulty', formData.technicalDifficulty === n ? '' : n)}
+                  style={{
+                    minHeight: 36,
+                    minWidth: 44,
+                    borderRadius: 8,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    transition: 'all 0.15s',
+                    ...(isActive
+                      ? active
+                      : { border: '1px solid rgba(122,120,111,0.3)', color: '#7a786f' }
+                    ),
+                  }}
+                >
+                  {n}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <span style={VAULT_LABEL}>EXECUTION PLAN</span>
+          <textarea
+            value={formData.executionPlan}
+            onChange={e => set('executionPlan', e.target.value)}
+            placeholder="Log your attack plan. Linework first session, color blending second session, black saturation last. Whatever the strategy is for this specific piece."
             style={{ ...INPUT_STYLE, minHeight: 80, resize: 'vertical' }}
           />
         </div>

@@ -4,9 +4,10 @@ import { STAGES } from '../constants/stages'
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
-const LS_CLIENTS = 'macri_crm_clients'
-const LS_GOALS   = 'macri_goals'
-const LS_WELCOME = 'macri_welcome_last_seen'
+const LS_CLIENTS  = 'macri_crm_clients'
+const LS_GOALS    = 'macri_goals'
+const LS_WELCOME  = 'macri_welcome_last_seen'
+const LS_SESSIONS = 'sessions_v4'
 
 function loadClients() {
   try { return JSON.parse(localStorage.getItem(LS_CLIENTS)) || [] } catch { return [] }
@@ -20,20 +21,26 @@ function saveGoals(list) {
 function saveClients(list) {
   localStorage.setItem(LS_CLIENTS, JSON.stringify(list))
 }
+function loadSessions4() {
+  try { return JSON.parse(localStorage.getItem(LS_SESSIONS)) || [] } catch { return [] }
+}
+function saveSessions4(list) {
+  localStorage.setItem(LS_SESSIONS, JSON.stringify(list))
+}
 
 // ─── Quotes ───────────────────────────────────────────────────────────────────
 
 const QUOTES = [
-  { text: 'Your body is a journal, and tattoos are the stories.',              author: 'Johnny Depp' },
-  { text: 'Art is not what you see, but what you make others see.',            author: 'Edgar Degas' },
-  { text: 'Every artist dips his brush in his own soul.',                      author: 'Henry Ward Beecher' },
-  { text: 'Creativity takes courage.',                                         author: 'Henri Matisse' },
-  { text: 'The purpose of art is washing the dust of daily life off our souls.', author: 'Pablo Picasso' },
+  { text: 'Your body is a journal, and tattoos are the stories.',                 author: 'Johnny Depp' },
+  { text: 'Art is not what you see, but what you make others see.',               author: 'Edgar Degas' },
+  { text: 'Every artist dips his brush in his own soul.',                         author: 'Henry Ward Beecher' },
+  { text: 'Creativity takes courage.',                                            author: 'Henri Matisse' },
+  { text: 'The purpose of art is washing the dust of daily life off our souls.',  author: 'Pablo Picasso' },
   { text: 'Art enables us to find ourselves and lose ourselves at the same time.', author: 'Thomas Merton' },
-  { text: "To create one's own world takes courage.",                          author: "Georgia O'Keeffe" },
-  { text: 'An artist is not paid for his labor but for his vision.',           author: 'James Whistler' },
-  { text: 'Great art picks up where nature ends.',                             author: 'Marc Chagall' },
-  { text: 'The job of the artist is always to deepen the mystery.',            author: 'Francis Bacon' },
+  { text: "To create one's own world takes courage.",                             author: "Georgia O'Keeffe" },
+  { text: 'An artist is not paid for his labor but for his vision.',              author: 'James Whistler' },
+  { text: 'Great art picks up where nature ends.',                                author: 'Marc Chagall' },
+  { text: 'The job of the artist is always to deepen the mystery.',               author: 'Francis Bacon' },
 ]
 
 function getDailyIdx() {
@@ -50,7 +57,7 @@ function getRefreshIdx(current) {
 
 async function speakText(text) {
   try {
-    const key = import.meta.env.VITE_ELEVENLABS_KEY
+    const key    = import.meta.env.VITE_ELEVENLABS_KEY
     const voiceId = 'Q2Qd4P9qaDNuBFUcFCQr'
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
@@ -63,7 +70,7 @@ async function speakText(text) {
     })
     if (!res.ok) return
     const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
+    const url  = URL.createObjectURL(blob)
     const audio = new Audio(url)
     audio.play()
     audio.onended = () => URL.revokeObjectURL(url)
@@ -82,6 +89,7 @@ function buildSessionMap(clients) {
   const map = {}
   for (const c of clients) {
     for (const s of (c.sessions || [])) {
+      if (typeof s !== 'object') continue
       const key = (s.date || '').trim().slice(0, 10)
       if (key.length < 10) continue
       if (!map[key]) map[key] = []
@@ -103,10 +111,10 @@ function parseSessionDate(str) {
 function getDateRange(period) {
   const now = new Date()
   if (period === 'week') {
-    const day = now.getDay()
+    const day  = now.getDay()
     const diff = day === 0 ? 6 : day - 1
     const start = new Date(now); start.setDate(now.getDate() - diff); start.setHours(0, 0, 0, 0)
-    const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999)
+    const end   = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999)
     return { start, end }
   }
   if (period === 'month') {
@@ -126,6 +134,7 @@ function filterSessions(clients, period) {
   const result = []
   for (const c of clients) {
     for (const s of (c.sessions || [])) {
+      if (typeof s !== 'object') continue
       const d = parseSessionDate(s.date)
       if (d && d >= start && d <= end) result.push(s)
     }
@@ -179,11 +188,71 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const LOG_FORM_INIT = {
-  date: '', tattooDescription: '', placement: '', isTouchUp: false,
-  deposit: '', depositRefund: false, tattooPrice: '', amountPaid: '',
-  tip: '', paymentMethod: 'Cash', giftCardCode: '', discountCode: '',
-  originalPrice: '', discountApplied: false, notes: '',
+const STYLE_OPTIONS = [
+  'Watercolor', 'Black and Gray', 'Black and Gray Portrait',
+  'Sketch Art', 'Abstract', 'Stippled Shading', 'Color Realism', 'Fine Line', 'Other',
+]
+
+const PAYMENT_OPTIONS = ['Cash', 'Zelle', 'Venmo', 'Apple Pay']
+
+function mkSF() {
+  return {
+    selectedClientId: null,
+    clientName: '',
+    date: todayISO(),
+    style: 'Watercolor',
+    placement: '',
+    total: '',
+    tip: '',
+    payment: 'Cash',
+    notes: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    instagramTag: '',
+  }
+}
+
+// ─── CSV helpers ──────────────────────────────────────────────────────────────
+
+function parseCSVManual(text) {
+  const lines = text.split(/\r?\n/)
+  const rows  = []
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const row = []
+    let inQuote = false
+    let cur     = ''
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') { cur += '"'; i++ }
+        else inQuote = !inQuote
+      } else if (ch === ',' && !inQuote) {
+        row.push(cur.trim()); cur = ''
+      } else {
+        cur += ch
+      }
+    }
+    row.push(cur.trim())
+    rows.push(row)
+  }
+  return rows
+}
+
+function normalizeDate(str) {
+  if (!str || !str.trim()) return todayISO()
+  const s = str.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (m1) return `${m1[3]}-${m1[1].padStart(2, '0')}-${m1[2].padStart(2, '0')}`
+  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/)
+  if (m2) {
+    const year = parseInt(m2[3]) < 50 ? `20${m2[3]}` : `19${m2[3]}`
+    return `${year}-${m2[1].padStart(2, '0')}-${m2[2].padStart(2, '0')}`
+  }
+  return todayISO()
 }
 
 // ─── Welcome helpers ──────────────────────────────────────────────────────────
@@ -222,10 +291,37 @@ function IconChevronRight({ color = '#7a786f' }) {
   )
 }
 
+function IconChevronDown({ color = '#7a786f' }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M4 6l4 4 4-4" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function IconChevronUp({ color = '#7a786f' }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M4 10l4-4 4 4" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
 function IconTrash() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.75 7.25A.5.5 0 0 0 4.24 11h5.52a.5.5 0 0 0 .49-.25L11 3.5M6 6v3M8 6v3" stroke="#7a786f" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function IconMic({ size = 28, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2" width="6" height="11" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="8" y1="22" x2="16" y2="22" />
     </svg>
   )
 }
@@ -236,8 +332,8 @@ export default function Home() {
   const navigate = useNavigate()
   const narrow   = useIsNarrow()
 
-  const [clients, setClients]         = useState(loadClients)
-  const [goals,   setGoals]           = useState(loadGoals)
+  const [clients, setClients] = useState(loadClients)
+  const [goals,   setGoals]   = useState(loadGoals)
 
   // Quote
   const [quoteIdx,  setQuoteIdx]  = useState(getDailyIdx)
@@ -256,25 +352,33 @@ export default function Home() {
   const [addGoalOpen, setAddGoalOpen] = useState(false)
   const [goalForm,    setGoalForm]    = useState({ name: '', targetAmount: '', category: 'Rent' })
 
-  // Log Session modal
-  const [logOpen,           setLogOpen]           = useState(false)
-  const [logStep,           setLogStep]           = useState(1)
-  const [logSelectedClient, setLogSelectedClient] = useState(null)
-  const [logSearch,         setLogSearch]         = useState('')
-  const [logForm,           setLogForm]           = useState(LOG_FORM_INIT)
-
   // Welcome modal
   const [welcomeOpen,   setWelcomeOpen]   = useState(false)
   const [briefingShown, setBriefingShown] = useState(false)
 
+  // Log a Session card
+  const [logCardOpen,  setLogCardOpen]  = useState(true)
+  const [clientMode,   setClientMode]   = useState('existing')
+  const [sf,           setSf]           = useState(mkSF)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
   // Voice log
   const [voiceStatus, setVoiceStatus] = useState('idle')
-  const [voiceMsg,    setVoiceMsg]    = useState('')
-  const voiceRecorderRef = useRef(null)
-  const voiceStreamRef   = useRef(null)
-  const voiceChunksRef   = useRef([])
-  const voiceMimeRef     = useRef('')
-  const voiceTtsRef      = useRef(null)
+  const [voiceMsg,    setVoiceMsg]    = useState('Speak Session')
+  const logMicRef    = useRef(null)
+  const logStreamRef = useRef(null)
+  const logChunksRef = useRef([])
+  const logMimeRef   = useRef('')
+  const logTtsRef    = useRef(null)
+
+  // Toast
+  const [toast, setToast] = useState(null)
+
+  // CSV import
+  const [csvOpen, setCsvOpen] = useState(false)
+  const [csvRows, setCsvRows] = useState([])
+  const [csvDups, setCsvDups] = useState([])
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     const todayStr = todayISO()
@@ -322,12 +426,21 @@ export default function Home() {
   const avgPerSession  = periodSessions.length > 0 ? revenue / periodSessions.length : 0
   const taxAside       = revenue * 0.28
 
-  // ── Derived: goals progress ──
-
   const thisMonthRevenue = useMemo(() => {
     return filterSessions(clients, 'month')
       .reduce((s, x) => s + (parseFloat(x.amountPaid) || 0), 0)
   }, [clients])
+
+  // ── Derived: client search ──
+
+  const searchResults = useMemo(() => {
+    const q = (sf.clientName || '').toLowerCase().trim()
+    if (!q || !dropdownOpen) return []
+    return clients
+      .filter(c => c.stage !== 'Archive')
+      .filter(c => (c.name || '').toLowerCase().includes(q))
+      .slice(0, 10)
+  }, [sf.clientName, clients, dropdownOpen])
 
   // ── Handlers: quote ──
 
@@ -390,44 +503,152 @@ export default function Home() {
     saveGoals(updated)
   }
 
+  // ── Handlers: toast ──
+
+  function showToast(msg, color = '#7aab8f') {
+    setToast({ msg, color })
+    setTimeout(() => setToast(null), 3000)
+  }
+
   // ── Handlers: log session ──
 
-  function handleOpenLogSession() {
-    if (voiceRecorderRef.current && voiceRecorderRef.current.state === 'recording') {
-      voiceRecorderRef.current.stop()
-    }
-    if (voiceStreamRef.current) {
-      voiceStreamRef.current.getTracks().forEach(t => t.stop())
-      voiceStreamRef.current = null
-    }
-    setVoiceStatus('idle')
-    setVoiceMsg('')
-    setLogForm({ ...LOG_FORM_INIT, date: todayISO() })
-    setLogStep(1)
-    setLogSelectedClient(null)
-    setLogSearch('')
-    setLogOpen(true)
+  function clearSF() {
+    setSf({ ...mkSF(), date: todayISO() })
+    setDropdownOpen(false)
+  }
+
+  function handleClientSelect(c) {
+    setSf(f => ({ ...f, selectedClientId: c.id, clientName: c.name || '' }))
+    setDropdownOpen(false)
   }
 
   function handleLogSave() {
-    if (!logSelectedClient) return
-    const session = {
-      id: crypto.randomUUID(),
-      ...logForm,
-      deposit:       parseFloat(logForm.deposit)       || 0,
-      tattooPrice:   parseFloat(logForm.tattooPrice)   || 0,
-      amountPaid:    parseFloat(logForm.amountPaid)    || 0,
-      tip:           parseFloat(logForm.tip)           || 0,
-      originalPrice: parseFloat(logForm.originalPrice) || 0,
+    if (clientMode === 'existing') {
+      if (!sf.date || !sf.total) return
+      const sessionId = Date.now()
+      const sess4 = {
+        id: sessionId,
+        name: sf.clientName,
+        date: sf.date,
+        style: sf.style,
+        placement: sf.placement,
+        total: parseFloat(sf.total) || 0,
+        tip: parseFloat(sf.tip) || 0,
+        payment: sf.payment,
+        notes: sf.notes,
+        clientId: sf.selectedClientId || null,
+        createdAt: new Date().toISOString(),
+      }
+      const s4list = loadSessions4()
+      s4list.unshift(sess4)
+      saveSessions4(s4list)
+
+      let updatedClients = clients
+      if (sf.selectedClientId) {
+        const compatSess = {
+          id: String(sessionId),
+          date: sf.date,
+          tattooDescription: sf.style,
+          placement: sf.placement,
+          isTouchUp: false,
+          deposit: 0,
+          depositRefund: false,
+          tattooPrice: parseFloat(sf.total) || 0,
+          amountPaid: parseFloat(sf.total) || 0,
+          tip: parseFloat(sf.tip) || 0,
+          paymentMethod: sf.payment,
+          giftCardCode: '',
+          discountCode: '',
+          originalPrice: parseFloat(sf.total) || 0,
+          discountApplied: false,
+          notes: sf.notes,
+        }
+        updatedClients = clients.map(c =>
+          c.id === sf.selectedClientId
+            ? { ...c, sessions: [...(c.sessions || []), compatSess] }
+            : c
+        )
+        saveClients(updatedClients)
+        setClients(updatedClients)
+      }
+      showToast('Session logged')
+      clearSF()
+
+    } else {
+      if (!sf.firstName.trim() || !sf.lastName.trim()) return
+      const newClientId = crypto.randomUUID()
+      const fullName    = `${sf.firstName.trim()} ${sf.lastName.trim()}`
+      const sessionId   = Date.now()
+
+      const compatSess = {
+        id: String(sessionId),
+        date: sf.date,
+        tattooDescription: sf.style,
+        placement: sf.placement,
+        isTouchUp: false,
+        deposit: 0,
+        depositRefund: false,
+        tattooPrice: parseFloat(sf.total) || 0,
+        amountPaid: parseFloat(sf.total) || 0,
+        tip: parseFloat(sf.tip) || 0,
+        paymentMethod: sf.payment,
+        giftCardCode: '',
+        discountCode: '',
+        originalPrice: parseFloat(sf.total) || 0,
+        discountApplied: false,
+        notes: sf.notes,
+      }
+
+      const newClient = {
+        id: newClientId,
+        name: fullName,
+        firstName: sf.firstName.trim(),
+        lastName: sf.lastName.trim(),
+        email: sf.email.trim(),
+        phone: sf.phone.trim(),
+        instagramTag: sf.instagramTag.trim(),
+        notes: sf.notes.trim(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        stage: 'Lead',
+        contentDrafts: [],
+        sessions: [compatSess],
+        tattooIdea: '', style: sf.style, placement: sf.placement, size: '', nextAction: '',
+        status: null,
+        journeyChecklist:   [false, false, false, false, false, false],
+        aftercareChecklist: [false, false, false, false, false],
+        consultations: [],
+        activityLog: [],
+        communications: [],
+        consultationCount: 0,
+      }
+
+      const sess4 = {
+        id: sessionId,
+        name: fullName,
+        date: sf.date,
+        style: sf.style,
+        placement: sf.placement,
+        total: parseFloat(sf.total) || 0,
+        tip: parseFloat(sf.tip) || 0,
+        payment: sf.payment,
+        notes: sf.notes,
+        clientId: newClientId,
+        createdAt: new Date().toISOString(),
+      }
+
+      const updatedClients = [...clients, newClient]
+      saveClients(updatedClients)
+      setClients(updatedClients)
+
+      const s4list = loadSessions4()
+      s4list.unshift(sess4)
+      saveSessions4(s4list)
+
+      showToast('Session logged and client added to CRM')
+      setClientMode('existing')
+      clearSF()
     }
-    const updated = clients.map(c =>
-      c.id === logSelectedClient.id
-        ? { ...c, sessions: [...(c.sessions || []), session] }
-        : c
-    )
-    saveClients(updated)
-    setClients(updated)
-    setLogOpen(false)
   }
 
   // ── Handlers: voice log ──
@@ -436,7 +657,7 @@ export default function Home() {
     if (voiceStatus === 'processing') return
 
     if (voiceStatus === 'listening') {
-      if (voiceRecorderRef.current) voiceRecorderRef.current.stop()
+      if (logMicRef.current) logMicRef.current.stop()
       return
     }
 
@@ -444,33 +665,33 @@ export default function Home() {
     ttsPlayer.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAA' +
       'EAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
     ttsPlayer.play().catch(() => {})
-    voiceTtsRef.current = ttsPlayer
+    logTtsRef.current = ttsPlayer
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      voiceStreamRef.current = stream
-      voiceChunksRef.current = []
+      logStreamRef.current = stream
+      logChunksRef.current = []
 
       const MIME_PRIORITIES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
       const mimeType = MIME_PRIORITIES.find(t => MediaRecorder.isTypeSupported(t)) ?? ''
-      voiceMimeRef.current = mimeType
+      logMimeRef.current = mimeType
 
       const mediaRecorder = mimeType
         ? new MediaRecorder(stream, { mimeType })
         : new MediaRecorder(stream)
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) voiceChunksRef.current.push(e.data) }
-      voiceRecorderRef.current = mediaRecorder
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) logChunksRef.current.push(e.data) }
+      logMicRef.current = mediaRecorder
       mediaRecorder.start(100)
 
       setVoiceStatus('listening')
       setVoiceMsg('Listening...')
 
-      const silenceCtx = new (window.AudioContext || window.webkitAudioContext)()
+      const silenceCtx    = new (window.AudioContext || window.webkitAudioContext)()
       const silenceSource = silenceCtx.createMediaStreamSource(stream)
-      const analyser = silenceCtx.createAnalyser()
-      analyser.fftSize = 256
+      const analyser      = silenceCtx.createAnalyser()
+      analyser.fftSize    = 256
       silenceSource.connect(analyser)
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      const dataArray  = new Uint8Array(analyser.frequencyBinCount)
       let silenceStart = null
       const silenceInterval = setInterval(() => {
         analyser.getByteFrequencyData(dataArray)
@@ -501,30 +722,30 @@ export default function Home() {
 
     } catch {
       setVoiceStatus('error')
-      setVoiceMsg('Could not process voice. Fill in manually.')
-      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('') }, 3000)
+      setVoiceMsg('Could not access mic. Try again.')
+      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('Speak Session') }, 3000)
     }
   }
 
   async function processVoiceLog() {
     try {
-      if (voiceStreamRef.current) {
-        voiceStreamRef.current.getTracks().forEach(t => t.stop())
-        voiceStreamRef.current = null
+      if (logStreamRef.current) {
+        logStreamRef.current.getTracks().forEach(t => t.stop())
+        logStreamRef.current = null
       }
 
-      const mime     = voiceMimeRef.current
+      const mime     = logMimeRef.current
       const isMP4    = mime.startsWith('audio/mp4')
       const ext      = isMP4 ? 'mp4' : 'webm'
       const blobType = isMP4 ? 'audio/mp4' : 'audio/webm'
 
-      const blob = new Blob(voiceChunksRef.current, { type: blobType })
-      voiceChunksRef.current = []
+      const blob = new Blob(logChunksRef.current, { type: blobType })
+      logChunksRef.current = []
       setVoiceStatus('processing')
       setVoiceMsg('Processing...')
 
       const elKey = import.meta.env.VITE_ELEVENLABS_KEY
-      const fd = new FormData()
+      const fd    = new FormData()
       fd.append('file', blob, `recording.${ext}`)
       fd.append('model_id', 'scribe_v2')
       const sttRes = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
@@ -533,10 +754,11 @@ export default function Home() {
         body: fd,
       })
       if (!sttRes.ok) throw new Error('stt')
-      const sttData = await sttRes.json()
+      const sttData    = await sttRes.json()
       const transcript = sttData.text?.trim()
       if (!transcript) throw new Error('empty')
 
+      const nowDate = todayISO()
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -547,8 +769,8 @@ export default function Home() {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 512,
-          system: 'You are a session log parser for a tattoo studio. Extract session details from the spoken input and return ONLY valid JSON with these exact keys: tattooDescription, placement, isTouchUp, tattooPrice, amountPaid, tip, paymentMethod, notes. isTouchUp is true if the person says touch up. paymentMethod must be one of: Cash, Venmo, Zelle, CashApp, Card, Gift Card, Other. All numeric fields as numbers not strings. Notes captures anything not covered by other fields.',
+          max_tokens: 500,
+          system: `You are a session logging assistant for tattoo artist Saul Gutierrez. Extract session details from the spoken input and return ONLY a JSON object with these fields: name, date (YYYY-MM-DD), style, placement, total (number), tip (number), payment, notes. If a field is not mentioned use empty string or 0 for numbers. Date defaults to today if not mentioned. Today is ${nowDate}.`,
           messages: [{ role: 'user', content: transcript }],
         }),
       })
@@ -559,54 +781,263 @@ export default function Home() {
         .replace(/```\s*$/, '')
       const parsed = JSON.parse(raw)
 
-      setLogForm(f => ({
+      let matchedClientId = null
+      if (parsed.name && clientMode === 'existing') {
+        const found = clients.find(c =>
+          (c.name || '').toLowerCase().includes((parsed.name || '').toLowerCase())
+        )
+        if (found) matchedClientId = found.id
+      }
+
+      setSf(f => ({
         ...f,
-        ...(parsed.tattooDescription != null && { tattooDescription: String(parsed.tattooDescription) }),
-        ...(parsed.placement         != null && { placement:         String(parsed.placement) }),
-        ...(parsed.isTouchUp         != null && { isTouchUp:         Boolean(parsed.isTouchUp) }),
-        ...(parsed.tattooPrice       != null && { tattooPrice:       String(parsed.tattooPrice) }),
-        ...(parsed.amountPaid        != null && { amountPaid:        String(parsed.amountPaid) }),
-        ...(parsed.tip               != null && { tip:               String(parsed.tip) }),
-        ...(parsed.paymentMethod     != null && { paymentMethod:     parsed.paymentMethod }),
-        ...(parsed.notes             != null && { notes:             String(parsed.notes) }),
+        clientName:       parsed.name       ? parsed.name          : f.clientName,
+        selectedClientId: matchedClientId   ? matchedClientId      : f.selectedClientId,
+        date:             parsed.date       ? parsed.date          : f.date,
+        style:            parsed.style      ? parsed.style         : f.style,
+        placement:        parsed.placement  ? parsed.placement     : f.placement,
+        total:            parsed.total > 0  ? String(parsed.total) : f.total,
+        tip:              parsed.tip   > 0  ? String(parsed.tip)   : f.tip,
+        payment:          parsed.payment    ? parsed.payment       : f.payment,
+        notes:            parsed.notes      ? parsed.notes         : f.notes,
       }))
 
+      const name     = parsed.name || 'the client'
+      const totalAmt = parsed.total > 0 ? `$${parsed.total}` : 'an amount'
+      const ttsText  = `Got it. Session with ${name} logged for ${totalAmt}.`
+
+      const ttsRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/Q2Qd4P9qaDNuBFUcFCQr', {
+        method: 'POST',
+        headers: {
+          'xi-api-key': import.meta.env.VITE_ELEVENLABS_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: ttsText,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      })
+      if (ttsRes.ok) {
+        const ttsBlob = await ttsRes.blob()
+        const ttsUrl  = URL.createObjectURL(ttsBlob)
+        logTtsRef.current.src = ttsUrl
+        logTtsRef.current.play()
+      }
+
       setVoiceStatus('done')
-      setVoiceMsg('Fields filled. Review and save.')
-      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('') }, 5000)
+      setVoiceMsg('Form filled. Review and save.')
+      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('Speak Session') }, 5000)
 
     } catch {
       setVoiceStatus('error')
       setVoiceMsg('Could not process voice. Fill in manually.')
-      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('') }, 3000)
+      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('Speak Session') }, 3000)
     }
   }
 
-  // ── Derived: log session client list ──
+  // ── Handlers: CSV import ──
 
-  const activeClients   = clients.filter(c => c.stage !== 'Archive')
-  const filteredClients = logSearch.trim()
-    ? activeClients.filter(c => (c.name || '').toLowerCase().includes(logSearch.toLowerCase()))
-    : activeClients
+  function handleImportClick() {
+    fileInputRef.current?.click()
+  }
+
+  function handleCSVFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const text = ev.target.result
+        const rows = parseCSVManual(text)
+        if (rows.length < 2) return
+        const headers  = rows[0].map(h => h.toLowerCase().trim())
+        const dataRows = rows.slice(1)
+        const getCol   = (row, name) => {
+          const idx = headers.indexOf(name.toLowerCase())
+          return idx >= 0 ? (row[idx] || '') : ''
+        }
+        const currentClients = loadClients()
+        const parsed = []
+        const dups   = []
+        for (const row of dataRows) {
+          const fn = getCol(row, 'firstname').trim()
+          const ln = getCol(row, 'lastname').trim()
+          if (!fn && !ln) continue
+          const obj = {
+            firstName:    fn,
+            lastName:     ln,
+            email:        getCol(row, 'email').trim(),
+            phone:        getCol(row, 'phone').trim(),
+            instagramTag: getCol(row, 'instagramtag').trim(),
+            style:        getCol(row, 'style').trim(),
+            placement:    getCol(row, 'placement').trim(),
+            date:         normalizeDate(getCol(row, 'date')),
+            total:        parseFloat(getCol(row, 'total')) || 0,
+            tip:          parseFloat(getCol(row, 'tip'))   || 0,
+            payment:      getCol(row, 'payment').trim() || 'Cash',
+            notes:        getCol(row, 'notes').trim(),
+          }
+          const fullName = `${fn} ${ln}`.toLowerCase().trim()
+          const em       = obj.email.toLowerCase()
+          const isDup    = currentClients.some(c => {
+            const cName = (c.name || '').toLowerCase()
+            const cFn   = (c.firstName || '').toLowerCase()
+            const cLn   = (c.lastName  || '').toLowerCase()
+            const cEm   = (c.email     || '').toLowerCase().trim()
+            const nameMatch  = fn && ln && (cName === fullName || (cFn === fn.toLowerCase() && cLn === ln.toLowerCase()))
+            const emailMatch = em && cEm && cEm === em
+            return nameMatch || emailMatch
+          })
+          parsed.push(obj)
+          dups.push(isDup)
+        }
+        setCsvRows(parsed)
+        setCsvDups(dups)
+        setCsvOpen(true)
+      } catch {}
+    }
+    reader.readAsText(file)
+  }
+
+  function handleImportAll() {
+    const currentClients = loadClients()
+    const currentS4      = loadSessions4()
+    const newClients     = []
+    const newSessions    = []
+
+    csvRows.forEach((row, i) => {
+      if (csvDups[i]) return
+      const clientId = crypto.randomUUID()
+      const fullName = `${row.firstName} ${row.lastName}`.trim()
+      const sessions = []
+
+      if (row.total > 0) {
+        const sId = Date.now() + i
+        sessions.push({
+          id: String(sId),
+          date: row.date,
+          tattooDescription: row.style,
+          placement: row.placement,
+          isTouchUp: false,
+          deposit: 0,
+          depositRefund: false,
+          tattooPrice: row.total,
+          amountPaid: row.total,
+          tip: row.tip,
+          paymentMethod: row.payment,
+          giftCardCode: '',
+          discountCode: '',
+          originalPrice: row.total,
+          discountApplied: false,
+          notes: row.notes,
+        })
+        newSessions.push({
+          id: sId,
+          name: fullName,
+          date: row.date,
+          style: row.style,
+          placement: row.placement,
+          total: row.total,
+          tip: row.tip,
+          payment: row.payment,
+          notes: row.notes,
+          clientId,
+          createdAt: new Date().toISOString(),
+        })
+      }
+
+      newClients.push({
+        id: clientId,
+        name: fullName,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
+        phone: row.phone,
+        instagramTag: row.instagramTag,
+        notes: row.notes,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        stage: 'Lead',
+        contentDrafts: [],
+        sessions,
+        tattooIdea: '', style: row.style, placement: row.placement, size: '', nextAction: '',
+        status: null,
+        journeyChecklist:   [false, false, false, false, false, false],
+        aftercareChecklist: [false, false, false, false, false],
+        consultations: [],
+        activityLog: [],
+        communications: [],
+        consultationCount: 0,
+      })
+    })
+
+    const updatedClients = [...currentClients, ...newClients]
+    saveClients(updatedClients)
+    setClients(updatedClients)
+
+    if (newSessions.length > 0) {
+      saveSessions4([...newSessions, ...currentS4])
+    }
+
+    const importCount = newClients.length
+    const skipCount   = csvDups.filter(Boolean).length
+    const msg = skipCount > 0
+      ? `${importCount} ${importCount === 1 ? 'client' : 'clients'} imported, ${skipCount} ${skipCount === 1 ? 'duplicate' : 'duplicates'} skipped`
+      : `${importCount} ${importCount === 1 ? 'client' : 'clients'} imported`
+    showToast(msg)
+    setCsvOpen(false)
+    setCsvRows([])
+    setCsvDups([])
+  }
+
+  // ── Styles ──
+
+  const FIELD = {
+    width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
+    borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
+    fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
+    boxSizing: 'border-box', minHeight: 44,
+  }
+
+  const LABEL = {
+    fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
+    display: 'block', marginBottom: 6,
+  }
+
+  const cols = narrow ? '1fr' : 'repeat(2, 1fr)'
+
+  const isListening = voiceStatus === 'listening'
+  const voiceColor  = voiceStatus === 'error' ? '#f09595'
+    : voiceStatus === 'done'    ? '#7aab8f'
+    : voiceStatus === 'listening' ? '#c9a96e'
+    : '#7a786f'
 
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ padding: narrow ? '24px 16px 80px' : '24px 24px 80px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-      {/* ══ HEADER ROW ══ */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <style>{`
+        @keyframes micPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(201,169,110,0.35); }
+          50%       { box-shadow: 0 0 0 10px rgba(201,169,110,0); }
+        }
+      `}</style>
+
+      {/* Hidden file input for CSV */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv"
+        style={{ display: 'none' }}
+        onChange={handleCSVFile}
+      />
+
+      {/* ══ HEADER ══ */}
+      <div>
         <span style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df' }}>Home Base</span>
-        <button
-          onClick={handleOpenLogSession}
-          style={{
-            background: '#c9a96e', color: '#0e0e0d', border: 'none',
-            borderRadius: 8, padding: '10px 20px', minHeight: 44,
-            fontFamily: 'var(--font-heading)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          + Log Session
-        </button>
       </div>
 
       {/* ══ SECTION 1: Daily Quote ══ */}
@@ -625,23 +1056,15 @@ export default function Home() {
           </button>
 
           <p style={{
-            fontFamily: 'var(--font-heading)',
-            fontSize: 18,
-            color: '#e8e6df',
-            fontStyle: 'italic',
-            textAlign: 'center',
-            lineHeight: 1.55,
-            paddingRight: 28,
+            fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df',
+            fontStyle: 'italic', textAlign: 'center', lineHeight: 1.55, paddingRight: 28,
           }}>
             {QUOTES[quoteIdx].text}
           </p>
 
           <p style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: '#7a786f',
-            textAlign: 'center',
-            marginTop: 10,
+            fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
+            textAlign: 'center', marginTop: 10,
           }}>
             {QUOTES[quoteIdx].author}
           </p>
@@ -661,14 +1084,12 @@ export default function Home() {
           <div style={{
             width: 36, height: 20, borderRadius: 10,
             background: readAloud ? '#c9a96e' : '#2a2a27',
-            position: 'relative', flexShrink: 0,
-            transition: 'background 0.2s',
+            position: 'relative', flexShrink: 0, transition: 'background 0.2s',
           }}>
             <span style={{
               position: 'absolute', top: 2, width: 16, height: 16, borderRadius: 8,
               background: '#e8e6df', display: 'block',
-              left: readAloud ? 18 : 2,
-              transition: 'left 0.2s',
+              left: readAloud ? 18 : 2, transition: 'left 0.2s',
             }} />
           </div>
         </button>
@@ -686,7 +1107,6 @@ export default function Home() {
           tap an active day to view sessions
         </p>
 
-        {/* Month nav */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <button
             onClick={handlePrevMonth}
@@ -711,32 +1131,25 @@ export default function Home() {
             style={{
               background: 'none', border: 'none',
               cursor: isCurrentMonth ? 'default' : 'pointer',
-              padding: '8px 12px', minHeight: 44,
-              display: 'flex', alignItems: 'center',
+              padding: '8px 12px', minHeight: 44, display: 'flex', alignItems: 'center',
             }}
           >
             <IconChevronRight color={isCurrentMonth ? '#3a3a37' : '#7a786f'} />
           </button>
         </div>
 
-        {/* Calendar grid — max width keeps circles compact on desktop */}
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
-          {/* Day-of-week labels */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
             {DAY_LABELS.map(l => (
               <div key={l} style={{
-                textAlign: 'center',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: '#7a786f',
-                paddingBottom: 4,
+                textAlign: 'center', fontFamily: 'var(--font-mono)',
+                fontSize: 10, color: '#7a786f', paddingBottom: 4,
               }}>
                 {l}
               </div>
             ))}
           </div>
 
-          {/* Day cells */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
             {calCells.map((day, idx) => {
               if (day === null) return <div key={`ph-${idx}`} style={{ height: 36 }} />
@@ -754,8 +1167,7 @@ export default function Home() {
                     color: active ? '#0e0e0d' : '#7a786f',
                     border: isToday ? '2px solid #c9a96e' : 'none',
                     cursor: active ? 'pointer' : 'default',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
+                    fontFamily: 'var(--font-mono)', fontSize: 12,
                     fontWeight: active ? 600 : 400,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     margin: '0 auto',
@@ -772,15 +1184,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Expanded day sessions */}
         {expandedDay && sessionMap[expandedDay] && (
           <div style={{ marginTop: 16, borderTop: '1px solid #2a2a27', paddingTop: 12 }}>
             {sessionMap[expandedDay].map((s, i, arr) => (
               <div
                 key={s.id || i}
                 style={{
-                  paddingTop: i === 0 ? 0 : 10,
-                  paddingBottom: 10,
+                  paddingTop: i === 0 ? 0 : 10, paddingBottom: 10,
                   borderBottom: i < arr.length - 1 ? '1px solid #2a2a27' : 'none',
                 }}
               >
@@ -831,11 +1241,8 @@ export default function Home() {
         }}>
           {PIPELINE_STAGES.map(stage => (
             <div key={stage} style={{
-              background: '#1e1e1b',
-              border: '1px solid #2a2a27',
-              borderRadius: 8,
-              padding: '12px 8px',
-              textAlign: 'center',
+              background: '#1e1e1b', border: '1px solid #2a2a27',
+              borderRadius: 8, padding: '12px 8px', textAlign: 'center',
             }}>
               <div style={{
                 width: 8, height: 8, borderRadius: '50%',
@@ -847,8 +1254,7 @@ export default function Home() {
               </p>
               <p style={{
                 fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f',
-                textTransform: 'uppercase', marginTop: 4, letterSpacing: '0.05em',
-                lineHeight: 1.3,
+                textTransform: 'uppercase', marginTop: 4, letterSpacing: '0.05em', lineHeight: 1.3,
               }}>
                 {stage}
               </p>
@@ -869,7 +1275,6 @@ export default function Home() {
           Earnings and Metrics
         </p>
 
-        {/* Period tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           {[
             { key: 'week',  label: 'This Week' },
@@ -882,14 +1287,10 @@ export default function Home() {
               style={{
                 background: period === key ? '#c9a96e' : '#1e1e1b',
                 border: '1px solid #2a2a27',
-                borderRadius: 8,
-                padding: '6px 14px',
-                minHeight: 44,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
+                borderRadius: 8, padding: '6px 14px', minHeight: 44,
+                fontFamily: 'var(--font-mono)', fontSize: 11,
                 color: period === key ? '#0e0e0d' : '#7a786f',
-                cursor: 'pointer',
-                transition: 'background 0.15s, color 0.15s',
+                cursor: 'pointer', transition: 'background 0.15s, color 0.15s',
               }}
             >
               {label}
@@ -897,41 +1298,37 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 2x2 metric tiles — max width keeps tiles compact on desktop */}
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-          {[
-            { label: 'Revenue',         value: fmt(revenue),        color: '#e8e6df', sub: null },
-            { label: 'Tips',            value: fmt(tips),           color: '#c9a96e', sub: null },
-            { label: 'Avg per Session', value: fmt(avgPerSession),  color: '#e8e6df', sub: null },
-            { label: 'Tax Aside',       value: fmt(taxAside),       color: '#c9a96e', sub: '28% rule' },
-          ].map(({ label, value, color, sub }) => (
-            <div key={label} style={{
-              background: '#1e1e1b',
-              border: '1px solid #2a2a27',
-              borderRadius: 8,
-              padding: 16,
-              textAlign: 'center',
-            }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginBottom: 6 }}>
-                {label}
-              </p>
-              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 28, color, lineHeight: 1 }}>
-                {value}
-              </p>
-              {sub && (
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 4 }}>
-                  {sub}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            {[
+              { label: 'Revenue',         value: fmt(revenue),       color: '#e8e6df', sub: null },
+              { label: 'Tips',            value: fmt(tips),          color: '#c9a96e', sub: null },
+              { label: 'Avg per Session', value: fmt(avgPerSession), color: '#e8e6df', sub: null },
+              { label: 'Tax Aside',       value: fmt(taxAside),      color: '#c9a96e', sub: '28% rule' },
+            ].map(({ label, value, color, sub }) => (
+              <div key={label} style={{
+                background: '#1e1e1b', border: '1px solid #2a2a27',
+                borderRadius: 8, padding: 16, textAlign: 'center',
+              }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginBottom: 6 }}>
+                  {label}
                 </p>
-              )}
-            </div>
-          ))}
-        </div>
+                <p style={{ fontFamily: 'var(--font-heading)', fontSize: 28, color, lineHeight: 1 }}>
+                  {value}
+                </p>
+                {sub && (
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 4 }}>
+                    {sub}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* ══ SECTION 5: Goal Progress Bars ══ */}
-      <div style={{ ...CARD, marginBottom: 0 }}>
+      <div style={CARD}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e' }}>
             Goals
@@ -939,15 +1336,9 @@ export default function Home() {
           <button
             onClick={() => setAddGoalOpen(true)}
             style={{
-              background: 'transparent',
-              border: '1px solid #c9a96e',
-              borderRadius: 8,
-              padding: '6px 12px',
-              minHeight: 44,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: '#c9a96e',
-              cursor: 'pointer',
+              background: 'transparent', border: '1px solid #c9a96e',
+              borderRadius: 8, padding: '6px 12px', minHeight: 44,
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e', cursor: 'pointer',
             }}
           >
             Add Goal
@@ -973,10 +1364,7 @@ export default function Home() {
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {goal.name}
                       </span>
-                      <span style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f',
-                        textTransform: 'uppercase', flexShrink: 0,
-                      }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', flexShrink: 0 }}>
                         {goal.category}
                       </span>
                     </div>
@@ -986,8 +1374,7 @@ export default function Home() {
                       style={{
                         background: 'none', border: 'none', cursor: 'pointer',
                         padding: '8px 8px', minHeight: 44, minWidth: 44,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                       }}
                     >
                       <IconTrash />
@@ -996,8 +1383,7 @@ export default function Home() {
                   <div style={{ height: 6, background: '#2a2a27', borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
                     <div style={{
                       height: '100%', width: `${pct * 100}%`,
-                      background: '#7aab8f', borderRadius: 3,
-                      transition: 'width 0.3s',
+                      background: '#7aab8f', borderRadius: 3, transition: 'width 0.3s',
                     }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1015,6 +1401,336 @@ export default function Home() {
         )}
       </div>
 
+      {/* ══ SECTION 6: Log a Session ══ */}
+      <div style={CARD}>
+        {/* Card header */}
+        <button
+          onClick={() => setLogCardOpen(o => !o)}
+          style={{
+            width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: 0, marginBottom: logCardOpen ? 20 : 0,
+          }}
+        >
+          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e' }}>
+            Log a Session
+          </span>
+          {logCardOpen ? <IconChevronUp color="#7a786f" /> : <IconChevronDown color="#7a786f" />}
+        </button>
+
+        {logCardOpen && (
+          <>
+            {/* ── Voice Log ── */}
+            <div style={{
+              background: '#1e1e1b',
+              border: '1px solid rgba(201,169,110,0.2)',
+              borderRadius: 10,
+              padding: '16px 20px',
+              marginBottom: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+            }}>
+              <div style={{ width: '100%' }}>
+                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 13, color: '#c9a96e', marginBottom: 4 }}>
+                  Voice Log
+                </div>
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: '#7a786f', margin: 0 }}>
+                  Tap the mic and speak the session details. MACRI fills in the form.
+                </p>
+              </div>
+
+              <button
+                onClick={handleVoiceTap}
+                disabled={voiceStatus === 'processing'}
+                style={{
+                  width: 72, height: 72, borderRadius: '50%',
+                  background: '#161614',
+                  border: isListening ? '2px solid #c9a96e' : '2px solid #2a2a27',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: voiceStatus === 'processing' ? 'default' : 'pointer',
+                  outline: 'none',
+                  animation: isListening ? 'micPulse 1.4s ease-in-out infinite' : 'none',
+                  transition: 'border-color 0.2s',
+                }}
+              >
+                <IconMic size={28} color={isListening ? '#c9a96e' : '#7a786f'} />
+              </button>
+
+              <p style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11,
+                color: voiceColor, margin: 0, textAlign: 'center', minHeight: 16,
+              }}>
+                {voiceMsg}
+              </p>
+            </div>
+
+            {/* ── Form ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 14 }}>
+
+              {/* Client Mode toggle — full width */}
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
+                {[
+                  { key: 'existing', label: 'Existing Client' },
+                  { key: 'new',      label: 'New Client' },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => { setClientMode(key); clearSF() }}
+                    style={{
+                      flex: 1, minHeight: 44,
+                      background: clientMode === key ? '#c9a96e' : '#1e1e1b',
+                      border: '1px solid #2a2a27',
+                      borderRadius: 8,
+                      fontFamily: 'var(--font-body)', fontSize: 14,
+                      color: clientMode === key ? '#0e0e0d' : '#7a786f',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s, color 0.15s',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* New Client fields */}
+              {clientMode === 'new' && (
+                <>
+                  <div>
+                    <label style={LABEL}>First Name *</label>
+                    <input
+                      style={FIELD}
+                      value={sf.firstName}
+                      onChange={e => setSf(f => ({ ...f, firstName: e.target.value }))}
+                      placeholder="First name"
+                    />
+                  </div>
+                  <div>
+                    <label style={LABEL}>Last Name *</label>
+                    <input
+                      style={FIELD}
+                      value={sf.lastName}
+                      onChange={e => setSf(f => ({ ...f, lastName: e.target.value }))}
+                      placeholder="Last name"
+                    />
+                  </div>
+                  <div>
+                    <label style={LABEL}>Email</label>
+                    <input
+                      type="email"
+                      style={FIELD}
+                      value={sf.email}
+                      onChange={e => setSf(f => ({ ...f, email: e.target.value }))}
+                      placeholder="email@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label style={LABEL}>Phone</label>
+                    <input
+                      type="tel"
+                      style={FIELD}
+                      value={sf.phone}
+                      onChange={e => setSf(f => ({ ...f, phone: e.target.value }))}
+                      placeholder="555 555 5555"
+                    />
+                  </div>
+                  <div>
+                    <label style={LABEL}>Instagram</label>
+                    <input
+                      style={FIELD}
+                      value={sf.instagramTag}
+                      onChange={e => setSf(f => ({ ...f, instagramTag: e.target.value }))}
+                      placeholder="@handle"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Existing Client search — full width */}
+              {clientMode === 'existing' && (
+                <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
+                  <label style={LABEL}>Client</label>
+                  <input
+                    style={FIELD}
+                    value={sf.clientName}
+                    onChange={e => {
+                      setSf(f => ({ ...f, clientName: e.target.value, selectedClientId: null }))
+                      setDropdownOpen(true)
+                    }}
+                    onFocus={() => { if (sf.clientName) setDropdownOpen(true) }}
+                    onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+                    placeholder="Search by name..."
+                  />
+                  {dropdownOpen && searchResults.length > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                      background: '#1e1e1b', border: '1px solid #2a2a27',
+                      borderRadius: 8, marginTop: 4, maxHeight: 240, overflowY: 'auto',
+                    }}>
+                      {searchResults.map(c => (
+                        <button
+                          key={c.id}
+                          onMouseDown={() => handleClientSelect(c)}
+                          style={{
+                            width: '100%', background: 'none', border: 'none',
+                            borderBottom: '1px solid #2a2a27',
+                            padding: '10px 14px', minHeight: 44,
+                            textAlign: 'left', cursor: 'pointer',
+                            fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df',
+                          }}
+                        >
+                          {c.name}
+                          {c.stage && (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginLeft: 10 }}>
+                              {c.stage}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Session date */}
+              <div>
+                <label style={LABEL}>Session Date</label>
+                <input
+                  type="date"
+                  style={FIELD}
+                  value={sf.date}
+                  onChange={e => setSf(f => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+
+              {/* Style */}
+              <div>
+                <label style={LABEL}>Style</label>
+                <select
+                  style={{ ...FIELD, appearance: 'none' }}
+                  value={sf.style}
+                  onChange={e => setSf(f => ({ ...f, style: e.target.value }))}
+                >
+                  {STYLE_OPTIONS.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Placement */}
+              <div>
+                <label style={LABEL}>Placement</label>
+                <input
+                  style={FIELD}
+                  value={sf.placement}
+                  onChange={e => setSf(f => ({ ...f, placement: e.target.value }))}
+                  placeholder="e.g. Left forearm"
+                />
+              </div>
+
+              {/* Total */}
+              <div>
+                <label style={LABEL}>Total ($)</label>
+                <input
+                  type="number"
+                  style={FIELD}
+                  value={sf.total}
+                  onChange={e => setSf(f => ({ ...f, total: e.target.value }))}
+                  placeholder="0"
+                  min="0"
+                />
+              </div>
+
+              {/* Tip */}
+              <div>
+                <label style={LABEL}>Tip ($)</label>
+                <input
+                  type="number"
+                  style={FIELD}
+                  value={sf.tip}
+                  onChange={e => setSf(f => ({ ...f, tip: e.target.value }))}
+                  placeholder="0"
+                  min="0"
+                />
+              </div>
+
+              {/* Payment Method */}
+              <div>
+                <label style={LABEL}>Payment Method</label>
+                <select
+                  style={{ ...FIELD, appearance: 'none' }}
+                  value={sf.payment}
+                  onChange={e => setSf(f => ({ ...f, payment: e.target.value }))}
+                >
+                  {PAYMENT_OPTIONS.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Notes — full width */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={LABEL}>Notes</label>
+                <textarea
+                  style={{ ...FIELD, resize: 'vertical', minHeight: 80 }}
+                  value={sf.notes}
+                  onChange={e => setSf(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Optional notes..."
+                  rows={3}
+                />
+              </div>
+
+              {/* Save button — full width */}
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={clearSF}
+                  style={{
+                    background: 'transparent', border: '1px solid #2a2a27',
+                    borderRadius: 8, padding: '10px 16px', minHeight: 44,
+                    fontFamily: 'var(--font-body)', fontSize: 14,
+                    color: '#7a786f', cursor: 'pointer',
+                  }}
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={handleLogSave}
+                  style={{
+                    background: '#c9a96e', border: 'none',
+                    borderRadius: 8, padding: '10px 24px', minHeight: 44,
+                    fontFamily: 'var(--font-body)', fontSize: 14,
+                    fontWeight: 600, color: '#0e0e0d', cursor: 'pointer',
+                  }}
+                >
+                  Log Session
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Import Past Clients button ── */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <button
+          onClick={handleImportClick}
+          style={{
+            background: 'transparent',
+            border: '1px solid #2a2a27',
+            borderRadius: 8,
+            padding: '10px 20px',
+            minHeight: 44,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: '#7a786f',
+            cursor: 'pointer',
+          }}
+        >
+          Import Past Clients
+        </button>
+      </div>
+
       {/* ══ Add Goal Modal ══ */}
       {addGoalOpen && (
         <div
@@ -1030,12 +1746,8 @@ export default function Home() {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#161614',
-              border: '1px solid #2a2a27',
-              borderRadius: 12,
-              padding: 24,
-              width: '100%',
-              maxWidth: 480,
+              background: '#161614', border: '1px solid #2a2a27',
+              borderRadius: 12, padding: 24, width: '100%', maxWidth: 480,
             }}
           >
             <p style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df', marginBottom: 20 }}>
@@ -1043,53 +1755,32 @@ export default function Home() {
             </p>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', display: 'block', marginBottom: 6 }}>
-                Goal Name
-              </label>
+              <label style={LABEL}>Goal Name</label>
               <input
                 value={goalForm.name}
                 onChange={e => setGoalForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Monthly Rent"
-                style={{
-                  width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
-                  borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
-                  fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
-                  boxSizing: 'border-box',
-                }}
+                style={FIELD}
               />
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', display: 'block', marginBottom: 6 }}>
-                Target Amount
-              </label>
+              <label style={LABEL}>Target Amount</label>
               <input
                 type="number"
                 value={goalForm.targetAmount}
                 onChange={e => setGoalForm(f => ({ ...f, targetAmount: e.target.value }))}
                 placeholder="e.g. 2000"
-                style={{
-                  width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
-                  borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
-                  fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
-                  boxSizing: 'border-box',
-                }}
+                style={FIELD}
               />
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <label style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', display: 'block', marginBottom: 6 }}>
-                Category
-              </label>
+              <label style={LABEL}>Category</label>
               <select
                 value={goalForm.category}
                 onChange={e => setGoalForm(f => ({ ...f, category: e.target.value }))}
-                style={{
-                  width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
-                  borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
-                  fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
-                  appearance: 'none', boxSizing: 'border-box',
-                }}
+                style={{ ...FIELD, appearance: 'none' }}
               >
                 {['Rent', 'Equipment', 'Tax Reserve', 'Savings', 'Other'].map(c => (
                   <option key={c} value={c}>{c}</option>
@@ -1103,8 +1794,7 @@ export default function Home() {
                 style={{
                   background: 'transparent', border: '1px solid #2a2a27',
                   borderRadius: 8, padding: '10px 16px',
-                  fontFamily: 'var(--font-body)', fontSize: 14,
-                  color: '#7a786f', cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', cursor: 'pointer',
                 }}
               >
                 Cancel
@@ -1125,258 +1815,102 @@ export default function Home() {
         </div>
       )}
 
-      {/* ══ Log Session Modal ══ */}
-      {logOpen && (
+      {/* ══ CSV Preview Modal ══ */}
+      {csvOpen && (
         <div
-          onClick={() => setLogOpen(false)}
+          onClick={() => setCsvOpen(false)}
           style={{
             position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.75)',
-            zIndex: 501,
+            background: 'rgba(0,0,0,0.8)',
+            zIndex: 600,
             display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-            padding: 20,
-            overflowY: 'auto',
+            padding: 20, overflowY: 'auto',
           }}
         >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#161614',
-              border: '1px solid #2a2a27',
-              borderRadius: 12,
-              padding: 24,
-              width: '100%',
-              maxWidth: 480,
-              marginTop: 40,
-              marginBottom: 40,
+              background: '#161614', border: '1px solid #2a2a27',
+              borderRadius: 12, padding: 24, width: '100%', maxWidth: 640,
+              marginTop: 40, marginBottom: 40,
             }}
           >
-            <p style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df', marginBottom: 20 }}>
-              {logStep === 1 ? 'Select Client' : logSelectedClient?.name || 'Log Session'}
+            <p style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df', marginBottom: 6 }}>
+              Import Past Clients
+            </p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginBottom: 20 }}>
+              {csvRows.length} {csvRows.length === 1 ? 'row' : 'rows'} found
+              {csvDups.filter(Boolean).length > 0 && ` · ${csvDups.filter(Boolean).length} ${csvDups.filter(Boolean).length === 1 ? 'duplicate' : 'duplicates'} will be skipped`}
             </p>
 
-            {logStep === 1 && (
-              <>
-                <input
-                  value={logSearch}
-                  onChange={e => setLogSearch(e.target.value)}
-                  placeholder="Search clients..."
-                  autoFocus
-                  style={{
-                    width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
-                    borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
-                    fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
-                    boxSizing: 'border-box', marginBottom: 12,
-                  }}
-                />
-
-                {activeClients.length === 0 ? (
-                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', textAlign: 'center', padding: '16px 0' }}>
-                    No clients found. Add a client in the CRM panel first.
-                  </p>
-                ) : filteredClients.length === 0 ? (
-                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', textAlign: 'center', padding: '16px 0' }}>
-                    No clients match your search.
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
-                    {filteredClients.map(c => (
-                      <button
-                        key={c.id}
-                        onClick={() => { setLogSelectedClient(c); setLogStep(2) }}
-                        style={{
-                          background: '#1e1e1b', border: '1px solid #2a2a27',
-                          borderRadius: 8, padding: '12px 14px', minHeight: 48,
-                          textAlign: 'left', cursor: 'pointer', color: '#e8e6df',
-                          fontFamily: 'var(--font-body)', fontSize: 14,
-                        }}
-                      >
-                        {c.name}
-                        {c.stage && (
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginLeft: 10 }}>
-                            {c.stage}
+            <div style={{ overflowX: 'auto', marginBottom: 20 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                <thead>
+                  <tr>
+                    {['First Name', 'Last Name', 'Email', 'Style', 'Total'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', color: '#7a786f', padding: '6px 10px', borderBottom: '1px solid #2a2a27' }}>
+                        {h}
+                      </th>
+                    ))}
+                    <th style={{ textAlign: 'left', color: '#7a786f', padding: '6px 10px', borderBottom: '1px solid #2a2a27' }}>
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvRows.slice(0, 10).map((row, i) => (
+                    <tr key={i} style={{ opacity: csvDups[i] ? 0.45 : 1 }}>
+                      <td style={{ padding: '8px 10px', color: '#e8e6df', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.firstName}</td>
+                      <td style={{ padding: '8px 10px', color: '#e8e6df', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.lastName}</td>
+                      <td style={{ padding: '8px 10px', color: '#7a786f', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.email || ''}</td>
+                      <td style={{ padding: '8px 10px', color: '#7a786f', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.style || ''}</td>
+                      <td style={{ padding: '8px 10px', color: '#7a786f', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.total > 0 ? `$${row.total}` : ''}</td>
+                      <td style={{ padding: '8px 10px', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>
+                        {csvDups[i] && (
+                          <span style={{
+                            fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f',
+                            background: '#2a2a27', borderRadius: 4, padding: '2px 6px',
+                          }}>
+                            Duplicate
                           </span>
                         )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-                  <button
-                    onClick={() => setLogOpen(false)}
-                    style={{
-                      background: 'transparent', border: '1px solid #2a2a27',
-                      borderRadius: 8, padding: '10px 16px', minHeight: 44,
-                      fontFamily: 'var(--font-body)', fontSize: 14,
-                      color: '#7a786f', cursor: 'pointer',
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
-
-            {logStep === 2 && (
-              <>
-                {/* Voice Log Card */}
-                <div style={{
-                  background: '#1e1e1b',
-                  border: '1px solid rgba(201,169,110,0.25)',
-                  borderRadius: 10,
-                  padding: '14px 16px',
-                  marginBottom: 16,
-                }}>
-                  <p style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
-                    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8,
-                  }}>
-                    VOICE LOG — HANDS FREE
-                  </p>
-                  <p style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: '#7a786f', marginBottom: 10 }}>
-                    Tap Speak and say the session details. Example:{' '}
-                    <span style={{ fontStyle: 'italic', color: '#c9a96e' }}>
-                      Maria, watercolor, left shoulder, 4 hours, $1000, cash, $100 tip
-                    </span>
-                  </p>
-                  <button
-                    onClick={handleVoiceTap}
-                    disabled={voiceStatus === 'processing'}
-                    style={{
-                      background: '#161614',
-                      border: voiceStatus === 'listening'
-                        ? '1px solid rgba(220,80,60,0.5)'
-                        : '1px solid rgba(255,255,255,0.14)',
-                      borderRadius: 6,
-                      padding: '8px 14px',
-                      minHeight: 48,
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 12,
-                      color: voiceStatus === 'listening' ? '#e07055' : '#7a786f',
-                      cursor: voiceStatus === 'processing' ? 'default' : 'pointer',
-                    }}
-                  >
-                    {voiceStatus === 'listening' ? 'Stop' : '🎙 Speak session'}
-                  </button>
-                  {voiceMsg ? (
-                    <p style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 11,
-                      color: voiceStatus === 'error' ? '#f09595' : '#c9a96e',
-                      marginTop: 8, marginBottom: 0,
-                    }}>
-                      {voiceMsg}
-                    </p>
-                  ) : null}
-                </div>
-
-                {[
-                  { field: 'date',              label: 'Date',              type: 'date',   placeholder: '' },
-                  { field: 'tattooDescription', label: 'Tattoo Description',type: 'text',   placeholder: 'e.g. Floral sleeve' },
-                  { field: 'placement',         label: 'Placement',         type: 'text',   placeholder: 'e.g. Left forearm' },
-                  { field: 'deposit',           label: 'Deposit ($)',        type: 'number', placeholder: '0' },
-                  { field: 'tattooPrice',       label: 'Tattoo Price ($)',   type: 'number', placeholder: '0' },
-                  { field: 'amountPaid',        label: 'Amount Paid ($)',    type: 'number', placeholder: '0' },
-                  { field: 'tip',               label: 'Tip ($)',            type: 'number', placeholder: '0' },
-                  { field: 'originalPrice',     label: 'Original Price ($)', type: 'number', placeholder: '0' },
-                  { field: 'giftCardCode',      label: 'Gift Card Code',     type: 'text',   placeholder: 'Optional' },
-                  { field: 'discountCode',      label: 'Discount Code',      type: 'text',   placeholder: 'Optional' },
-                ].map(({ field, label, type, placeholder }) => (
-                  <div key={field} style={{ marginBottom: 14 }}>
-                    <label style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', display: 'block', marginBottom: 6 }}>{label}</label>
-                    <input
-                      type={type}
-                      value={logForm[field]}
-                      onChange={e => setLogForm(f => ({ ...f, [field]: e.target.value }))}
-                      placeholder={placeholder}
-                      style={{
-                        width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
-                        borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
-                        fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-                ))}
-
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', display: 'block', marginBottom: 6 }}>Payment Method</label>
-                  <select
-                    value={logForm.paymentMethod}
-                    onChange={e => setLogForm(f => ({ ...f, paymentMethod: e.target.value }))}
-                    style={{
-                      width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
-                      borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
-                      fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
-                      appearance: 'none', boxSizing: 'border-box',
-                    }}
-                  >
-                    {['Cash', 'Venmo', 'Zelle', 'CashApp', 'Card', 'Gift Card', 'Other'].map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-                  {[
-                    { key: 'isTouchUp',       label: 'Touch Up' },
-                    { key: 'depositRefund',   label: 'Deposit Refunded' },
-                    { key: 'discountApplied', label: 'Discount Applied' },
-                  ].map(({ key, label }) => (
-                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', minHeight: 44 }}>
-                      <input
-                        type="checkbox"
-                        checked={logForm[key]}
-                        onChange={e => setLogForm(f => ({ ...f, [key]: e.target.checked }))}
-                        style={{ width: 18, height: 18, accentColor: '#c9a96e', cursor: 'pointer' }}
-                      />
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df' }}>{label}</span>
-                    </label>
+                      </td>
+                    </tr>
                   ))}
-                </div>
+                </tbody>
+              </table>
+              {csvRows.length > 10 && (
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginTop: 8, textAlign: 'center' }}>
+                  Showing first 10 of {csvRows.length} rows
+                </p>
+              )}
+            </div>
 
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', display: 'block', marginBottom: 6 }}>Notes</label>
-                  <textarea
-                    value={logForm.notes}
-                    onChange={e => setLogForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="Optional notes..."
-                    rows={3}
-                    style={{
-                      width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
-                      borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
-                      fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
-                      boxSizing: 'border-box', resize: 'vertical',
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => setLogStep(1)}
-                    style={{
-                      background: 'transparent', border: '1px solid #2a2a27',
-                      borderRadius: 8, padding: '10px 16px', minHeight: 44,
-                      fontFamily: 'var(--font-body)', fontSize: 14,
-                      color: '#7a786f', cursor: 'pointer',
-                    }}
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={handleLogSave}
-                    style={{
-                      background: '#c9a96e', border: 'none',
-                      borderRadius: 8, padding: '10px 20px', minHeight: 44,
-                      fontFamily: 'var(--font-body)', fontSize: 14,
-                      fontWeight: 600, color: '#0e0e0d', cursor: 'pointer',
-                    }}
-                  >
-                    Save Session
-                  </button>
-                </div>
-              </>
-            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setCsvOpen(false); setCsvRows([]); setCsvDups([]) }}
+                style={{
+                  background: 'transparent', border: '1px solid #2a2a27',
+                  borderRadius: 8, padding: '10px 16px', minHeight: 44,
+                  fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportAll}
+                disabled={csvRows.filter((_, i) => !csvDups[i]).length === 0}
+                style={{
+                  background: '#c9a96e', border: 'none',
+                  borderRadius: 8, padding: '10px 20px', minHeight: 44,
+                  fontFamily: 'var(--font-body)', fontSize: 14,
+                  fontWeight: 600, color: '#0e0e0d', cursor: 'pointer',
+                  opacity: csvRows.filter((_, i) => !csvDups[i]).length === 0 ? 0.4 : 1,
+                }}
+              >
+                Import All
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1387,18 +1921,14 @@ export default function Home() {
           style={{
             position: 'fixed', inset: 0,
             background: 'rgba(0,0,0,0.85)',
-            zIndex: 600,
+            zIndex: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: 20,
           }}
         >
           <div style={{
-            background: '#161614',
-            border: '1px solid #2a2a27',
-            borderRadius: 16,
-            padding: 32,
-            width: '100%',
-            maxWidth: 480,
+            background: '#161614', border: '1px solid #2a2a27',
+            borderRadius: 16, padding: 32, width: '100%', maxWidth: 480,
           }}>
             <p style={{
               fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
@@ -1427,8 +1957,7 @@ export default function Home() {
                 style={{
                   width: '100%', minHeight: 48, borderRadius: 10,
                   background: '#1e1e1b', border: '1px solid #2a2a27',
-                  color: '#e8e6df', fontFamily: 'var(--font-body)', fontSize: 14,
-                  cursor: 'pointer',
+                  color: '#e8e6df', fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer',
                 }}
               >
                 Run my briefing
@@ -1439,8 +1968,7 @@ export default function Home() {
                 style={{
                   width: '100%', minHeight: 48, borderRadius: 10,
                   background: '#1e1e1b', border: '1px solid #c9a96e',
-                  color: '#c9a96e', fontFamily: 'var(--font-body)', fontSize: 14,
-                  cursor: 'pointer',
+                  color: '#c9a96e', fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer',
                 }}
               >
                 Read me something inspiring
@@ -1482,6 +2010,20 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* ══ Toast ══ */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 96, left: '50%', transform: 'translateX(-50%)',
+          background: '#161614', border: `1px solid ${toast.color}`,
+          borderRadius: 8, padding: '10px 20px',
+          fontFamily: 'var(--font-mono)', fontSize: 12, color: toast.color,
+          zIndex: 800, whiteSpace: 'nowrap', pointerEvents: 'none',
+        }}>
+          {toast.msg}
+        </div>
+      )}
+
     </div>
   )
 }

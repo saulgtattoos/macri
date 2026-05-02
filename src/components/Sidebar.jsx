@@ -8,6 +8,9 @@ const NAV_ITEMS = [
   { label: 'Consultation',       path: '/consultation' },
   { label: 'Session Prep',       path: '/session-prep' },
   { label: 'Finances',           path: '/finances' },
+  { label: 'Supplies',           path: '/supplies' },
+  { label: 'Color Lab',          path: '/colorlab' },
+  { label: 'Content Studio',     path: '/contentstudio' },
   { label: 'Dev Queue',          path: '/dev-queue' },
   { label: 'Settings',           path: '/settings' },
 ]

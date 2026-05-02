@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useOutletContext, useLocation } from 'react-router-dom'
 import { STAGES } from '../constants/stages'
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
@@ -2651,6 +2652,11 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
 // ─── CRM ──────────────────────────────────────────────────────────────────────
 
 export default function CRM() {
+  const ctx = useOutletContext?.() ?? {}
+  const externalOpenDrawer = ctx.openDrawer ?? null
+  const location = useLocation()
+
+
   const [clients,      setClients]      = useState(loadClients)
   const [drawerOpen,   setDrawerOpen]   = useState(false)
   const [editTarget,   setEditTarget]   = useState(null)
@@ -2843,11 +2849,18 @@ export default function CRM() {
     setImportError('')
   }
 
-  function openDrawer(client, section = null) {
+function openDrawer(client, section = null) {
     setEditTarget(client)
     setJumpSection(section)
     setDrawerOpen(true)
   }
+
+  useEffect(() => {
+    const id = location.state?.openClientId
+    if (!id) return
+    const client = clients.find(c => c.id === id)
+    if (client) openDrawer(client, null)
+  }, [location.state])
 
   useEffect(() => {
     function onStorage(e) {

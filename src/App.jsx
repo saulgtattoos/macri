@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import BottomNav from './components/BottomNav'
@@ -9,12 +10,28 @@ import DevQueue from './pages/DevQueue'
 import SessionPrep from './pages/SessionPrep'
 import Consultation from './pages/Consultation'
 import ConsultationClient from './pages/ConsultationClient'
+import ProjectWall from './pages/ProjectWall'
 
 function AppShell() {
+  const [drawerOpen,    setDrawerOpen]    = useState(false)
+  const [drawerClient,  setDrawerClient]  = useState(null)
+  const [drawerSection, setDrawerSection] = useState(null)
+
+  function openDrawer(client, section = null) {
+    setDrawerClient(client)
+    setDrawerSection(section)
+    setDrawerOpen(true)
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false)
+    setDrawerClient(null)
+    setDrawerSection(null)
+  }
+
   return (
     <div className="app-outer" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
-
       <div className="mobile-header" style={{ flexDirection: 'column', gap: '3px' }}>
         <span style={{
           fontFamily: 'var(--font-heading)',
@@ -36,18 +53,14 @@ function AppShell() {
           Managing. Artist. Clients. Revenue. Intelligently.
         </span>
       </div>
-
-      {/* overflowY:'scroll' instead of 'auto' — iOS Safari applies implicit momentum-scroll
-          context to overflow:auto which can cancel touch events before they reach children */}
       <main style={{
         flex: 1,
         minHeight: 0,
         overflowY: 'scroll',
         background: 'var(--bg)',
       }}>
-        <Outlet />
+        <Outlet context={{ openDrawer, drawerOpen, drawerClient, drawerSection, closeDrawer }} />
       </main>
-
       <BottomNav />
     </div>
   )
@@ -62,7 +75,7 @@ export default function App() {
           <Route path="/"             element={<Home />} />
           <Route path="/inquiry"      element={<InquiryAssistant />} />
           <Route path="/crm"          element={<CRM />} />
-          <Route path="/projects"     element={<Placeholder name="Project Wall" />} />
+          <Route path="/projects"     element={<ProjectWall />} />
           <Route path="/consultation" element={<Consultation />} />
           <Route path="/clients"      element={<Placeholder name="Client Database" />} />
           <Route path="/session-prep" element={<SessionPrep />} />

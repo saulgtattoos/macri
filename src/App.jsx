@@ -11,8 +11,10 @@ import SessionPrep from './pages/SessionPrep'
 import Consultation from './pages/Consultation'
 import ConsultationClient from './pages/ConsultationClient'
 import ProjectWall from './pages/ProjectWall'
+import Finance from './pages/Finance'
 import Supplies from './pages/Supplies'
 import ColorLab from './pages/ColorLab'
+import ContentStudio from './pages/ContentStudio'
 
 function AppShell() {
   const [drawerOpen,    setDrawerOpen]    = useState(false)
@@ -81,9 +83,10 @@ export default function App() {
           <Route path="/consultation" element={<Consultation />} />
           <Route path="/clients"      element={<Placeholder name="Client Database" />} />
           <Route path="/session-prep" element={<SessionPrep />} />
-          <Route path="/finances"     element={<Placeholder name="Finances" />} />
+          <Route path="/finances"     element={<Finance />} />
           <Route path="/supplies"     element={<Supplies />} />
-          <Route path="/colorlab"     element={<ColorLab />} />
+          <Route path="/colorlab"      element={<ColorLab />} />
+          <Route path="/contentstudio" element={<ContentStudio />} />
           <Route path="/dev-queue"    element={<DevQueue />} />
           <Route path="/settings"     element={<Placeholder name="Settings" />} />
         </Route>

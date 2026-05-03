@@ -686,8 +686,8 @@ function AnalyzeTab({ inks, palettes, setPalettes, showToast }) {
       const inStockInks = inks.filter((i) => i.inStock)
       const inkList = inStockInks.map((i) => `${i.name} | ${i.brand} | ${i.colorHex} | ${i.colorFamily}`).join('\n')
       const userText = inkList
-        ? `Here is my ink library:\n${inkList}\n\nAnalyze the design and tell me which of my inks to use and why.`
-        : 'I have no inks in my library yet. Analyze the design and describe what colors would be needed for this tattoo.'
+        ? `Here is my ink library:\n${inkList}\n\nAnalyze the design image and tell me exactly which of my inks to use and why.`
+        : 'I have no inks in my library yet. Analyze the design image and describe what colors would be needed for this tattoo.'
 
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -700,7 +700,7 @@ function AnalyzeTab({ inks, palettes, setPalettes, showToast }) {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
-          system: 'You are a tattoo ink color expert helping a colorblind tattoo artist named Saul. He works primarily with RAW Pigments and Fusion Ink but also uses other brands. Given a design image and a list of inks he owns, recommend which specific inks from his collection to use for the tattoo. For each ink recommendation give a plain language description of why that color fits. Warn if any two recommended inks may look confusingly similar to someone with color vision differences. Include blending suggestions where relevant. Keep advice practical and concise. Use zero hyphens or dashes in your response. Write all ranges as X to Y.',
+          system: 'You are a tattoo ink color expert helping a colorblind tattoo artist named Saul Gutierrez. He works with RAW Pigments, Fusion Ink, and other brands. Given a design image and a list of inks he owns, recommend which specific inks from his collection to use for this tattoo. For each ink give a plain language description of why that color fits the design. Warn if any two recommended inks may look confusingly similar. Include blending suggestions where relevant. Keep advice practical and concise. Use zero hyphens or dashes in your response. Write all ranges as X to Y.',
           messages: [{
             role: 'user',
             content: [
@@ -840,7 +840,7 @@ function AnalyzeTab({ inks, palettes, setPalettes, showToast }) {
 
 // ─── ColorLab (root) ──────────────────────────────────────────────────────────
 export default function ColorLab() {
-  const [activeTab, setActiveTab] = useState('inks')
+  const [activeTab, setActiveTab] = useState('analyze')
   const [inks, setInks] = useState([])
   const [palettes, setPalettes] = useState([])
   const [brands, setBrands] = useState([])

@@ -672,6 +672,7 @@ export default function InquiryAssistant() {
       } else {
         const client = mkClient({
           name: clientName, email: clientEmail, phone: c.phone || '',
+          instagram: c.instagram || '',
           tattooIdea: c.tattooIdea || '', style: c.style || '',
           placement: c.placement || '', size: c.size || '',
           stage: 'Inquiry', status: null, consultationCount: 0,

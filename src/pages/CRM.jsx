@@ -112,7 +112,7 @@ export function mkClient(data = {}) {
   const now = new Date().toISOString()
   return {
     id: crypto.randomUUID(),
-    name: '', email: '', phone: '',
+    name: '', email: '', phone: '', instagram: '',
     tattooIdea: '', style: '', placement: '', size: '', nextAction: '',
     stage: 'Inquiry', status: null,
     journeyChecklist:   [false, false, false, false, false, false],
@@ -693,6 +693,9 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   const [deleteFading,   setDeleteFading]   = useState(false)
   const [sectionOrder,   setSectionOrder]   = useState(loadSectionOrder)
   const [layoutEditMode, setLayoutEditMode] = useState(false)
+  const [editingCommId,   setEditingCommId]   = useState(null)
+  const [editingCommBody, setEditingCommBody] = useState('')
+  const [drawerToast,     setDrawerToast]     = useState(null)
 
   const consultRef    = useRef(null)
   const sectionRefs   = useRef({})
@@ -717,6 +720,8 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       setExpandedSessions({})
       setDeleteSessionTarget(null)
       setLayoutEditMode(false)
+      setEditingCommId(null)
+      setEditingCommBody('')
       setSectionOrder(loadSectionOrder())
     }
   }, [isOpen])
@@ -874,6 +879,34 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
     push({ ...client, communications: [entry, ...(client.communications || [])] })
     setCommForm({ channel: 'Text Message', subject: '', body: '' })
     setCommLogOpen(false)
+  }
+
+  function showDrawerToast(msg) {
+    setDrawerToast(msg)
+    setTimeout(() => setDrawerToast(null), 2000)
+  }
+
+  function saveCommEdit(commId) {
+    onUpdate({
+      ...client,
+      communications: (client.communications || []).map(c =>
+        c.id === commId ? { ...c, body: editingCommBody } : c
+      ),
+      updatedAt: new Date().toISOString(),
+    })
+    setEditingCommId(null)
+    setEditingCommBody('')
+    showDrawerToast('Draft saved')
+  }
+
+  function markCommSent(commId) {
+    onUpdate({
+      ...client,
+      communications: (client.communications || []).map(c =>
+        c.id === commId ? { ...c, editable: false } : c
+      ),
+      updatedAt: new Date().toISOString(),
+    })
   }
 
   function handleSaveSession(session) {
@@ -1321,13 +1354,16 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
             {commEntries.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
                 {commEntries.map(entry => {
-                  const isEmail  = entry.channel === 'Email'
-                  const expanded = expandedComms[entry.id]
+                  const isEmail   = entry.channel === 'Email'
+                  const expanded  = expandedComms[entry.id]
+                  const isDraft   = isEmail && entry.editable === true
+                  const isSent    = isEmail && entry.editable === false
+                  const isEditing = editingCommId === entry.id
                   return (
                     <div key={entry.id} style={{ background: 'var(--surface2)', borderRadius: 10, overflow: 'hidden' }}>
                       <div
                         onClick={() => setExpandedComms(p => ({ ...p, [entry.id]: !p[entry.id] }))}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', minHeight: 44 }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', minHeight: 44, flexWrap: 'wrap' }}
                       >
                         <span style={{
                           fontFamily: 'var(--font-mono)', fontSize: 10,
@@ -1337,31 +1373,130 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                         }}>
                           {entry.channel}
                         </span>
+                        {isDraft && (
+                          <span style={{
+                            fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
+                            letterSpacing: '0.08em', textTransform: 'uppercase',
+                            color: '#c9a96e', background: 'rgba(201,169,110,0.12)',
+                            border: '1px solid rgba(201,169,110,0.3)',
+                            borderRadius: 4, padding: '1px 5px', flexShrink: 0,
+                          }}>
+                            Draft
+                          </span>
+                        )}
+                        {isSent && (
+                          <span style={{
+                            fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
+                            letterSpacing: '0.08em', textTransform: 'uppercase',
+                            color: '#7aab8f', background: 'rgba(122,171,143,0.12)',
+                            border: '1px solid rgba(122,171,143,0.3)',
+                            borderRadius: 4, padding: '1px 5px', flexShrink: 0,
+                          }}>
+                            Sent
+                          </span>
+                        )}
                         <span style={{
                           fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)',
                           flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          minWidth: 60,
                         }}>
                           {formatTs(entry.timestamp)}
                         </span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>
+                        {isDraft && (
+                          <>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation()
+                                setEditingCommId(entry.id)
+                                setEditingCommBody(entry.body)
+                                setExpandedComms(p => ({ ...p, [entry.id]: true }))
+                              }}
+                              style={{
+                                background: 'rgba(201,169,110,0.1)', border: '1px solid rgba(201,169,110,0.3)',
+                                borderRadius: 6, padding: '3px 9px', flexShrink: 0,
+                                fontFamily: 'var(--font-mono)', fontSize: 10,
+                                color: '#c9a96e', cursor: 'pointer',
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); markCommSent(entry.id) }}
+                              style={{
+                                background: 'rgba(122,171,143,0.1)', border: '1px solid rgba(122,171,143,0.3)',
+                                borderRadius: 6, padding: '3px 9px', flexShrink: 0,
+                                fontFamily: 'var(--font-mono)', fontSize: 10,
+                                color: '#7aab8f', cursor: 'pointer',
+                              }}
+                            >
+                              Mark as Sent
+                            </button>
+                          </>
+                        )}
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', flexShrink: 0 }}>
                           {expanded ? '▲' : '▼'}
                         </span>
                       </div>
                       {expanded && (
                         <div style={{
-                          background: 'var(--surface2)', borderRadius: 8,
+                          background: 'var(--bg)', borderRadius: 8,
                           margin: '0 12px 12px', padding: 12,
-                          fontFamily: 'var(--font-body)', fontSize: 13,
-                          color: '#e8e6df', lineHeight: 1.65,
                         }}>
-                          {entry.subject && (
-                            <div style={{ fontWeight: 500, marginBottom: 8, color: 'var(--text)' }}>
+                          {entry.subject && !isEditing && (
+                            <div style={{
+                              fontFamily: 'var(--font-body)', fontSize: 13,
+                              fontWeight: 500, marginBottom: 8, color: 'var(--text)',
+                            }}>
                               {entry.subject}
                             </div>
                           )}
-                          <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                            {entry.body}
-                          </div>
+                          {isEditing ? (
+                            <>
+                              <textarea
+                                value={editingCommBody}
+                                onChange={e => setEditingCommBody(e.target.value)}
+                                rows={8}
+                                style={{
+                                  width: '100%', background: 'var(--surface2)',
+                                  border: '1px solid rgba(201,169,110,0.4)', borderRadius: 8,
+                                  padding: '10px 12px', fontFamily: 'var(--font-body)',
+                                  fontSize: 13, color: 'var(--text)', outline: 'none',
+                                  resize: 'vertical', lineHeight: 1.65, boxSizing: 'border-box',
+                                }}
+                              />
+                              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                                <button
+                                  onClick={() => { setEditingCommId(null); setEditingCommBody('') }}
+                                  style={{
+                                    flex: 1, minHeight: 40, borderRadius: 8,
+                                    border: '1px solid var(--surface2)', background: 'var(--surface2)',
+                                    fontFamily: 'var(--font-body)', fontSize: 13,
+                                    color: 'var(--muted)', cursor: 'pointer',
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => saveCommEdit(entry.id)}
+                                  style={{
+                                    flex: 2, minHeight: 40, borderRadius: 8, border: 'none',
+                                    background: 'var(--gold)', fontFamily: 'var(--font-body)',
+                                    fontSize: 13, fontWeight: 600, color: 'var(--bg)', cursor: 'pointer',
+                                  }}
+                                >
+                                  Save Draft
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{
+                              fontFamily: 'var(--font-body)', fontSize: 13,
+                              color: '#e8e6df', lineHeight: 1.65,
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            }}>
+                              {entry.body}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1902,6 +2037,19 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         </div>
 
       </div>
+
+      {drawerToast && (
+        <div style={{
+          position: 'fixed', bottom: 100, left: '50%', transform: 'translateX(-50%)',
+          background: '#7aab8f', color: '#0e0e0d',
+          fontFamily: 'var(--font-mono)', fontSize: 12,
+          padding: '8px 20px', borderRadius: 20, zIndex: 210,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)', whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}>
+          {drawerToast}
+        </div>
+      )}
 
       {deleteSessionTarget && (
         <>

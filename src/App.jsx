@@ -16,6 +16,7 @@ import Supplies from './pages/Supplies'
 import ColorLab from './pages/ColorLab'
 import ContentStudio from './pages/ContentStudio'
 import AgentQueue from './pages/AgentQueue'
+import AftercarePortal from './pages/AftercarePortal'
 
 function AppShell() {
   const [drawerOpen,    setDrawerOpen]    = useState(false)
@@ -76,6 +77,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/consultation/client" element={<ConsultationClient />} />
+        <Route path="/care/:sessionId" element={<AftercarePortal />} />
         <Route element={<AppShell />}>
           <Route path="/"             element={<Home />} />
           <Route path="/inquiry"      element={<InquiryAssistant />} />

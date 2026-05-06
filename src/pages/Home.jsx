@@ -374,6 +374,9 @@ export default function Home() {
   // Toast
   const [toast, setToast] = useState(null)
 
+  // Aftercare link
+  const [lastSavedSession, setLastSavedSession] = useState(null)
+
   // CSV import
   const [csvOpen, setCsvOpen] = useState(false)
   const [csvRows, setCsvRows] = useState([])
@@ -503,6 +506,26 @@ export default function Home() {
     saveGoals(updated)
   }
 
+  // ── Handlers: aftercare link ──
+
+  async function handleCopyAftercareLink() {
+    if (!lastSavedSession) return
+    const s = lastSavedSession
+    const params = new URLSearchParams({
+      name: s.name.split(' ')[0],
+      style: s.style,
+      placement: s.placement || '',
+      date: s.date,
+    })
+    const link = `${window.location.origin}/care/${s.id}?${params}`
+    try {
+      await navigator.clipboard.writeText(link)
+      showToast('Aftercare link copied', '#7aab8f')
+    } catch {
+      showToast('Could not copy link', '#f09595')
+    }
+  }
+
   // ── Handlers: toast ──
 
   function showToast(msg, color = '#7aab8f') {
@@ -515,6 +538,7 @@ export default function Home() {
   function clearSF() {
     setSf({ ...mkSF(), date: todayISO() })
     setDropdownOpen(false)
+    setLastSavedSession(null)
   }
 
   function handleClientSelect(c) {
@@ -571,8 +595,10 @@ export default function Home() {
         saveClients(updatedClients)
         setClients(updatedClients)
       }
+      const savedSession = { id: String(sessionId), name: sf.clientName, style: sf.style, placement: sf.placement, date: sf.date }
       showToast('Session logged')
       clearSF()
+      setLastSavedSession(savedSession)
 
     } else {
       if (!sf.firstName.trim() || !sf.lastName.trim()) return
@@ -645,9 +671,11 @@ export default function Home() {
       s4list.unshift(sess4)
       saveSessions4(s4list)
 
+      const savedSession = { id: String(sessionId), name: fullName, style: sf.style, placement: sf.placement, date: sf.date }
       showToast('Session logged and client added to CRM')
       setClientMode('existing')
       clearSF()
+      setLastSavedSession(savedSession)
     }
   }
 
@@ -1707,6 +1735,21 @@ export default function Home() {
                 </button>
               </div>
             </div>
+
+            {lastSavedSession && (
+              <button
+                onClick={handleCopyAftercareLink}
+                style={{
+                  width: '100%', minHeight: 48,
+                  background: '#c9a96e', border: 'none',
+                  borderRadius: 10, marginTop: 4,
+                  fontFamily: 'var(--font-body)', fontSize: 14,
+                  fontWeight: 600, color: '#0e0e0d', cursor: 'pointer',
+                }}
+              >
+                Generate Aftercare Link
+              </button>
+            )}
           </>
         )}
       </div>

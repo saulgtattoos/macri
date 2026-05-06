@@ -1813,18 +1813,45 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                               </div>
                             ))}
                           </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); setDeleteSessionTarget(s.id) }}
-                            style={{
-                              marginTop: 12, width: '100%', minHeight: 36,
-                              background: 'transparent', border: '1px solid #f09595',
-                              color: '#f09595', borderRadius: 8, padding: '8px 14px',
-                              fontFamily: 'var(--font-mono)', fontSize: 11,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Delete Session
-                          </button>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation()
+                                const firstName = (client.name || 'Client').split(' ')[0]
+                                const params = new URLSearchParams({
+                                  name: firstName,
+                                  style: s.tattooDescription || '',
+                                  placement: s.placement || '',
+                                  date: s.date || '',
+                                })
+                                const link = `${window.location.origin}/care/${s.id}?${params}`
+                                navigator.clipboard.writeText(link)
+                                  .then(() => showDrawerToast('Aftercare link copied'))
+                                  .catch(() => showDrawerToast('Could not copy link'))
+                              }}
+                              style={{
+                                flex: 1, minHeight: 36,
+                                background: 'transparent', border: '1px solid #c9a96e',
+                                color: '#c9a96e', borderRadius: 8, padding: '8px 10px',
+                                fontFamily: 'var(--font-mono)', fontSize: 11,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Aftercare Link
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setDeleteSessionTarget(s.id) }}
+                              style={{
+                                flex: 1, minHeight: 36,
+                                background: 'transparent', border: '1px solid #f09595',
+                                color: '#f09595', borderRadius: 8, padding: '8px 10px',
+                                fontFamily: 'var(--font-mono)', fontSize: 11,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Delete Session
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>

@@ -206,6 +206,7 @@ function mkSF() {
     tip: '',
     payment: 'Cash',
     notes: '',
+    film: false,
     firstName: '',
     lastName: '',
     email: '',
@@ -516,6 +517,7 @@ export default function Home() {
       style: s.style,
       placement: s.placement || '',
       date: s.date,
+      film: s.film ? 'true' : 'false',
     })
     const link = `${window.location.origin}/care/${s.id}?${params}`
     try {
@@ -560,6 +562,7 @@ export default function Home() {
         tip: parseFloat(sf.tip) || 0,
         payment: sf.payment,
         notes: sf.notes,
+        film: sf.film || false,
         clientId: sf.selectedClientId || null,
         createdAt: new Date().toISOString(),
       }
@@ -595,7 +598,7 @@ export default function Home() {
         saveClients(updatedClients)
         setClients(updatedClients)
       }
-      const savedSession = { id: String(sessionId), name: sf.clientName, style: sf.style, placement: sf.placement, date: sf.date }
+      const savedSession = { id: String(sessionId), name: sf.clientName, style: sf.style, placement: sf.placement, date: sf.date, film: sf.film || false }
       showToast('Session logged')
       clearSF()
       setLastSavedSession(savedSession)
@@ -659,6 +662,7 @@ export default function Home() {
         tip: parseFloat(sf.tip) || 0,
         payment: sf.payment,
         notes: sf.notes,
+        film: sf.film || false,
         clientId: newClientId,
         createdAt: new Date().toISOString(),
       }
@@ -671,7 +675,7 @@ export default function Home() {
       s4list.unshift(sess4)
       saveSessions4(s4list)
 
-      const savedSession = { id: String(sessionId), name: fullName, style: sf.style, placement: sf.placement, date: sf.date }
+      const savedSession = { id: String(sessionId), name: fullName, style: sf.style, placement: sf.placement, date: sf.date, film: sf.film || false }
       showToast('Session logged and client added to CRM')
       setClientMode('existing')
       clearSF()
@@ -1707,6 +1711,30 @@ export default function Home() {
                   placeholder="Optional notes..."
                   rows={3}
                 />
+              </div>
+
+              {/* Film toggle — full width */}
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 12, minHeight: 44 }}>
+                <button
+                  type="button"
+                  onClick={() => setSf(f => ({ ...f, film: !f.film }))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '12px 0', display: 'flex', alignItems: 'center' }}
+                >
+                  <div style={{
+                    width: 36, height: 20, borderRadius: 10,
+                    background: sf.film ? '#c9a96e' : '#2a2a27',
+                    position: 'relative', flexShrink: 0, transition: 'background 0.2s',
+                  }}>
+                    <span style={{
+                      position: 'absolute', top: 2, width: 16, height: 16, borderRadius: 8,
+                      background: '#e8e6df', display: 'block',
+                      left: sf.film ? 18 : 2, transition: 'left 0.2s',
+                    }} />
+                  </div>
+                </button>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
+                  Applied Protective Film
+                </span>
               </div>
 
               {/* Save button — full width */}

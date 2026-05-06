@@ -35,6 +35,7 @@ export default function AftercarePortal() {
   const style = searchParams.get('style') || ''
   const placement = searchParams.get('placement') || ''
   const dateStr = searchParams.get('date') || ''
+  const film = searchParams.get('film') === 'true'
 
   const rawDays = computeDays(dateStr)
   const daysSinceSession = Math.min(rawDays, 30)
@@ -93,6 +94,8 @@ export default function AftercarePortal() {
         'You are writing a warm, personal 60 second spoken audio script for tattoo artist Saul Gutierrez to send to a client after their tattoo session.',
         'Write in first person as Saul. Warm, calm, reassuring tone.',
         'Zero hyphens or dashes anywhere. No asterisks or special characters. Plain spoken language only.',
+        'Recommend Dial Antibacterial fragrance free soap for cleaning and Lubriderm fragrance free or vitamin enriched unscented lotion for moisturizing.',
+        film ? 'The client has a protective film applied. Advise keeping it on for 3 to 5 days and removing under warm running water before starting the standard routine.' : '',
         'The script must follow this structure:',
         `1. Intro: "Hey ${name}, it's Saul..."`,
         '2. Body: Personalized healing guidance based on style and placement. Reference the specific tattoo style and placement naturally.',
@@ -190,7 +193,7 @@ export default function AftercarePortal() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 200,
-          system: 'You are a tattoo healing assessment assistant. Analyze the uploaded tattoo photo and classify the healing status as one of three options: Healthy, Dry, or Irritated. Provide a one sentence plain language explanation. Return only a JSON object: {"status": "Healthy or Dry or Irritated", "note": "one sentence explanation"}',
+          system: 'You are the MACRI Concierge, a studio AI assistant for Saul Gutierrez. You specialize in tattoo aftercare guidance. Always recommend Dial Antibacterial fragrance free soap for cleaning and Lubriderm fragrance free or vitamin enriched unscented lotion for moisturizing. If the client has a protective film applied, advise keeping it for 3 to 5 days and removing under warm running water before starting the standard routine. Use zero hyphens or dashes. Write all ranges as X to Y. Analyze the uploaded tattoo photo and classify the healing status as one of three options: Healthy, Dry, or Irritated. Provide a one sentence plain language explanation. Return only a JSON object: {"status": "Healthy or Dry or Irritated", "note": "one sentence explanation"}',
           messages: [{
             role: 'user',
             content: [
@@ -245,13 +248,20 @@ export default function AftercarePortal() {
     : null
 
   const universalCards = [
-    { title: 'Keep It Clean', body: 'Gently wash with unscented soap and lukewarm water twice a day. Pat dry with a clean paper towel. Never scrub.' },
-    { title: 'Moisturize', body: 'Apply a thin layer of unscented lotion or Hustle Butter 2 to 3 times a day. Less is more. Never suffocate the skin.' },
+    { title: 'Keep It Clean', body: 'Gently wash with Dial Antibacterial soap (fragrance free) and lukewarm water twice a day. Pat dry with a clean paper towel. Never scrub.' },
+    { title: 'Moisturize', body: 'Apply a thin layer of Lubriderm (fragrance free) or a vitamin enriched unscented lotion 2 to 3 times a day. Less is more. Never suffocate the skin.' },
     { title: 'No Sun and No Soaking', body: 'Stay out of direct sunlight. No swimming, hot tubs, or long baths for at least 2 to 3 weeks. Showers are fine.' },
     { title: 'Do Not Pick or Scratch', body: 'Peeling and itching are normal. Let it shed on its own. Picking pulls out ink and creates uneven healing.' },
   ]
 
+  const filmCard = film ? {
+    title: 'Protective Film Care',
+    body: 'Keep the film applied for 3 to 5 days. A buildup of fluid under the film is completely normal and is your body healing. To remove: peel slowly under warm running water starting from a corner. Once removed, begin the standard soap and lotion routine below.',
+    borderColor: '#7aab8f',
+  } : null
+
   const allCards = [
+    ...(filmCard ? [filmCard] : []),
     ...universalCards,
     ...(styleCard ? [styleCard] : []),
     ...(placementCard ? [placementCard] : []),
@@ -266,7 +276,7 @@ export default function AftercarePortal() {
         {/* Hero Header */}
         <div style={{ background: '#161614', padding: '28px 20px', boxSizing: 'border-box' }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#c9a96e', letterSpacing: '0.1em', marginBottom: 12 }}>
-            aftercare portal
+            MACRI Concierge | Studio AI Assistant
           </div>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 26, fontWeight: 700, color: '#e8e6df', marginBottom: 6 }}>
             Hey {name}.
@@ -361,7 +371,7 @@ export default function AftercarePortal() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {allCards.map((card, i) => (
-                <div key={i} style={{ background: '#1e1e1b', borderRadius: 10, borderLeft: '2px solid #c9a96e', padding: 16 }}>
+                <div key={i} style={{ background: '#1e1e1b', borderRadius: 10, borderLeft: `2px solid ${card.borderColor || '#c9a96e'}`, padding: 16 }}>
                   <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14, fontWeight: 700, color: '#e8e6df', marginBottom: 8 }}>
                     {card.title}
                   </div>
@@ -504,6 +514,16 @@ export default function AftercarePortal() {
             >
               SaulsAppointments.as.me/TattooConsultation
             </a>
+            <div style={{ marginTop: 12 }}>
+              <a
+                href="https://www.saulgtattoos.com"
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e', textDecoration: 'none' }}
+              >
+                saulgtattoos.com
+              </a>
+            </div>
           </div>
 
         </div>

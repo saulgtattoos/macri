@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: 'Supplies',           path: '/supplies' },
   { label: 'Color Lab',          path: '/colorlab' },
   { label: 'Content Studio',     path: '/contentstudio' },
+  { label: 'Agent Queue',        path: '/agents' },
   { label: 'Dev Queue',          path: '/dev-queue' },
   { label: 'Settings',           path: '/settings' },
 ]

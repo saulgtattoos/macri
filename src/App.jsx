@@ -15,6 +15,7 @@ import Finance from './pages/Finance'
 import Supplies from './pages/Supplies'
 import ColorLab from './pages/ColorLab'
 import ContentStudio from './pages/ContentStudio'
+import AgentQueue from './pages/AgentQueue'
 
 function AppShell() {
   const [drawerOpen,    setDrawerOpen]    = useState(false)
@@ -87,6 +88,7 @@ export default function App() {
           <Route path="/supplies"     element={<Supplies />} />
           <Route path="/colorlab"      element={<ColorLab />} />
           <Route path="/contentstudio" element={<ContentStudio />} />
+          <Route path="/agents"       element={<AgentQueue />} />
           <Route path="/dev-queue"    element={<DevQueue />} />
           <Route path="/settings"     element={<Placeholder name="Settings" />} />
         </Route>

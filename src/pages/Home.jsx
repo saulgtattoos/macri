@@ -1,31 +1,18 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { STAGES } from '../constants/stages'
+import { loadClients as loadClientsDB, saveClient } from '../lib/crmService'
+import { sessionsService } from '../lib/dataService'
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
-const LS_CLIENTS  = 'macri_crm_clients'
 const LS_GOALS    = 'macri_goals'
 const LS_WELCOME  = 'macri_welcome_last_seen'
-const LS_SESSIONS = 'sessions_v4'
-
-function loadClients() {
-  try { return JSON.parse(localStorage.getItem(LS_CLIENTS)) || [] } catch { return [] }
-}
 function loadGoals() {
   try { return JSON.parse(localStorage.getItem(LS_GOALS)) || [] } catch { return [] }
 }
 function saveGoals(list) {
   localStorage.setItem(LS_GOALS, JSON.stringify(list))
-}
-function saveClients(list) {
-  localStorage.setItem(LS_CLIENTS, JSON.stringify(list))
-}
-function loadSessions4() {
-  try { return JSON.parse(localStorage.getItem(LS_SESSIONS)) || [] } catch { return [] }
-}
-function saveSessions4(list) {
-  localStorage.setItem(LS_SESSIONS, JSON.stringify(list))
 }
 
 // ─── Quotes ───────────────────────────────────────────────────────────────────
@@ -333,7 +320,7 @@ export default function Home() {
   const navigate = useNavigate()
   const narrow   = useIsNarrow()
 
-  const [clients, setClients] = useState(loadClients)
+  const [clients, setClients] = useState([])
   const [goals,   setGoals]   = useState(loadGoals)
 
   // Quote
@@ -383,6 +370,10 @@ export default function Home() {
   const [csvRows, setCsvRows] = useState([])
   const [csvDups, setCsvDups] = useState([])
   const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    loadClientsDB().then(setClients)
+  }, [])
 
   useEffect(() => {
     const todayStr = todayISO()
@@ -566,9 +557,7 @@ export default function Home() {
         clientId: sf.selectedClientId || null,
         createdAt: new Date().toISOString(),
       }
-      const s4list = loadSessions4()
-      s4list.unshift(sess4)
-      saveSessions4(s4list)
+      sessionsService.saveRecord(sess4)
 
       let updatedClients = clients
       if (sf.selectedClientId) {
@@ -595,8 +584,8 @@ export default function Home() {
             ? { ...c, sessions: [...(c.sessions || []), compatSess] }
             : c
         )
-        saveClients(updatedClients)
         setClients(updatedClients)
+        saveClient(updatedClients.find(c => c.id === sf.selectedClientId))
       }
       const savedSession = { id: String(sessionId), name: sf.clientName, style: sf.style, placement: sf.placement, date: sf.date, film: sf.film || false }
       showToast('Session logged')
@@ -668,12 +657,10 @@ export default function Home() {
       }
 
       const updatedClients = [...clients, newClient]
-      saveClients(updatedClients)
       setClients(updatedClients)
+      saveClient(newClient)
 
-      const s4list = loadSessions4()
-      s4list.unshift(sess4)
-      saveSessions4(s4list)
+      sessionsService.saveRecord(sess4)
 
       const savedSession = { id: String(sessionId), name: fullName, style: sf.style, placement: sf.placement, date: sf.date, film: sf.film || false }
       showToast('Session logged and client added to CRM')
@@ -890,7 +877,7 @@ export default function Home() {
           const idx = headers.indexOf(name.toLowerCase())
           return idx >= 0 ? (row[idx] || '') : ''
         }
-        const currentClients = loadClients()
+        const currentClients = clients
         const parsed = []
         const dups   = []
         for (const row of dataRows) {
@@ -934,8 +921,7 @@ export default function Home() {
   }
 
   function handleImportAll() {
-    const currentClients = loadClients()
-    const currentS4      = loadSessions4()
+    const currentClients = clients
     const newClients     = []
     const newSessions    = []
 
@@ -1006,12 +992,10 @@ export default function Home() {
     })
 
     const updatedClients = [...currentClients, ...newClients]
-    saveClients(updatedClients)
     setClients(updatedClients)
+    newClients.forEach(c => saveClient(c))
 
-    if (newSessions.length > 0) {
-      saveSessions4([...newSessions, ...currentS4])
-    }
+    newSessions.forEach(s => sessionsService.saveRecord(s))
 
     const importCount = newClients.length
     const skipCount   = csvDups.filter(Boolean).length

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { inventoryService, cartService } from '../lib/dataService'
 
 // ─── utils ───────────────────────────────────────────────────────────────────
 const uid = () => crypto.randomUUID()
@@ -337,18 +338,21 @@ function InventoryTab({ inventory, setInventory, cart, setCart }) {
     return updated
   }
 
-  const saveInventory = (updated) => {
+  const saveInventory = (updated, changedItem) => {
     const newCart = syncLowStockToCart(updated, cart)
     setInventory(updated)
     setCart(newCart)
     localStorage.setItem('macri_inventory', JSON.stringify(updated))
     localStorage.setItem('macri_cart', JSON.stringify(newCart))
+    if (changedItem) inventoryService.saveRecord(changedItem)
+    const prevCartIds = new Set(cart.map((c) => c.id))
+    newCart.filter((c) => !prevCartIds.has(c.id)).forEach((c) => cartService.saveRecord(c))
   }
 
   const handleAdd = () => {
     if (!form.name.trim()) return
     const item = { ...form, id: uid(), createdAt: now() }
-    saveInventory([item, ...inventory])
+    saveInventory([item, ...inventory], item)
     setForm(blankInventory())
     setShowModal(false)
   }
@@ -358,7 +362,8 @@ function InventoryTab({ inventory, setInventory, cart, setCart }) {
     const updated = inventory.map((i) =>
       i.id === id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i
     )
-    saveInventory(updated)
+    const changedItem = updated.find((i) => i.id === id)
+    saveInventory(updated, changedItem)
   }
 
   const toggleExpand = (id) => {
@@ -374,7 +379,7 @@ function InventoryTab({ inventory, setInventory, cart, setCart }) {
 
   const saveEdit = (id) => {
     const updated = inventory.map((i) => (i.id === id ? { ...editDraft } : i))
-    saveInventory(updated)
+    saveInventory(updated, editDraft)
     setExpanded(null)
     setEditDraft({})
   }
@@ -382,6 +387,7 @@ function InventoryTab({ inventory, setInventory, cart, setCart }) {
   const handleDelete = (e, id) => {
     e.stopPropagation()
     if (confirmDelete === id) {
+      inventoryService.deleteRecord(id)
       saveInventory(inventory.filter((i) => i.id !== id))
       setConfirmDelete(null)
       if (expanded === id) setExpanded(null)
@@ -580,20 +586,27 @@ function CartTab({ cart, setCart, inventory, setInventory }) {
 
   const handleAdd = () => {
     if (!form.name.trim()) return
-    saveCart([{ ...form, id: uid(), createdAt: now() }, ...cart])
+    const newItem = { ...form, id: uid(), createdAt: now() }
+    saveCart([newItem, ...cart])
+    cartService.saveRecord(newItem)
     setForm(blankCart())
     setShowModal(false)
   }
 
   const markOrdered = (id) => {
-    saveCart(cart.map((c) => c.id === id ? { ...c, status: 'ordered' } : c))
+    const updated = cart.map((c) => c.id === id ? { ...c, status: 'ordered' } : c)
+    saveCart(updated)
+    const changed = updated.find((c) => c.id === id)
+    if (changed) cartService.saveRecord(changed)
   }
 
   const markPurchased = (id) => {
     const item = cart.find((c) => c.id === id)
     if (!item) return
-    const updated = cart.map((c) => c.id === id ? { ...c, status: 'purchased', purchasedAt: now() } : c)
-    saveCart(updated)
+    const updatedCart = cart.map((c) => c.id === id ? { ...c, status: 'purchased', purchasedAt: now() } : c)
+    saveCart(updatedCart)
+    const updatedCard = updatedCart.find((c) => c.id === id)
+    if (updatedCard) cartService.saveRecord(updatedCard)
 
     // increment inventory quantity if linked
     if (item.inventoryItemId) {
@@ -603,11 +616,14 @@ function CartTab({ cart, setCart, inventory, setInventory }) {
           : inv
       )
       saveInventory(updatedInv)
+      const updatedInvItem = updatedInv.find((inv) => inv.id === item.inventoryItemId)
+      if (updatedInvItem) inventoryService.saveRecord(updatedInvItem)
     }
   }
 
   const removeItem = (id) => {
     saveCart(cart.filter((c) => c.id !== id))
+    cartService.deleteRecord(id)
   }
 
   const statusLabel = { 'to-order': 'To Order', ordered: 'Ordered', purchased: 'Purchased' }
@@ -747,41 +763,46 @@ export default function Supplies() {
   const [inventory, setInventory] = useState([])
   const [cart, setCart] = useState([])
 
-  // bootstrap from localStorage
   useEffect(() => {
-    const storedInv = localStorage.getItem('macri_inventory')
-    const storedCart = localStorage.getItem('macri_cart')
+    async function init() {
+      let [inv, crt] = await Promise.all([inventoryService.loadAll(), cartService.loadAll()])
 
-    let inv = storedInv ? JSON.parse(storedInv) : null
-    if (!inv || inv.length === 0) {
-      inv = SEED_INVENTORY
-      localStorage.setItem('macri_inventory', JSON.stringify(inv))
-    }
-
-    let crt = storedCart ? JSON.parse(storedCart) : []
-
-    // auto-add low stock items to cart on first load
-    inv.forEach((item) => {
-      if (item.quantity <= item.lowStockThreshold) {
-        const exists = crt.some((c) => c.inventoryItemId === item.id && c.status !== 'purchased')
-        if (!exists) {
-          crt.push({
-            ...blankCart(),
-            name: item.name,
-            brand: item.brand,
-            quantityNeeded: item.lowStockThreshold * 2 || 2,
-            estimatedCost: item.unitCost * (item.lowStockThreshold * 2 || 2),
-            whereToBuy: item.supplier,
-            inventoryItemId: item.id,
-            status: 'to-order',
-          })
-        }
+      if (!inv.length) {
+        inv = SEED_INVENTORY
+        localStorage.setItem('macri_inventory', JSON.stringify(inv))
+        inv.forEach((item) => inventoryService.saveRecord(item))
       }
-    })
 
-    localStorage.setItem('macri_cart', JSON.stringify(crt))
-    setInventory(inv)
-    setCart(crt)
+      // auto-add low stock items to cart
+      const newCartItems = []
+      inv.forEach((item) => {
+        if (item.quantity <= item.lowStockThreshold) {
+          const exists = crt.some((c) => c.inventoryItemId === item.id && c.status !== 'purchased')
+          if (!exists) {
+            const entry = {
+              ...blankCart(),
+              name: item.name,
+              brand: item.brand,
+              quantityNeeded: item.lowStockThreshold * 2 || 2,
+              estimatedCost: item.unitCost * (item.lowStockThreshold * 2 || 2),
+              whereToBuy: item.supplier,
+              inventoryItemId: item.id,
+              status: 'to-order',
+            }
+            newCartItems.push(entry)
+          }
+        }
+      })
+      const merged = [...crt, ...newCartItems]
+      if (newCartItems.length) {
+        localStorage.setItem('macri_cart', JSON.stringify(merged))
+        newCartItems.forEach((c) => cartService.saveRecord(c))
+      }
+
+      setInventory(inv)
+      setCart(merged)
+    }
+    init()
   }, [])
 
   const lowStockCount = inventory.filter((i) => i.quantity <= i.lowStockThreshold).length

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { sessionsService, expensesService, goalsService } from '../lib/dataService'
 
 // ─── utils ────────────────────────────────────────────────────────────────────
 const uid = () => crypto.randomUUID()
@@ -609,7 +610,7 @@ function IncomeTab({ sessions, setSessions }) {
     const cleaned = nonDupes.map(({ _dupe, ...r }) => r)
     const updated = [...sessions, ...cleaned]
     setSessions(updated)
-    localStorage.setItem('sessions_v4', JSON.stringify(updated))
+    cleaned.forEach(r => sessionsService.saveRecord(r))
     setShowPreview(false)
     setPreviewData([])
     const msg = dupeCount > 0
@@ -761,6 +762,7 @@ function ExpensesTab({ expenses, setExpenses }) {
 
   const saveEdit = (id) => {
     saveExpenses(expenses.map((e) => e.id === id ? { ...editDraft } : e))
+    expensesService.saveRecord(editDraft)
     setExpanded(null)
     setEditDraft({})
   }
@@ -768,6 +770,7 @@ function ExpensesTab({ expenses, setExpenses }) {
   const handleDelete = (evt, id) => {
     evt.stopPropagation()
     if (confirmDelete === id) {
+      expensesService.deleteRecord(id)
       saveExpenses(expenses.filter((e) => e.id !== id))
       setConfirmDelete(null)
       if (expanded === id) setExpanded(null)
@@ -779,7 +782,9 @@ function ExpensesTab({ expenses, setExpenses }) {
 
   const handleAdd = () => {
     if (!form.amount || (!form.vendor && !form.description)) return
-    saveExpenses([{ ...form, id: uid(), createdAt: now() }, ...expenses])
+    const newExpense = { ...form, id: uid(), createdAt: now() }
+    saveExpenses([newExpense, ...expenses])
+    expensesService.saveRecord(newExpense)
     setForm(blankExpense())
     setShowModal(false)
   }
@@ -813,6 +818,7 @@ function ExpensesTab({ expenses, setExpenses }) {
 
   const handleImport = () => {
     saveExpenses([...expenses, ...previewData])
+    previewData.forEach(r => expensesService.saveRecord(r))
     setShowPreview(false)
     showToast(`${previewData.length} expenses imported`)
     setPreviewData([])
@@ -1197,10 +1203,14 @@ function GoalsTab({ sessions, goals, setGoals }) {
   const handleSave = () => {
     if (!form.targetAmount) return
     const existing = goals.find((g) => g.month === form.month)
+    const savedGoal = existing
+      ? { ...form, id: existing.id }
+      : { ...form, id: uid(), createdAt: now() }
     const updated = existing
-      ? goals.map((g) => g.month === form.month ? { ...form, id: existing.id } : g)
-      : [{ ...form, id: uid(), createdAt: now() }, ...goals]
+      ? goals.map((g) => g.month === form.month ? savedGoal : g)
+      : [savedGoal, ...goals]
     saveGoals(updated)
+    goalsService.saveRecord(savedGoal)
     setShowModal(false)
   }
 
@@ -1311,12 +1321,8 @@ export default function Finance() {
   const [goals, setGoals] = useState([])
 
   useEffect(() => {
-    const s = localStorage.getItem('sessions_v4')
-    const e = localStorage.getItem('macri_expenses')
-    const g = localStorage.getItem('macri_finance_goals')
-    setSessions(s ? JSON.parse(s) : [])
-    setExpenses(e ? JSON.parse(e) : [])
-    setGoals(g ? JSON.parse(g) : [])
+    Promise.all([sessionsService.loadAll(), expensesService.loadAll(), goalsService.loadAll()])
+      .then(([s, e, g]) => { setSessions(s); setExpenses(e); setGoals(g) })
   }, [])
 
   const thisYM = new Date().toISOString().slice(0, 7)

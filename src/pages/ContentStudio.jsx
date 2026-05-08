@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { loadClients as loadClientsDB, saveClient } from '../lib/crmService'
+import { draftsService, hashtagsService } from '../lib/dataService'
 
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
@@ -250,15 +252,24 @@ function GenerateTab({ clients }) {
   const [copiedPlatform, setCopiedPlatform] = useState(null)
   const [draftSaved, setDraftSaved] = useState(false)
   const fileInputRef = useRef(null)
+  const hashtagIds = useRef([null, null, null, null, null])
 
   useEffect(() => {
-    const saved = localStorage.getItem('macri_content_hashtags')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length === 5) setHashtags(parsed)
-      } catch (_) {}
-    }
+    hashtagsService.loadAll().then((records) => {
+      if (records.length >= 5) {
+        const sorted = records.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        setHashtags(sorted.slice(0, 5).map((r) => r.tag || ''))
+        hashtagIds.current = sorted.slice(0, 5).map((r) => r.id)
+      } else {
+        const saved = localStorage.getItem('macri_content_hashtags')
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved)
+            if (Array.isArray(parsed) && parsed.length === 5) setHashtags(parsed)
+          } catch (_) {}
+        }
+      }
+    })
   }, [])
 
   const handleFileChange = (file) => {
@@ -299,6 +310,15 @@ function GenerateTab({ clients }) {
 
   const saveDefaultHashtags = () => {
     localStorage.setItem('macri_content_hashtags', JSON.stringify(hashtags))
+    const records = hashtags.map((tag, i) => ({
+      id: hashtagIds.current[i] || uid(),
+      tag,
+      createdAt: now(),
+    }))
+    records.forEach((r, i) => {
+      hashtagIds.current[i] = r.id
+      hashtagsService.saveRecord(r)
+    })
     setHashtagsSaved(true)
     setTimeout(() => setHashtagsSaved(false), 2000)
   }
@@ -426,18 +446,11 @@ Short punchy caption optimized for TikTok. Energetic tone. Include 5 hashtags. M
     const drafts = existing ? JSON.parse(existing) : []
     drafts.push(draft)
     localStorage.setItem('macri_content_drafts', JSON.stringify(drafts))
+    draftsService.saveRecord(draft)
 
     if (clientId) {
-      const rawClients = localStorage.getItem('macri_crm_clients')
-      if (rawClients) {
-        const allClients = JSON.parse(rawClients)
-        const updated = allClients.map((c) =>
-          c.id === clientId
-            ? { ...c, contentDrafts: [...(c.contentDrafts || []), draft.id] }
-            : c
-        )
-        localStorage.setItem('macri_crm_clients', JSON.stringify(updated))
-      }
+      const target = clients.find(c => c.id === clientId)
+      if (target) saveClient({ ...target, contentDrafts: [...(target.contentDrafts || []), draft.id] })
     }
 
     setDraftSaved(true)
@@ -649,14 +662,10 @@ function DraftsTab() {
   const [copiedKey, setCopiedKey] = useState(null)
 
   useEffect(() => {
-    const raw = localStorage.getItem('macri_content_drafts')
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw)
-        parsed.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        setDrafts(parsed)
-      } catch (_) {}
-    }
+    draftsService.loadAll().then((records) => {
+      records.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      setDrafts(records)
+    })
   }, [])
 
   const clientNames = [...new Set(drafts.filter((d) => d.clientName).map((d) => d.clientName))]
@@ -678,6 +687,7 @@ function DraftsTab() {
       const updated = drafts.filter((d) => d.id !== id)
       setDrafts(updated)
       localStorage.setItem('macri_content_drafts', JSON.stringify(updated))
+      draftsService.deleteRecord(id)
       setConfirmDelete(null)
       if (expandedId === id) setExpandedId(null)
     } else {
@@ -801,14 +811,8 @@ export default function ContentStudio() {
   const [draftCount, setDraftCount] = useState(0)
 
   useEffect(() => {
-    const raw = localStorage.getItem('macri_crm_clients')
-    if (raw) {
-      try { setClients(JSON.parse(raw)) } catch (_) {}
-    }
-    const drafts = localStorage.getItem('macri_content_drafts')
-    if (drafts) {
-      try { setDraftCount(JSON.parse(drafts).length) } catch (_) {}
-    }
+    loadClientsDB().then(setClients)
+    draftsService.loadAll().then((drafts) => setDraftCount(drafts.length))
   }, [])
 
   return (

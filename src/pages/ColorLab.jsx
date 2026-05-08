@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { inksService, palettesService, brandsService, sessionPrepService } from '../lib/dataService'
 
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
@@ -160,9 +161,10 @@ function InkLibraryTab({ inks, setInks, brands, palettes, setBrands, setPalettes
 
   const brandNames = brands.map((b) => b.name)
 
-  const saveInks = (updated) => {
+  const saveInks = (updated, changedInk) => {
     setInks(updated)
     localStorage.setItem('macri_colorlab_inks', JSON.stringify(updated))
+    if (changedInk) inksService.saveRecord(changedInk)
   }
 
   const filtered = inks.filter((ink) => {
@@ -179,13 +181,14 @@ function InkLibraryTab({ inks, setInks, brands, palettes, setBrands, setPalettes
   }
 
   const saveEdit = (id) => {
-    saveInks(inks.map((i) => (i.id === id ? { ...editDraft } : i)))
+    saveInks(inks.map((i) => (i.id === id ? { ...editDraft } : i)), editDraft)
     setExpanded(null); setEditDraft({})
   }
 
   const handleDelete = (e, id) => {
     e.stopPropagation()
     if (confirmDelete === id) {
+      inksService.deleteRecord(id)
       saveInks(inks.filter((i) => i.id !== id))
       setConfirmDelete(null)
       if (expanded === id) setExpanded(null)
@@ -197,7 +200,8 @@ function InkLibraryTab({ inks, setInks, brands, palettes, setBrands, setPalettes
 
   const handleAdd = () => {
     if (!form.name.trim()) return
-    saveInks([{ ...form, id: uid(), createdAt: now() }, ...inks])
+    const newInk = { ...form, id: uid(), createdAt: now() }
+    saveInks([newInk, ...inks], newInk)
     setForm(blankInk(brands)); setShowModal(false)
   }
 
@@ -357,9 +361,10 @@ function PalettesTab({ palettes, setPalettes, inks, showToast }) {
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(blankPalette())
 
-  const savePalettes = (updated) => {
+  const savePalettes = (updated, changedPalette) => {
     setPalettes(updated)
     localStorage.setItem('macri_colorlab_palettes', JSON.stringify(updated))
+    if (changedPalette) palettesService.saveRecord(changedPalette)
   }
 
   const toggleExpand = (id) => {
@@ -368,13 +373,14 @@ function PalettesTab({ palettes, setPalettes, inks, showToast }) {
   }
 
   const saveEdit = (id) => {
-    savePalettes(palettes.map((p) => (p.id === id ? { ...editDraft } : p)))
+    savePalettes(palettes.map((p) => (p.id === id ? { ...editDraft } : p)), editDraft)
     setExpanded(null); setEditDraft({}); setAddingInks(false)
   }
 
   const handleDelete = (e, id) => {
     e.stopPropagation()
     if (confirmDelete === id) {
+      palettesService.deleteRecord(id)
       savePalettes(palettes.filter((p) => p.id !== id))
       setConfirmDelete(null)
       if (expanded === id) setExpanded(null)
@@ -386,7 +392,8 @@ function PalettesTab({ palettes, setPalettes, inks, showToast }) {
 
   const handleAdd = () => {
     if (!form.name.trim()) return
-    savePalettes([{ ...form, id: uid(), createdAt: now() }, ...palettes])
+    const newPalette = { ...form, id: uid(), createdAt: now() }
+    savePalettes([newPalette, ...palettes], newPalette)
     setForm(blankPalette()); setShowModal(false)
   }
 
@@ -396,15 +403,19 @@ function PalettesTab({ palettes, setPalettes, inks, showToast }) {
     setEditDraft({ ...d, inkIds: has ? d.inkIds.filter((id) => id !== inkId) : [...(d.inkIds || []), inkId] })
   }
 
-  const sendToSessionPrep = (inkIds) => {
+  const sendToSessionPrep = async (inkIds) => {
     const paletteInks = inkIds.map((id) => inks.find((i) => i.id === id)).filter(Boolean)
     if (paletteInks.length === 0) { showToast('No inks in this palette'); return }
+    const existing = await sessionPrepService.loadAll()
+    const nextOrder = existing.length
+    const newItems = paletteInks.map((ink, idx) => ({ id: uid(), text: ink.name, checked: false, sortOrder: nextOrder + idx }))
     const raw = localStorage.getItem('macri_session_prep')
     let data = { items: [] }
     try { data = raw ? JSON.parse(raw) : { items: [] } } catch {}
     if (!Array.isArray(data.items)) data.items = []
-    data.items = [...data.items, ...paletteInks.map((ink) => ({ id: uid(), text: ink.name, checked: false }))]
+    data.items = [...data.items, ...newItems]
     localStorage.setItem('macri_session_prep', JSON.stringify(data))
+    newItems.forEach((item) => sessionPrepService.saveRecord(item))
     showToast('Inks added to Session Prep')
   }
 
@@ -569,9 +580,10 @@ function BrandsTab({ brands, setBrands, inks }) {
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(blankBrand())
 
-  const saveBrands = (updated) => {
+  const saveBrands = (updated, changedBrand) => {
     setBrands(updated)
     localStorage.setItem('macri_colorlab_brands', JSON.stringify(updated))
+    if (changedBrand) brandsService.saveRecord(changedBrand)
   }
 
   const colorCount = (name) => inks.filter((i) => i.brand === name).length
@@ -582,13 +594,14 @@ function BrandsTab({ brands, setBrands, inks }) {
   }
 
   const saveEdit = (id) => {
-    saveBrands(brands.map((b) => (b.id === id ? { ...editDraft } : b)))
+    saveBrands(brands.map((b) => (b.id === id ? { ...editDraft } : b)), editDraft)
     setExpanded(null); setEditDraft({})
   }
 
   const handleDelete = (e, id) => {
     e.stopPropagation()
     if (confirmDelete === id) {
+      brandsService.deleteRecord(id)
       saveBrands(brands.filter((b) => b.id !== id))
       setConfirmDelete(null)
       if (expanded === id) setExpanded(null)
@@ -600,7 +613,8 @@ function BrandsTab({ brands, setBrands, inks }) {
 
   const handleAdd = () => {
     if (!form.name.trim()) return
-    saveBrands([{ ...form, id: uid(), createdAt: now() }, ...brands])
+    const newBrand = { ...form, id: uid(), createdAt: now() }
+    saveBrands([newBrand, ...brands], newBrand)
     setForm(blankBrand()); setShowModal(false)
   }
 
@@ -856,33 +870,28 @@ function AnalyzeTab({ inks, palettes, setPalettes, showToast, onSendToMixingLab 
       mixingRecipes: recipes,
       createdAt: now(),
     }
-    const raw = localStorage.getItem('macri_colorlab_palettes')
-    let existing = []
-    try { existing = raw ? JSON.parse(raw) : [] } catch {}
-    const updated = [newPalette, ...existing]
-    localStorage.setItem('macri_colorlab_palettes', JSON.stringify(updated))
-    setPalettes(updated)
+    setPalettes((prev) => [newPalette, ...prev])
+    palettesService.saveRecord(newPalette)
     setShowSaveModal(false)
     setPaletteName('')
     showToast('Palette saved')
   }
 
-  const handleAddToSessionPrep = () => {
+  const handleAddToSessionPrep = async () => {
     if (!result) return
     const inkNames = result.filter((r) => r.recommendedInk).map((r) => r.recommendedInk)
     const matched = inks.filter((ink) => inkNames.some((n) => n.toLowerCase() === ink.name.toLowerCase()))
     if (matched.length === 0) { showToast('No inks matched in your library'); return }
+    const existing = await sessionPrepService.loadAll()
+    const nextOrder = existing.length
+    const newItems = matched.map((ink, idx) => ({ id: uid(), text: ink.name, checked: false, sortOrder: nextOrder + idx }))
     const raw = localStorage.getItem('macri_session_prep')
     let data = { items: [] }
     try { data = raw ? JSON.parse(raw) : { items: [] } } catch {}
     if (!Array.isArray(data.items)) data.items = []
-    const section = {
-      id: uid(),
-      sectionTitle: 'Inks for This Session',
-      items: matched.map((ink) => ({ id: uid(), text: ink.name, checked: false })),
-    }
-    data.items.push(section)
+    data.items = [...data.items, ...newItems]
     localStorage.setItem('macri_session_prep', JSON.stringify(data))
+    newItems.forEach((item) => sessionPrepService.saveRecord(item))
     showToast('Inks added to Session Prep')
   }
 
@@ -1185,9 +1194,8 @@ function WitnessTab({ inks, setInks, showToast }) {
       colorHex: '#888888', colorFamily: 'Other',
       inStock: true, lastUsed: null, notes: '', createdAt: now(),
     }))
-    const updated = [...newInks, ...inks]
-    setInks(updated)
-    localStorage.setItem('macri_colorlab_inks', JSON.stringify(updated))
+    setInks((prev) => [...newInks, ...prev])
+    newInks.forEach((ink) => inksService.saveRecord(ink))
     showToast(`${pending.length} ${pending.length === 1 ? 'ink' : 'inks'} added to your library`)
     setPending([])
   }
@@ -1334,12 +1342,8 @@ function MixingLabTab({ inks, palettes, setPalettes, showToast, mixingTargets })
       mixingRecipes: [{ targetHex: recipe.targetHex, region: 'Manual Mix', recipe: recipe.recipeText, inkIds: [] }],
       createdAt: now(),
     }
-    const raw = localStorage.getItem('macri_colorlab_palettes')
-    let existing = []
-    try { existing = raw ? JSON.parse(raw) : [] } catch {}
-    const updated = [newPalette, ...existing]
-    localStorage.setItem('macri_colorlab_palettes', JSON.stringify(updated))
-    setPalettes(updated)
+    setPalettes((prev) => [newPalette, ...prev])
+    palettesService.saveRecord(newPalette)
     showToast('Recipe saved to Palettes')
   }
 
@@ -1438,17 +1442,18 @@ export default function ColorLab() {
   const [mixingTargets, setMixingTargets] = useState([])
 
   useEffect(() => {
-    const rawBrands = localStorage.getItem('macri_colorlab_brands')
-    let b = rawBrands ? JSON.parse(rawBrands) : null
-    if (!b || b.length === 0) {
-      b = SEED_BRANDS
-      localStorage.setItem('macri_colorlab_brands', JSON.stringify(b))
+    async function init() {
+      let [b, i, p] = await Promise.all([brandsService.loadAll(), inksService.loadAll(), palettesService.loadAll()])
+      if (!b.length) {
+        b = SEED_BRANDS
+        localStorage.setItem('macri_colorlab_brands', JSON.stringify(b))
+        b.forEach((brand) => brandsService.saveRecord(brand))
+      }
+      setBrands(b)
+      setInks(i)
+      setPalettes(p)
     }
-    setBrands(b)
-    const rawInks = localStorage.getItem('macri_colorlab_inks')
-    setInks(rawInks ? JSON.parse(rawInks) : [])
-    const rawPalettes = localStorage.getItem('macri_colorlab_palettes')
-    setPalettes(rawPalettes ? JSON.parse(rawPalettes) : [])
+    init()
   }, [])
 
   const showToast = (msg) => {

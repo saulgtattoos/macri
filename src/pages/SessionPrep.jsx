@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { sessionPrepService } from '../lib/dataService'
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
@@ -41,6 +42,7 @@ function loadItems() {
 
 function saveItems(list) {
   localStorage.setItem(LS_KEY, JSON.stringify({ items: list }))
+  list.forEach((item, idx) => sessionPrepService.saveRecord({ ...item, sortOrder: idx }))
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -129,7 +131,7 @@ function SortableCheckItem({ item, onTextChange, onDelete }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SessionPrep() {
-  const [items, setItems]             = useState(() => loadItems())
+  const [items, setItems]             = useState([])
   const [editMode, setEditMode]       = useState(false)
   const [newItemText, setNewItemText] = useState('')
   const [micStatus, setMicStatus]     = useState('idle')
@@ -141,6 +143,21 @@ export default function SessionPrep() {
   const chunksRef    = useRef([])
   const mimeTypeRef  = useRef('')
   const ttsPlayerRef = useRef(null)
+
+  useEffect(() => {
+    sessionPrepService.loadAll().then((records) => {
+      if (records.length > 0) {
+        const sorted = records.slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        const list = sorted.map(({ sortOrder: _so, ...item }) => item)
+        setItems(list)
+        localStorage.setItem(LS_KEY, JSON.stringify({ items: list }))
+      } else {
+        const defaults = makeDefaultItems()
+        setItems(defaults)
+        saveItems(defaults)
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const fn = () => setNarrow(window.innerWidth < 600)
@@ -183,6 +200,7 @@ export default function SessionPrep() {
     const next = items.filter(item => item.id !== id)
     setItems(next)
     saveItems(next)
+    sessionPrepService.deleteRecord(id)
   }
 
   function handleAddItem() {

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { loadClients as loadClientsDB } from '../lib/crmService'
+import { agentQueueService, sessionsService, inventoryService } from '../lib/dataService'
 
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
@@ -37,10 +39,6 @@ const agentLabel = (type) => ({
   supply_sentry: 'SUPPLY SENTRY',
   review_recruiter: 'REVIEW',
 }[type] || type.toUpperCase())
-
-const loadJSON = (key, fallback = []) => {
-  try { return JSON.parse(localStorage.getItem(key)) || fallback } catch { return fallback }
-}
 
 const saveQueue = (cards) => {
   localStorage.setItem('macri_agent_queue', JSON.stringify(cards))
@@ -407,9 +405,11 @@ async function runReviewRecruiter(sessions, existingCards) {
 // ─── run all agents ───────────────────────────────────────────────────────────
 
 async function runAllAgents(currentCards) {
-  const sessions = loadJSON('sessions_v4', [])
-  const clients = loadJSON('macri_crm_clients', [])
-  const inventory = loadJSON('macri_inventory', [])
+  const [sessions, clients, inventory] = await Promise.all([
+    sessionsService.loadAll(),
+    loadClientsDB(),
+    inventoryService.loadAll(),
+  ])
 
   const aftercareCards = await runAftercareGuardian(sessions, currentCards)
   const allSoFar1 = [...currentCards, ...aftercareCards]
@@ -705,12 +705,13 @@ export default function AgentQueue() {
   const hasRun = useRef(false)
 
   useEffect(() => {
-    const saved = loadJSON('macri_agent_queue', [])
-    setCards(saved)
-    if (!hasRun.current) {
-      hasRun.current = true
-      silentScan(saved)
-    }
+    agentQueueService.loadAll().then((saved) => {
+      setCards(saved)
+      if (!hasRun.current) {
+        hasRun.current = true
+        silentScan(saved)
+      }
+    })
   }, [])
 
   const showToast = (msg) => {
@@ -725,6 +726,7 @@ export default function AgentQueue() {
       const updated = [...newCards, ...currentCards]
       setCards(updated)
       saveQueue(updated)
+      newCards.forEach((c) => agentQueueService.saveRecord(c))
     } catch {}
   }
 
@@ -735,6 +737,7 @@ export default function AgentQueue() {
       const updated = [...newCards, ...cards]
       setCards(updated)
       saveQueue(updated)
+      newCards.forEach((c) => agentQueueService.saveRecord(c))
       showToast(`Agents scanned. ${newCards.length} new ${newCards.length === 1 ? 'card' : 'cards'} added.`)
     } catch {
       showToast('Agent scan failed. Check your API key.')
@@ -746,6 +749,8 @@ export default function AgentQueue() {
     setCards((prev) => {
       const updated = prev.map((c) => (c.id === id ? { ...c, ...changes } : c))
       saveQueue(updated)
+      const changedCard = updated.find((c) => c.id === id)
+      if (changedCard) agentQueueService.saveRecord(changedCard)
       return updated
     })
   }

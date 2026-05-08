@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useOutletContext, useLocation } from 'react-router-dom'
 import { STAGES } from '../constants/stages'
+import supabase from '../lib/supabase'
+import { loadClients as loadClientsDB, saveClient, deleteClient, seedFromLocalStorage } from '../lib/crmService'
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
@@ -2832,7 +2834,7 @@ export default function CRM() {
   const location = useLocation()
 
 
-  const [clients,      setClients]      = useState(loadClients)
+  const [clients,      setClients]      = useState([])
   const [drawerOpen,   setDrawerOpen]   = useState(false)
   const [editTarget,   setEditTarget]   = useState(null)
   const [addModalOpen, setAddModalOpen] = useState(false)
@@ -2843,40 +2845,45 @@ export default function CRM() {
   const [importHdrs,   setImportHdrs]   = useState([])
   const [importError,  setImportError]  = useState('')
   const importRef = useRef(null)
+  const [cloudIsEmpty, setCloudIsEmpty] = useState(false)
+  const [syncing,      setSyncing]      = useState(false)
+  const [syncToast,    setSyncToast]    = useState(null)
 
   function persist(list) {
     setClients(list)
-    saveClients(list)
   }
 
   function handleClientUpdate(updatedClient) {
     persist(clients.map(c => c.id === updatedClient.id ? updatedClient : c))
+    saveClient(updatedClient)
   }
 
   function handleDeleteClient(id) {
     persist(clients.filter(c => c.id !== id))
+    deleteClient(id)
     setDrawerOpen(false)
     setEditTarget(null)
   }
 
   function handleAddClient(newClient) {
     persist([newClient, ...clients])
+    saveClient(newClient)
   }
 
   function handleArchive(id) {
-    persist(clients.map(c =>
-      c.id === id
-        ? { ...c, stage: 'Archive', updatedAt: new Date().toISOString() }
-        : c
-    ))
+    const target = clients.find(c => c.id === id)
+    if (!target) return
+    const archived = { ...target, stage: 'Archive', updatedAt: new Date().toISOString() }
+    persist(clients.map(c => c.id === id ? archived : c))
+    saveClient(archived)
   }
 
   function handleUnarchive(id) {
-    persist(clients.map(c =>
-      c.id === id
-        ? { ...c, stage: 'Inquiry', updatedAt: new Date().toISOString() }
-        : c
-    ))
+    const target = clients.find(c => c.id === id)
+    if (!target) return
+    const unarchived = { ...target, stage: 'Inquiry', updatedAt: new Date().toISOString() }
+    persist(clients.map(c => c.id === id ? unarchived : c))
+    saveClient(unarchived)
   }
 
   function handleExport() {
@@ -3018,6 +3025,10 @@ export default function CRM() {
     }
 
     persist(updated)
+    for (const [name] of byName) {
+      const c = updated.find(x => x.name.trim().toLowerCase() === name.toLowerCase())
+      if (c) saveClient(c)
+    }
     setImportOpen(false)
     setImportRows([])
     setImportHdrs([])
@@ -3038,12 +3049,27 @@ function openDrawer(client, section = null) {
   }, [location.state])
 
   useEffect(() => {
+    loadClientsDB().then(setClients)
+  }, [])
+
+  useEffect(() => {
+    supabase.from('crm_clients_v1')
+      .select('id', { count: 'exact', head: true })
+      .then(({ count }) => setCloudIsEmpty((count ?? 0) === 0))
+  }, [])
+
+  useEffect(() => {
     function onStorage(e) {
-      if (e.key === STORAGE_KEY) setClients(loadClients())
+      if (e.key === STORAGE_KEY) loadClientsDB().then(setClients)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
   }, [])
+
+  function showSyncToast(msg) {
+    setSyncToast(msg)
+    setTimeout(() => setSyncToast(null), 3000)
+  }
 
   const liveEditTarget = editTarget
     ? (clients.find(c => c.id === editTarget.id) ?? editTarget)
@@ -3081,6 +3107,33 @@ function openDrawer(client, section = null) {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {cloudIsEmpty && (
+            <button
+              onClick={async () => {
+                setSyncing(true)
+                try {
+                  const count = await seedFromLocalStorage()
+                  setCloudIsEmpty(false)
+                  showSyncToast(`${count} client${count === 1 ? '' : 's'} synced to Supabase`)
+                } catch {
+                  showSyncToast('Sync failed. Check console.')
+                } finally {
+                  setSyncing(false)
+                }
+              }}
+              disabled={syncing}
+              style={{
+                background: 'transparent', color: '#c9a96e',
+                border: '1px solid #c9a96e', borderRadius: 8,
+                padding: '8px 14px', minHeight: 36,
+                fontFamily: 'var(--font-mono)', fontSize: 11,
+                cursor: syncing ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap', opacity: syncing ? 0.6 : 1,
+              }}
+            >
+              {syncing ? 'Syncing...' : 'Sync to Cloud'}
+            </button>
+          )}
           <button
             onClick={handleExport}
             style={{
@@ -3219,6 +3272,19 @@ function openDrawer(client, section = null) {
         onClose={() => { setDrawerOpen(false); setEditTarget(null); setJumpSection(null) }}
         jumpSection={jumpSection}
       />
+
+      {syncToast && (
+        <div style={{
+          position: 'fixed', bottom: 100, left: '50%', transform: 'translateX(-50%)',
+          background: '#7aab8f', color: '#0e0e0d',
+          fontFamily: 'var(--font-mono)', fontSize: 12,
+          padding: '8px 20px', borderRadius: 20, zIndex: 210,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)', whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}>
+          {syncToast}
+        </div>
+      )}
 
     </div>
   )

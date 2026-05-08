@@ -2846,6 +2846,7 @@ export default function CRM() {
   const [importError,  setImportError]  = useState('')
   const importRef = useRef(null)
   const [cloudIsEmpty, setCloudIsEmpty] = useState(false)
+  const cloudAlreadySeeded = localStorage.getItem('macri_cloud_seeded') === 'true'
   const [syncing,      setSyncing]      = useState(false)
   const [syncToast,    setSyncToast]    = useState(null)
 
@@ -3053,6 +3054,7 @@ function openDrawer(client, section = null) {
   }, [])
 
   useEffect(() => {
+    if (cloudAlreadySeeded) return
     supabase.from('crm_clients_v1')
       .select('id', { count: 'exact', head: true })
       .then(({ count }) => setCloudIsEmpty((count ?? 0) === 0))
@@ -3113,9 +3115,11 @@ function openDrawer(client, section = null) {
                 setSyncing(true)
                 try {
                   const count = await seedFromLocalStorage()
+                  localStorage.setItem('macri_cloud_seeded', 'true')
                   setCloudIsEmpty(false)
                   showSyncToast(`${count} client${count === 1 ? '' : 's'} synced to Supabase`)
-                } catch {
+                } catch (err) {
+                  console.error('[MACRI] Sync to Cloud failed:', err)
                   showSyncToast('Sync failed. Check console.')
                 } finally {
                   setSyncing(false)

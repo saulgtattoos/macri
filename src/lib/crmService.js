@@ -78,7 +78,9 @@ export async function loadClients() {
 }
 
 export async function saveClient(client) {
-  supabase.from('crm_clients_v1').upsert(toDB(client)).then()
+  supabase.from('crm_clients_v1').upsert(toDB(client), { onConflict: 'id' }).then(({ error }) => {
+    if (error) console.error('[MACRI] saveClient error:', error.message, error)
+  })
   const list = lsRead()
   const idx = list.findIndex(c => c.id === client.id)
   if (idx >= 0) list[idx] = client
@@ -87,14 +89,29 @@ export async function saveClient(client) {
 }
 
 export async function deleteClient(id) {
-  supabase.from('crm_clients_v1').delete().eq('id', id).then()
+  supabase.from('crm_clients_v1').delete().eq('id', id).then(({ error }) => {
+    if (error) console.error('[MACRI] deleteClient error:', error.message, error)
+  })
   lsWrite(lsRead().filter(c => c.id !== id))
 }
 
 export async function seedFromLocalStorage() {
   const list = lsRead()
   if (!list.length) return 0
-  const { error } = await supabase.from('crm_clients_v1').upsert(list.map(toDB))
-  if (error) throw error
+
+  const mapped = list.map(toDB)
+  console.log('[MACRI] seedFromLocalStorage — sending', mapped.length, 'records')
+  console.log('[MACRI] sample record keys:', Object.keys(mapped[0] ?? {}))
+
+  const { error } = await supabase.from('crm_clients_v1').upsert(mapped)
+  if (error) {
+    console.error('[MACRI] seedFromLocalStorage failed:', {
+      message: error.message,
+      code:    error.code,
+      details: error.details,
+      hint:    error.hint,
+    })
+    throw error
+  }
   return list.length
 }

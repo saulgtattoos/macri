@@ -1,19 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
+import { loadClients as loadClientsDB, saveClient } from '../lib/crmService'
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY  = 'macri_crm_clients'
 const PROMOTED_KEY = 'macri_wall_first_run_done'
 const API_KEY      = import.meta.env.VITE_ANTHROPIC_KEY
-
-function loadClients() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? [] } catch { return [] }
-}
-
-function saveClients(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-}
 
 // ─── Pipeline config ──────────────────────────────────────────────────────────
 
@@ -551,32 +544,30 @@ export default function ProjectWall() {
   const ctx        = useOutletContext?.() ?? {}
   const navigate   = useNavigate()
 
-  const [clients,      setClients]      = useState(loadClients)
+  const [clients,      setClients]      = useState([])
   const [activeOnly,   setActiveOnly]   = useState(true)
   const [bulkOpen,     setBulkOpen]     = useState(false)
   const [importOpen,   setImportOpen]   = useState(false)
   const [dragClientId, setDragClientId] = useState(null)
 
   useEffect(() => {
-    const done = localStorage.getItem(PROMOTED_KEY)
-    if (!done) {
-      const unpromoted = clients.filter(c => !c.projectStage)
-      if (unpromoted.length > 0) setBulkOpen(true)
-    }
+    loadClientsDB().then(data => {
+      setClients(data)
+      const done = localStorage.getItem(PROMOTED_KEY)
+      if (!done) {
+        const unpromoted = data.filter(c => !c.projectStage)
+        if (unpromoted.length > 0) setBulkOpen(true)
+      }
+    })
   }, [])
 
   useEffect(() => {
     function onStorage(e) {
-      if (e.key === STORAGE_KEY) setClients(loadClients())
+      if (e.key === STORAGE_KEY) loadClientsDB().then(setClients)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
   }, [])
-
-  function persist(list) {
-    setClients(list)
-    saveClients(list)
-  }
 
   function handleBulkConfirm(ids) {
     const updated = clients.map(c =>
@@ -584,7 +575,8 @@ export default function ProjectWall() {
         ? { ...c, projectStage: 'waiting-on-reply', projectOrder: 0 }
         : c
     )
-    persist(updated)
+    setClients(updated)
+    updated.filter(c => ids.includes(c.id)).forEach(c => saveClient(c))
     setBulkOpen(false)
     localStorage.setItem(PROMOTED_KEY, 'true')
   }
@@ -614,7 +606,8 @@ export default function ProjectWall() {
       createdAt:    now,
       updatedAt:    now,
     }
-    persist([newClient, ...clients])
+    setClients([newClient, ...clients])
+    saveClient(newClient)
   }
 
   function handleDragStart(e, clientId) {
@@ -627,12 +620,11 @@ export default function ProjectWall() {
     e.preventDefault()
     const id = dragClientId || e.dataTransfer.getData('text/plain')
     if (!id) return
-    const updated = clients.map(c =>
-      c.id === id
-        ? { ...c, projectStage: stageKey, updatedAt: new Date().toISOString() }
-        : c
-    )
-    persist(updated)
+    const target = clients.find(c => c.id === id)
+    if (!target) return
+    const changed = { ...target, projectStage: stageKey, updatedAt: new Date().toISOString() }
+    setClients(clients.map(c => c.id === id ? changed : c))
+    saveClient(changed)
     setDragClientId(null)
   }
 
@@ -664,7 +656,8 @@ export default function ProjectWall() {
         ? { ...c, projectOrder: orderMap.get(c.id) }
         : c
     )
-    persist(updated)
+    setClients(updated)
+    updated.filter(c => orderMap.has(c.id)).forEach(c => saveClient(c))
     setDragClientId(null)
   }
 

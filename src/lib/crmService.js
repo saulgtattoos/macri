@@ -78,14 +78,31 @@ export async function loadClients() {
 }
 
 export async function saveClient(client) {
-  supabase.from('crm_clients_v1').upsert(toDB(client), { onConflict: 'id' }).then(({ error }) => {
-    if (error) console.error('[MACRI] saveClient error:', error.message, error)
-  })
-  const list = lsRead()
-  const idx = list.findIndex(c => c.id === client.id)
-  if (idx >= 0) list[idx] = client
-  else list.unshift(client)
-  lsWrite(list)
+  try {
+    const mapped = toDB(client)
+    console.log('saveClient mapped:', JSON.stringify(mapped))
+    const { data, error } = await supabase
+      .from('crm_clients_v1')
+      .upsert(mapped, { onConflict: 'id' })
+    if (error) {
+      console.error('saveClient supabase error:', error.code, error.message, error.details, error.hint)
+    } else {
+      console.log('saveClient success')
+    }
+  } catch (err) {
+    console.error('saveClient caught:', err.message)
+  }
+
+  // always update localStorage regardless
+  try {
+    const arr = JSON.parse(localStorage.getItem('macri_crm_clients') || '[]')
+    const idx = arr.findIndex(c => c.id === client.id)
+    if (idx >= 0) arr[idx] = client
+    else arr.push(client)
+    localStorage.setItem('macri_crm_clients', JSON.stringify(arr))
+  } catch (e) {
+    console.error('saveClient localStorage error:', e.message)
+  }
 }
 
 export async function deleteClient(id) {

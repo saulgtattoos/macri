@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { mkClient, mkComm, loadClients, saveClients } from './CRM'
+import { mkClient, mkComm, loadClients } from './CRM'
+import { saveClient } from '../lib/crmService'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -233,7 +234,7 @@ function logClientActivity(clientId, text) {
       const entry = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), text }
       return { ...c, activityLog: [entry, ...(c.activityLog || [])], updatedAt: new Date().toISOString() }
     })
-    saveClients(updated)
+    saveClient(updated.find(c => c.id === clientId))
   } catch { /* silent */ }
 }
 
@@ -254,7 +255,7 @@ function tickJourneyResponseSent(clientId) {
         updatedAt: new Date().toISOString(),
       }
     })
-    saveClients(updated)
+    saveClient(updated.find(c => c.id === clientId))
   } catch { /* silent */ }
 }
 
@@ -272,7 +273,7 @@ function advanceToInquiryResponse(clientId) {
         updatedAt: new Date().toISOString(),
       }
     })
-    saveClients(updated)
+    saveClient(updated.find(c => c.id === clientId))
   } catch { /* silent */ }
 }
 
@@ -668,7 +669,7 @@ export default function InquiryAssistant() {
           activityLog: [{ id: crypto.randomUUID(), timestamp: now, text: `${logDate()} Response logged from Inquiry Assistant.` }, ...(existing.activityLog || [])],
           updatedAt: now,
         }
-        saveClients(clients)
+        saveClient(clients[existingIdx])
       } else {
         const client = mkClient({
           name: clientName, email: clientEmail, phone: c.phone || '',
@@ -679,7 +680,7 @@ export default function InquiryAssistant() {
           communications: newComms,
           activityLog: [{ id: crypto.randomUUID(), timestamp: now, text: `${logDate()} Added from Inquiry Assistant.` }],
         })
-        saveClients([client, ...clients])
+        saveClient(client)
       }
 
       setSavedToCRM(true)

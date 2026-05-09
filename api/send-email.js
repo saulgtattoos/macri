@@ -1,4 +1,4 @@
-import { createTransport } from 'nodemailer'
+import { Resend } from 'resend'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,26 +11,21 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing required fields: to, subject, body' })
   }
 
-  const transporter = createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  })
+  const resend = new Resend(process.env.RESEND_API_KEY)
 
   try {
-    await transporter.sendMail({
-      from: `"Saul Gutierrez" <${process.env.GMAIL_USER}>`,
+    const { error } = await resend.emails.send({
+      from: 'Saul Gutierrez <onboarding@resend.dev>',
       to,
       subject,
       text: body,
-      replyTo: process.env.GMAIL_USER,
     })
+
+    if (error) throw new Error(error.message)
 
     return res.status(200).json({ success: true })
   } catch (err) {
-    console.error('Gmail send error:', err)
+    console.error('Resend error:', err)
     return res.status(500).json({ error: err.message })
   }
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { mkClient, mkComm, loadClients } from './CRM'
 import { saveClient } from '../lib/crmService'
 
@@ -210,6 +211,18 @@ async function callClaude(prompt) {
   }
 }
 
+// ─── phone helpers ────────────────────────────────────────────────────────────
+
+function isValidPhone(raw) {
+  const digits = raw.replace(/\D/g, '')
+  return digits.length === 10 || digits.length === 11
+}
+
+function normalizePhone(raw) {
+  const digits = raw.replace(/\D/g, '')
+  return digits.length === 11 ? `+${digits}` : `+1${digits}`
+}
+
 // ─── CRM activity helpers ─────────────────────────────────────────────────────
 
 function extractFirstName(emailText) {
@@ -244,7 +257,7 @@ function tickJourneyResponseSent(clientId) {
     const updated = clients.map(c => {
       if (c.id !== clientId) return c
       const checklist = [...(c.journeyChecklist || [false, false, false, false, false, false])]
-      if (checklist[1]) return c  // already ticked
+      if (checklist[1]) return c
       checklist[1] = true
       const logText = `${logDate()} Inquiry response sent.`
       const entry   = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), text: logText }
@@ -281,7 +294,7 @@ function logDate() {
   return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-// ─── draft persistence (localStorage — survives app-switch on iOS) ───────────
+// ─── draft persistence ────────────────────────────────────────────────────────
 
 const DRAFT_KEY = 'macri_inquiry_draft'
 
@@ -296,7 +309,7 @@ function clearSession() {
   try { localStorage.removeItem(DRAFT_KEY) } catch {}
 }
 
-// ─── clipboard (iOS Safari safe) ─────────────────────────────────────────────
+// ─── clipboard ────────────────────────────────────────────────────────────────
 
 async function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) {
@@ -454,7 +467,6 @@ function Toggle({ label, value, onChange }) {
 }
 
 function CountdownRing() {
-  // SVG: size=48, sw=4, r=22 — matches ring-deplete keyframe in index.css
   return (
     <svg
       width={48} height={48}
@@ -484,7 +496,6 @@ export default function InquiryAssistant() {
   const isMobile = useIsMobile()
   const navigate = useNavigate()
 
-  // Initialise from sessionStorage so state survives app-switches and refreshes
   const [showOutput,         setShowOutput]        = useState(() => loadSession().showOutput         ?? false)
   const [source,             setSource]            = useState(() => loadSession().source             ?? null)
   const [timing,             setTiming]            = useState(() => loadSession().timing             ?? null)
@@ -504,28 +515,41 @@ export default function InquiryAssistant() {
   const [editedText,         setEditedText]        = useState(() => loadSession().editedText         ?? '')
   const [sentAction,         setSentAction]        = useState(null)
 
+  // Twilio send state
+  const [recipientPhone,  setRecipientPhone]  = useState(() => loadSession().recipientPhone  ?? '')
+  const [smsSending,      setSmsSending]      = useState(false)
+  const [logSmsToCRM,     setLogSmsToCRM]     = useState(true)
+
   const pageRef    = useRef(null)
   const crmSaveRef = useRef(false)
 
   const showCustomPrice = CUSTOM_PRICE_MODELS.has(pricingModel)
   const canGenerate     = !!source && !!timing && !!contentType && !!pricingModel && inquiry.trim().length > 10
+  const canSendSms      = isValidPhone(recipientPhone) && editedText.trim().length > 0 && !smsSending
+
+  // Resolve phone number: CRM first, then inquiry output, then empty
+  useEffect(() => {
+    if (!output) return
+    const firstName = extractFirstName(editedEmail)
+    const crmClient = findCRMClient(firstName)
+    const resolved  = crmClient?.phone || output?.client?.phone || ''
+    setRecipientPhone(resolved)
+  }, [output])
 
   useEffect(() => {
     if (showOutput) document.querySelector('main')?.scrollTo({ top: 0 })
   }, [showOutput])
 
-  // Persist form + output to sessionStorage on every change
   useEffect(() => {
     saveSession({
       showOutput, source, timing, contentType, pricingModel, customPrice,
       includeConsultLink, isCoverup, inquiry, output,
-      activeTab, savedToCRM, editedEmail, editedText,
+      activeTab, savedToCRM, editedEmail, editedText, recipientPhone,
     })
   }, [showOutput, source, timing, contentType, pricingModel, customPrice,
       includeConsultLink, isCoverup, inquiry, output,
-      activeTab, savedToCRM, editedEmail, editedText])
+      activeTab, savedToCRM, editedEmail, editedText, recipientPhone])
 
-  // Sync editable state when output arrives
   useEffect(() => {
     if (output) {
       setEditedEmail(output.email || '')
@@ -569,6 +593,8 @@ export default function InquiryAssistant() {
     setEditedEmail('')
     setEditedText('')
     setSentAction(null)
+    setRecipientPhone('')
+    setLogSmsToCRM(true)
   }
 
   async function handleCopy(type) {
@@ -598,7 +624,6 @@ export default function InquiryAssistant() {
     const body      = encodeURIComponent(editedEmail)
 
     if (isMobile) {
-      // iOS Gmail app deep link
       window.location.href = `googlegmail:///co?to=${encodeURIComponent(toEmail)}&subject=${subject}&body=${body}`
     } else {
       window.open(`mailto:${encodeURIComponent(toEmail)}?subject=${subject}&body=${body}`)
@@ -616,10 +641,9 @@ export default function InquiryAssistant() {
   function handleOpenInMessages() {
     const firstName = extractFirstName(editedEmail)
     const crmClient = findCRMClient(firstName)
-    const phone     = crmClient?.phone || output?.client?.phone || ''
+    const phone     = recipientPhone || crmClient?.phone || output?.client?.phone || ''
     const body      = encodeURIComponent(editedText)
 
-    // Use <a> click instead of location.href — avoids iOS page-reload on return
     const a = document.createElement('a')
     a.href = `sms:${phone}?body=${body}`
     a.style.display = 'none'
@@ -634,6 +658,54 @@ export default function InquiryAssistant() {
     }
     setSentAction('messages')
     setTimeout(() => setSentAction(null), 2500)
+  }
+
+  // ─── Twilio send ────────────────────────────────────────────────────────────
+
+  async function handleSendViaTwilio() {
+    if (!canSendSms) return
+    setSmsSending(true)
+
+    try {
+      const res = await fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to:   normalizePhone(recipientPhone),
+          body: editedText,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Send failed (${res.status})`)
+      }
+
+      toast.success('Message sent')
+
+      // Log to CRM if checkbox is checked and a client exists
+      if (logSmsToCRM) {
+        const firstName = extractFirstName(editedEmail)
+        const crmClient = findCRMClient(firstName)
+        if (crmClient) {
+          const templateName = TIMINGS.find(t => t.id === timing)?.label ?? 'Inquiry'
+          logClientActivity(
+            crmClient.id,
+            `${logDate()} Text sent via MACRI (${templateName} template). SID: ${data.sid ?? 'unknown'}`
+          )
+          advanceToInquiryResponse(crmClient.id)
+          tickJourneyResponseSent(crmClient.id)
+        }
+      }
+
+      setSentAction('twilio')
+      setTimeout(() => setSentAction(null), 2500)
+    } catch (err) {
+      toast.error(err.message ?? 'Send failed')
+    } finally {
+      setSmsSending(false)
+    }
   }
 
   function handleSaveToCRM() {
@@ -690,14 +762,6 @@ export default function InquiryAssistant() {
       crmSaveRef.current = false
     }
   }
-
-  // Derived for desktop phone display in text tab
-  const resolvedPhone = (() => {
-    if (!output) return ''
-    const firstName = extractFirstName(editedEmail)
-    const crmClient = findCRMClient(firstName)
-    return crmClient?.phone || output?.client?.phone || ''
-  })()
 
   const outputTextareaBase = {
     width: '100%',
@@ -887,7 +951,6 @@ export default function InquiryAssistant() {
       {/* ── results ── */}
       {showOutput && output && (
         <div>
-          {import.meta.env.DEV && console.log('[MACRI save-to-crm]', { hasOutput: !!output, outputClientName: output?.client?.name, savedToCRM, crmSaveRef: crmSaveRef.current }) && false}
 
           {/* selections summary */}
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px' }}>
@@ -1027,18 +1090,76 @@ export default function InquiryAssistant() {
                     onBlur={e => e.target.style.borderColor = 'transparent'}
                   />
 
-                  {/* Desktop phone reference */}
-                  {!isMobile && resolvedPhone && (
+                  {/* Phone number field */}
+                  <div style={{ marginTop: '16px' }}>
                     <div style={{
-                      marginTop: '14px',
-                      fontFamily: 'var(--font-mono)', fontSize: '11px',
-                      color: 'var(--muted)', letterSpacing: '0.06em',
+                      fontFamily: 'var(--font-mono)', fontSize: '10px',
+                      letterSpacing: '0.1em', textTransform: 'uppercase',
+                      color: 'var(--muted)', marginBottom: '7px',
                     }}>
-                      {resolvedPhone}
+                      Recipient Phone
                     </div>
-                  )}
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      placeholder="(916) 555 0000"
+                      value={recipientPhone}
+                      onChange={e => setRecipientPhone(e.target.value)}
+                      style={{
+                        width: '100%',
+                        background: 'var(--surface2)',
+                        border: `1px solid ${isValidPhone(recipientPhone) ? 'rgba(201,169,110,0.35)' : 'var(--surface2)'}`,
+                        borderRadius: '7px',
+                        padding: '10px 14px',
+                        fontFamily: 'var(--font-mono)', fontSize: '14px',
+                        color: isValidPhone(recipientPhone) ? 'var(--text)' : 'var(--muted)',
+                        outline: 'none',
+                        transition: 'border-color 0.12s, color 0.12s',
+                        boxSizing: 'border-box',
+                        letterSpacing: '0.05em',
+                      }}
+                      onFocus={e => e.target.style.borderColor = 'var(--gold)'}
+                      onBlur={e => e.target.style.borderColor = isValidPhone(recipientPhone) ? 'rgba(201,169,110,0.35)' : 'var(--surface2)'}
+                    />
+                  </div>
 
-                  <div style={{ marginTop: !isMobile && resolvedPhone ? '8px' : '16px', display: 'flex', gap: '10px', flexWrap: 'wrap', position: 'relative', zIndex: 10 }}>
+                  {/* Action row */}
+                  <div style={{ marginTop: '14px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 10 }}>
+
+                    {/* Send via Twilio */}
+                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                      <button
+                        onClick={handleSendViaTwilio}
+                        disabled={!canSendSms}
+                        style={{
+                          ...actionBtnBase,
+                          background: sentAction === 'twilio'
+                            ? 'rgba(122,171,143,0.15)'
+                            : canSendSms
+                            ? 'var(--gold)'
+                            : 'var(--surface2)',
+                          border: `1px solid ${sentAction === 'twilio' ? '#7aab8f' : 'transparent'}`,
+                          color: sentAction === 'twilio'
+                            ? '#7aab8f'
+                            : canSendSms
+                            ? 'var(--bg)'
+                            : 'var(--muted)',
+                          fontWeight: 600,
+                          cursor: canSendSms ? 'pointer' : 'not-allowed',
+                          opacity: smsSending ? 0.7 : 1,
+                          minWidth: '120px',
+                        }}
+                      >
+                        {smsSending
+                          ? 'Sending…'
+                          : sentAction === 'twilio'
+                          ? '✓ Sent'
+                          : 'Send Text'}
+                      </button>
+                      {sentAction === 'twilio' && <CountdownRing />}
+                    </div>
+
+                    {/* Copy Text */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={() => handleCopy('text')}
@@ -1055,6 +1176,7 @@ export default function InquiryAssistant() {
                       {sentAction === 'copyText' && <CountdownRing />}
                     </div>
 
+                    {/* Open in Messages */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={handleOpenInMessages}
@@ -1071,6 +1193,7 @@ export default function InquiryAssistant() {
                       {sentAction === 'messages' && <CountdownRing />}
                     </div>
 
+                    {/* Save to CRM */}
                     <button
                       onClick={savedToCRM ? undefined : handleSaveToCRM}
                       style={{
@@ -1087,7 +1210,40 @@ export default function InquiryAssistant() {
                         ? `${output?.client?.name ? output.client.name.split(' ')[0] : 'Client'} added to CRM`
                         : 'Save to CRM'}
                     </button>
+
                   </div>
+
+                  {/* Log to CRM checkbox — only shows when a valid phone is entered */}
+                  {isValidPhone(recipientPhone) && (
+                    <div
+                      onClick={() => setLogSmsToCRM(v => !v)}
+                      style={{
+                        marginTop: '14px',
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        cursor: 'pointer', userSelect: 'none',
+                      }}
+                    >
+                      <div style={{
+                        width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                        border: `2px solid ${logSmsToCRM ? 'var(--gold)' : 'var(--surface2)'}`,
+                        background: logSmsToCRM ? 'var(--gold)' : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.12s',
+                      }}>
+                        {logSmsToCRM && (
+                          <span style={{ color: 'var(--bg)', fontSize: 10, fontWeight: 700, lineHeight: 1 }}>✓</span>
+                        )}
+                      </div>
+                      <span style={{
+                        fontFamily: 'var(--font-body)', fontSize: '12px',
+                        color: logSmsToCRM ? 'var(--text)' : 'var(--muted)',
+                        transition: 'color 0.12s',
+                      }}>
+                        Log to CRM after sending
+                      </span>
+                    </div>
+                  )}
+
                 </>
               )}
 

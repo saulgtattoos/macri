@@ -101,4 +101,3 @@ VITE_ELEVENLABS_KEY=your_elevenlabs_key
 Saul Gutierrez
 Private Studio | Elk Grove CA
 Specialties: Watercolor, Black and Gray, Black and Gray Portrait, Sketch Art, Abstract, Stippled Shading, Color Realism
-

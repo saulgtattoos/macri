@@ -211,7 +211,7 @@ async function callClaude(prompt) {
   }
 }
 
-// ─── phone helpers ────────────────────────────────────────────────────────────
+// ─── phone + email helpers ────────────────────────────────────────────────────
 
 function isValidPhone(raw) {
   const digits = raw.replace(/\D/g, '')
@@ -221,6 +221,10 @@ function isValidPhone(raw) {
 function normalizePhone(raw) {
   const digits = raw.replace(/\D/g, '')
   return digits.length === 11 ? `+${digits}` : `+1${digits}`
+}
+
+function isValidEmail(raw) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim())
 }
 
 // ─── CRM activity helpers ─────────────────────────────────────────────────────
@@ -496,29 +500,34 @@ export default function InquiryAssistant() {
   const isMobile = useIsMobile()
   const navigate = useNavigate()
 
-  const [showOutput,         setShowOutput]        = useState(() => loadSession().showOutput         ?? false)
-  const [source,             setSource]            = useState(() => loadSession().source             ?? null)
-  const [timing,             setTiming]            = useState(() => loadSession().timing             ?? null)
-  const [contentType,        setContentType]       = useState(() => loadSession().contentType        ?? null)
-  const [pricingModel,       setPricingModel]      = useState(() => loadSession().pricingModel       ?? null)
-  const [customPrice,        setCustomPrice]       = useState(() => loadSession().customPrice        ?? '')
+  const [showOutput,         setShowOutput]         = useState(() => loadSession().showOutput         ?? false)
+  const [source,             setSource]             = useState(() => loadSession().source             ?? null)
+  const [timing,             setTiming]             = useState(() => loadSession().timing             ?? null)
+  const [contentType,        setContentType]        = useState(() => loadSession().contentType        ?? null)
+  const [pricingModel,       setPricingModel]       = useState(() => loadSession().pricingModel       ?? null)
+  const [customPrice,        setCustomPrice]        = useState(() => loadSession().customPrice        ?? '')
   const [includeConsultLink, setIncludeConsultLink] = useState(() => loadSession().includeConsultLink ?? false)
-  const [isCoverup,          setIsCoverup]         = useState(() => loadSession().isCoverup          ?? false)
-  const [inquiry,            setInquiry]           = useState(() => loadSession().inquiry            ?? '')
-  const [loading,            setLoading]           = useState(false)
-  const [output,             setOutput]            = useState(() => loadSession().output             ?? null)
-  const [activeTab,          setActiveTab]         = useState(() => loadSession().activeTab          ?? 'email')
-  const [copied,             setCopied]            = useState(null)
-  const [error,              setError]             = useState(null)
-  const [savedToCRM,         setSavedToCRM]        = useState(() => loadSession().savedToCRM         ?? false)
-  const [editedEmail,        setEditedEmail]       = useState(() => loadSession().editedEmail        ?? '')
-  const [editedText,         setEditedText]        = useState(() => loadSession().editedText         ?? '')
-  const [sentAction,         setSentAction]        = useState(null)
+  const [isCoverup,          setIsCoverup]          = useState(() => loadSession().isCoverup          ?? false)
+  const [inquiry,            setInquiry]            = useState(() => loadSession().inquiry            ?? '')
+  const [loading,            setLoading]            = useState(false)
+  const [output,             setOutput]             = useState(() => loadSession().output             ?? null)
+  const [activeTab,          setActiveTab]          = useState(() => loadSession().activeTab          ?? 'email')
+  const [copied,             setCopied]             = useState(null)
+  const [error,              setError]              = useState(null)
+  const [savedToCRM,         setSavedToCRM]         = useState(() => loadSession().savedToCRM         ?? false)
+  const [editedEmail,        setEditedEmail]        = useState(() => loadSession().editedEmail        ?? '')
+  const [editedText,         setEditedText]         = useState(() => loadSession().editedText         ?? '')
+  const [sentAction,         setSentAction]         = useState(null)
 
-  // Twilio send state
-  const [recipientPhone,  setRecipientPhone]  = useState(() => loadSession().recipientPhone  ?? '')
-  const [smsSending,      setSmsSending]      = useState(false)
-  const [logSmsToCRM,     setLogSmsToCRM]     = useState(true)
+  // SMS send state
+  const [recipientPhone, setRecipientPhone] = useState(() => loadSession().recipientPhone ?? '')
+  const [smsSending,     setSmsSending]     = useState(false)
+  const [logSmsToCRM,    setLogSmsToCRM]    = useState(true)
+
+  // Email send state
+  const [recipientEmail, setRecipientEmail] = useState(() => loadSession().recipientEmail ?? '')
+  const [emailSending,   setEmailSending]   = useState(false)
+  const [logEmailToCRM,  setLogEmailToCRM]  = useState(true)
 
   const pageRef    = useRef(null)
   const crmSaveRef = useRef(false)
@@ -526,14 +535,17 @@ export default function InquiryAssistant() {
   const showCustomPrice = CUSTOM_PRICE_MODELS.has(pricingModel)
   const canGenerate     = !!source && !!timing && !!contentType && !!pricingModel && inquiry.trim().length > 10
   const canSendSms      = isValidPhone(recipientPhone) && editedText.trim().length > 0 && !smsSending
+  const canSendEmail    = isValidEmail(recipientEmail) && editedEmail.trim().length > 0 && !emailSending
 
-  // Resolve phone number: CRM first, then inquiry output, then empty
+  // Resolve phone + email: CRM first, then inquiry output, then empty
   useEffect(() => {
     if (!output) return
-    const firstName = extractFirstName(editedEmail)
-    const crmClient = findCRMClient(firstName)
-    const resolved  = crmClient?.phone || output?.client?.phone || ''
-    setRecipientPhone(resolved)
+    const firstName    = extractFirstName(editedEmail)
+    const crmClient    = findCRMClient(firstName)
+    const resolvedPhone = crmClient?.phone || output?.client?.phone || ''
+    const resolvedEmail = crmClient?.email || output?.client?.email || ''
+    setRecipientPhone(resolvedPhone)
+    setRecipientEmail(resolvedEmail)
   }, [output])
 
   useEffect(() => {
@@ -544,11 +556,13 @@ export default function InquiryAssistant() {
     saveSession({
       showOutput, source, timing, contentType, pricingModel, customPrice,
       includeConsultLink, isCoverup, inquiry, output,
-      activeTab, savedToCRM, editedEmail, editedText, recipientPhone,
+      activeTab, savedToCRM, editedEmail, editedText,
+      recipientPhone, recipientEmail,
     })
   }, [showOutput, source, timing, contentType, pricingModel, customPrice,
       includeConsultLink, isCoverup, inquiry, output,
-      activeTab, savedToCRM, editedEmail, editedText, recipientPhone])
+      activeTab, savedToCRM, editedEmail, editedText,
+      recipientPhone, recipientEmail])
 
   useEffect(() => {
     if (output) {
@@ -594,7 +608,9 @@ export default function InquiryAssistant() {
     setEditedText('')
     setSentAction(null)
     setRecipientPhone('')
+    setRecipientEmail('')
     setLogSmsToCRM(true)
+    setLogEmailToCRM(true)
   }
 
   async function handleCopy(type) {
@@ -660,7 +676,7 @@ export default function InquiryAssistant() {
     setTimeout(() => setSentAction(null), 2500)
   }
 
-  // ─── Twilio send ────────────────────────────────────────────────────────────
+  // ─── Twilio SMS send ────────────────────────────────────────────────────────
 
   async function handleSendViaTwilio() {
     if (!canSendSms) return
@@ -677,14 +693,10 @@ export default function InquiryAssistant() {
       })
 
       const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data?.error ?? `Send failed (${res.status})`)
-      }
+      if (!res.ok) throw new Error(data?.error ?? `Send failed (${res.status})`)
 
       toast.success('Message sent')
 
-      // Log to CRM if checkbox is checked and a client exists
       if (logSmsToCRM) {
         const firstName = extractFirstName(editedEmail)
         const crmClient = findCRMClient(firstName)
@@ -707,6 +719,55 @@ export default function InquiryAssistant() {
       setSmsSending(false)
     }
   }
+
+  // ─── Gmail (Nodemailer) send ────────────────────────────────────────────────
+
+  async function handleSendViaGmail() {
+    if (!canSendEmail) return
+    setEmailSending(true)
+
+    const clientName = output?.client?.name || ''
+    const firstName  = clientName.split(' ')[0] || extractFirstName(editedEmail) || 'Client'
+    const subject    = `Tattoo Inquiry: ${clientName || 'New Client'} | Saul Gutierrez`
+
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to:      recipientEmail.trim(),
+          subject,
+          body:    editedEmail,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? `Send failed (${res.status})`)
+
+      toast.success('Email sent')
+
+      if (logEmailToCRM) {
+        const crmClient = findCRMClient(firstName)
+        if (crmClient) {
+          logClientActivity(
+            crmClient.id,
+            `${logDate()} Email sent via MACRI. Subject: ${subject}`
+          )
+          advanceToInquiryResponse(crmClient.id)
+          tickJourneyResponseSent(crmClient.id)
+        }
+      }
+
+      setSentAction('emailSent')
+      setTimeout(() => setSentAction(null), 2500)
+    } catch (err) {
+      toast.error(err.message ?? 'Email send failed')
+    } finally {
+      setEmailSending(false)
+    }
+  }
+
+  // ─── Save to CRM ────────────────────────────────────────────────────────────
 
   function handleSaveToCRM() {
     if (savedToCRM || !output || crmSaveRef.current) return
@@ -763,6 +824,8 @@ export default function InquiryAssistant() {
     }
   }
 
+  // ─── styles ─────────────────────────────────────────────────────────────────
+
   const outputTextareaBase = {
     width: '100%',
     fontFamily: 'var(--font-body)',
@@ -789,6 +852,50 @@ export default function InquiryAssistant() {
     cursor: 'pointer', transition: 'all 0.15s',
     touchAction: 'manipulation',
   }
+
+  const recipientFieldStyle = (valid) => ({
+    width: '100%',
+    background: 'var(--surface2)',
+    border: `1px solid ${valid ? 'rgba(201,169,110,0.35)' : 'var(--surface2)'}`,
+    borderRadius: '7px',
+    padding: '10px 14px',
+    fontFamily: 'var(--font-mono)', fontSize: '14px',
+    color: valid ? 'var(--text)' : 'var(--muted)',
+    outline: 'none',
+    transition: 'border-color 0.12s, color 0.12s',
+    boxSizing: 'border-box',
+    letterSpacing: '0.04em',
+  })
+
+  const logCRMCheckbox = (checked, onToggle) => (
+    <div
+      onClick={onToggle}
+      style={{
+        marginTop: '14px',
+        display: 'flex', alignItems: 'center', gap: '10px',
+        cursor: 'pointer', userSelect: 'none',
+      }}
+    >
+      <div style={{
+        width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+        border: `2px solid ${checked ? 'var(--gold)' : 'var(--surface2)'}`,
+        background: checked ? 'var(--gold)' : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'all 0.12s',
+      }}>
+        {checked && <span style={{ color: 'var(--bg)', fontSize: 10, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+      </div>
+      <span style={{
+        fontFamily: 'var(--font-body)', fontSize: '12px',
+        color: checked ? 'var(--text)' : 'var(--muted)',
+        transition: 'color 0.12s',
+      }}>
+        Log to CRM after sending
+      </span>
+    </div>
+  )
+
+  // ─── render ──────────────────────────────────────────────────────────────────
 
   return (
     <div ref={pageRef} className="page-content" style={{ maxWidth: '680px', margin: '0 auto' }}>
@@ -975,6 +1082,7 @@ export default function InquiryAssistant() {
             borderRadius: '10px',
             position: 'relative',
           }}>
+
             {/* tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--surface2)', borderRadius: '10px 10px 0 0', overflow: 'hidden' }}>
               {['email', 'text'].map(tab => (
@@ -1015,7 +1123,7 @@ export default function InquiryAssistant() {
                     color: 'var(--text)', marginBottom: '16px',
                     padding: '8px 12px', background: 'var(--surface2)', borderRadius: '5px',
                   }}>
-                    {output.subject}
+                    {`Tattoo Inquiry: ${output?.client?.name || 'New Client'} | Saul Gutierrez`}
                   </div>
 
                   <textarea
@@ -1026,7 +1134,60 @@ export default function InquiryAssistant() {
                     onBlur={e => e.target.style.borderColor = 'transparent'}
                   />
 
-                  <div style={{ marginTop: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap', position: 'relative', zIndex: 10 }}>
+                  {/* Recipient Email field */}
+                  <div style={{ marginTop: '16px' }}>
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: '10px',
+                      letterSpacing: '0.1em', textTransform: 'uppercase',
+                      color: 'var(--muted)', marginBottom: '7px',
+                    }}>
+                      Recipient Email
+                    </div>
+                    <input
+                      type="email"
+                      inputMode="email"
+                      placeholder="client@email.com"
+                      value={recipientEmail}
+                      onChange={e => setRecipientEmail(e.target.value)}
+                      style={recipientFieldStyle(isValidEmail(recipientEmail))}
+                      onFocus={e => e.target.style.borderColor = 'var(--gold)'}
+                      onBlur={e => e.target.style.borderColor = isValidEmail(recipientEmail) ? 'rgba(201,169,110,0.35)' : 'var(--surface2)'}
+                    />
+                  </div>
+
+                  {/* Action row */}
+                  <div style={{ marginTop: '14px', display: 'flex', gap: '10px', flexWrap: 'wrap', position: 'relative', zIndex: 10 }}>
+
+                    {/* Send Email via Nodemailer */}
+                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                      <button
+                        onClick={handleSendViaGmail}
+                        disabled={!canSendEmail}
+                        style={{
+                          ...actionBtnBase,
+                          background: sentAction === 'emailSent'
+                            ? 'rgba(122,171,143,0.15)'
+                            : canSendEmail
+                            ? 'var(--gold)'
+                            : 'var(--surface2)',
+                          border: `1px solid ${sentAction === 'emailSent' ? '#7aab8f' : 'transparent'}`,
+                          color: sentAction === 'emailSent'
+                            ? '#7aab8f'
+                            : canSendEmail
+                            ? 'var(--bg)'
+                            : 'var(--muted)',
+                          fontWeight: 600,
+                          cursor: canSendEmail ? 'pointer' : 'not-allowed',
+                          opacity: emailSending ? 0.7 : 1,
+                          minWidth: '120px',
+                        }}
+                      >
+                        {emailSending ? 'Sending…' : sentAction === 'emailSent' ? '✓ Sent' : 'Send Email'}
+                      </button>
+                      {sentAction === 'emailSent' && <CountdownRing />}
+                    </div>
+
+                    {/* Copy Email */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={() => handleCopy('email')}
@@ -1035,7 +1196,6 @@ export default function InquiryAssistant() {
                           background: sentAction === 'copyEmail' ? 'rgba(122,171,143,0.15)' : 'var(--surface2)',
                           border: `1px solid ${sentAction === 'copyEmail' ? '#7aab8f' : 'transparent'}`,
                           color: sentAction === 'copyEmail' ? '#7aab8f' : 'var(--muted)',
-                          fontFamily: sentAction === 'copyEmail' ? 'var(--font-mono)' : 'var(--font-body)',
                         }}
                       >
                         {sentAction === 'copyEmail' ? '✓ Logged' : 'Copy Email'}
@@ -1043,6 +1203,7 @@ export default function InquiryAssistant() {
                       {sentAction === 'copyEmail' && <CountdownRing />}
                     </div>
 
+                    {/* Open in Gmail */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={handleOpenInGmail}
@@ -1051,7 +1212,6 @@ export default function InquiryAssistant() {
                           background: sentAction === 'gmail' ? 'rgba(122,171,143,0.15)' : 'var(--surface2)',
                           border: `1px solid ${sentAction === 'gmail' ? '#7aab8f' : 'transparent'}`,
                           color: sentAction === 'gmail' ? '#7aab8f' : 'var(--muted)',
-                          fontFamily: sentAction === 'gmail' ? 'var(--font-mono)' : 'var(--font-body)',
                         }}
                       >
                         {sentAction === 'gmail' ? '✓ Logged' : 'Open in Gmail'}
@@ -1059,6 +1219,7 @@ export default function InquiryAssistant() {
                       {sentAction === 'gmail' && <CountdownRing />}
                     </div>
 
+                    {/* Save to CRM */}
                     <button
                       onClick={savedToCRM ? undefined : handleSaveToCRM}
                       style={{
@@ -1076,6 +1237,9 @@ export default function InquiryAssistant() {
                         : 'Save to CRM'}
                     </button>
                   </div>
+
+                  {/* Log to CRM checkbox — shows when valid email entered */}
+                  {isValidEmail(recipientEmail) && logCRMCheckbox(logEmailToCRM, () => setLogEmailToCRM(v => !v))}
                 </>
               )}
 
@@ -1105,19 +1269,7 @@ export default function InquiryAssistant() {
                       placeholder="(916) 555 0000"
                       value={recipientPhone}
                       onChange={e => setRecipientPhone(e.target.value)}
-                      style={{
-                        width: '100%',
-                        background: 'var(--surface2)',
-                        border: `1px solid ${isValidPhone(recipientPhone) ? 'rgba(201,169,110,0.35)' : 'var(--surface2)'}`,
-                        borderRadius: '7px',
-                        padding: '10px 14px',
-                        fontFamily: 'var(--font-mono)', fontSize: '14px',
-                        color: isValidPhone(recipientPhone) ? 'var(--text)' : 'var(--muted)',
-                        outline: 'none',
-                        transition: 'border-color 0.12s, color 0.12s',
-                        boxSizing: 'border-box',
-                        letterSpacing: '0.05em',
-                      }}
+                      style={recipientFieldStyle(isValidPhone(recipientPhone))}
                       onFocus={e => e.target.style.borderColor = 'var(--gold)'}
                       onBlur={e => e.target.style.borderColor = isValidPhone(recipientPhone) ? 'rgba(201,169,110,0.35)' : 'var(--surface2)'}
                     />
@@ -1150,11 +1302,7 @@ export default function InquiryAssistant() {
                           minWidth: '120px',
                         }}
                       >
-                        {smsSending
-                          ? 'Sending…'
-                          : sentAction === 'twilio'
-                          ? '✓ Sent'
-                          : 'Send Text'}
+                        {smsSending ? 'Sending…' : sentAction === 'twilio' ? '✓ Sent' : 'Send Text'}
                       </button>
                       {sentAction === 'twilio' && <CountdownRing />}
                     </div>
@@ -1168,7 +1316,6 @@ export default function InquiryAssistant() {
                           background: sentAction === 'copyText' ? 'rgba(122,171,143,0.15)' : 'var(--surface2)',
                           border: `1px solid ${sentAction === 'copyText' ? '#7aab8f' : 'transparent'}`,
                           color: sentAction === 'copyText' ? '#7aab8f' : 'var(--muted)',
-                          fontFamily: sentAction === 'copyText' ? 'var(--font-mono)' : 'var(--font-body)',
                         }}
                       >
                         {sentAction === 'copyText' ? '✓ Logged' : 'Copy Text'}
@@ -1185,7 +1332,6 @@ export default function InquiryAssistant() {
                           background: sentAction === 'messages' ? 'rgba(122,171,143,0.15)' : 'var(--surface2)',
                           border: `1px solid ${sentAction === 'messages' ? '#7aab8f' : 'transparent'}`,
                           color: sentAction === 'messages' ? '#7aab8f' : 'var(--muted)',
-                          fontFamily: sentAction === 'messages' ? 'var(--font-mono)' : 'var(--font-body)',
                         }}
                       >
                         {sentAction === 'messages' ? '✓ Logged' : 'Open in Messages'}
@@ -1210,40 +1356,10 @@ export default function InquiryAssistant() {
                         ? `${output?.client?.name ? output.client.name.split(' ')[0] : 'Client'} added to CRM`
                         : 'Save to CRM'}
                     </button>
-
                   </div>
 
-                  {/* Log to CRM checkbox — only shows when a valid phone is entered */}
-                  {isValidPhone(recipientPhone) && (
-                    <div
-                      onClick={() => setLogSmsToCRM(v => !v)}
-                      style={{
-                        marginTop: '14px',
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        cursor: 'pointer', userSelect: 'none',
-                      }}
-                    >
-                      <div style={{
-                        width: 16, height: 16, borderRadius: 3, flexShrink: 0,
-                        border: `2px solid ${logSmsToCRM ? 'var(--gold)' : 'var(--surface2)'}`,
-                        background: logSmsToCRM ? 'var(--gold)' : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.12s',
-                      }}>
-                        {logSmsToCRM && (
-                          <span style={{ color: 'var(--bg)', fontSize: 10, fontWeight: 700, lineHeight: 1 }}>✓</span>
-                        )}
-                      </div>
-                      <span style={{
-                        fontFamily: 'var(--font-body)', fontSize: '12px',
-                        color: logSmsToCRM ? 'var(--text)' : 'var(--muted)',
-                        transition: 'color 0.12s',
-                      }}>
-                        Log to CRM after sending
-                      </span>
-                    </div>
-                  )}
-
+                  {/* Log to CRM checkbox — only shows when valid phone entered */}
+                  {isValidPhone(recipientPhone) && logCRMCheckbox(logSmsToCRM, () => setLogSmsToCRM(v => !v))}
                 </>
               )}
 

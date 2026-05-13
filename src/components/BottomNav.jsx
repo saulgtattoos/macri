@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
 const HomeIcon = () => (
@@ -63,6 +63,17 @@ export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false)
   const navigate = useNavigate()
 
+  useEffect(() => {
+    if (moreOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [moreOpen])
+
   function handleMoreItem(path) {
     setMoreOpen(false)
     navigate(path)
@@ -98,7 +109,6 @@ export default function BottomNav() {
           transition: 'bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
-        {/* Tappable close handle */}
         <div
           onClick={() => setMoreOpen(false)}
           style={{

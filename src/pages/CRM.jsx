@@ -15,7 +15,6 @@ import { CSS } from '@dnd-kit/utilities'
 export const STORAGE_KEY = 'macri_crm_clients'
 const SECTION_ORDER_KEY  = 'macri_drawer_section_order'
 
-// 10 unified pipeline stages — matches ProjectWall exactly
 export const STAGES = [
   'new_inquiry',
   'active_dialogue',
@@ -68,7 +67,6 @@ const AVATAR_PALETTE = [
   '#c9a96e', '#7aab8f', '#78aed4', '#a78bfa', '#f87171', '#34d399', '#fb923c',
 ]
 
-// Updated journey checklist — aligned with new 5-stage booking funnel
 const JOURNEY_LABELS = [
   'Inquiry received',
   'Initial response sent',
@@ -109,10 +107,11 @@ const TEMPLATES = {
   ],
 }
 
+// ─── studioAssistant added to movable sections ───────────────────────────────
 const MOVABLE_SECTIONS = [
   'clientStatus', 'projectDetails', 'pipelineStage',
   'journeyChecklist', 'aftercareChecklist', 'consultationLog', 'communications', 'activityNotes',
-  'paymentHistory',
+  'paymentHistory', 'studioAssistant',
 ]
 
 const SECTION_LABELS = {
@@ -125,6 +124,7 @@ const SECTION_LABELS = {
   communications:     'Communications',
   activityNotes:      'Activity and Notes',
   paymentHistory:     'Payment History',
+  studioAssistant:    'Studio Assistant',
 }
 
 const ALL_JUMP_SECTIONS = [
@@ -138,6 +138,7 @@ const ALL_JUMP_SECTIONS = [
   { id: 'communications',     label: 'Communications',            locked: false },
   { id: 'activityNotes',      label: 'Activity and Notes',        locked: false },
   { id: 'paymentHistory',     label: 'Payment History',           locked: false },
+  { id: 'studioAssistant',    label: 'Studio Assistant',          locked: false },
   { id: 'bottomActions',      label: 'Persistent Bottom Actions', locked: true },
 ]
 
@@ -243,26 +244,25 @@ function loadSectionOrder() {
   try {
     const stored = JSON.parse(localStorage.getItem(SECTION_ORDER_KEY))
     if (Array.isArray(stored)) {
-      if (!stored.includes('communications')) {
-        const idx = stored.indexOf('activityNotes')
-        const migrated = [...stored]
-        migrated.splice(idx >= 0 ? idx : stored.length, 0, 'communications')
-        if (migrated.length === MOVABLE_SECTIONS.length && migrated.every(id => MOVABLE_SECTIONS.includes(id))) {
-          saveSectionOrder(migrated)
-          return migrated
-        }
+      // Migration: add studioAssistant if missing
+      let migrated = [...stored]
+      if (!migrated.includes('studioAssistant')) {
+        migrated.push('studioAssistant')
       }
-      if (!stored.includes('paymentHistory')) {
-        const migrated = [...stored, 'paymentHistory']
-        if (migrated.length === MOVABLE_SECTIONS.length && migrated.every(id => MOVABLE_SECTIONS.includes(id))) {
-          saveSectionOrder(migrated)
-          return migrated
-        }
+      if (!migrated.includes('communications')) {
+        const idx = migrated.indexOf('activityNotes')
+        migrated.splice(idx >= 0 ? idx : migrated.length, 0, 'communications')
+      }
+      if (!migrated.includes('paymentHistory')) {
+        migrated.push('paymentHistory')
       }
       if (
-        stored.length === MOVABLE_SECTIONS.length &&
-        stored.every(id => MOVABLE_SECTIONS.includes(id))
-      ) return stored
+        migrated.length === MOVABLE_SECTIONS.length &&
+        migrated.every(id => MOVABLE_SECTIONS.includes(id))
+      ) {
+        saveSectionOrder(migrated)
+        return migrated
+      }
     }
   } catch {}
   return [...MOVABLE_SECTIONS]
@@ -318,7 +318,7 @@ function buildCSV(clients) {
 }
 
 function parseCSVText(raw) {
-  const src = raw.replace(/^﻿/, '')
+  const src = raw.replace(/^\uFEFF/, '')
   const rows = []
   let row = [], field = '', inQ = false
   for (let i = 0; i < src.length; i++) {
@@ -678,6 +678,50 @@ function TemplatePanel({ itemIndex, firstName, phone, isMobile, onMarkSent, onCl
   )
 }
 
+// ─── SpeakerButton ────────────────────────────────────────────────────────────
+// Sleek ElevenLabs playback button — wired to voice ID Q2Qd4P9qaDNuBFUcFCQr later
+
+function SpeakerButton({ active = false, onClick }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title="Play AI Summary"
+      style={{
+        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+        border: `1px solid ${active ? 'rgba(201,169,110,0.6)' : 'rgba(201,169,110,0.2)'}`,
+        background: active
+          ? 'rgba(201,169,110,0.15)'
+          : hovered
+          ? 'rgba(201,169,110,0.08)'
+          : 'rgba(201,169,110,0.04)',
+        cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'all 0.15s',
+        position: 'relative', overflow: 'hidden',
+      }}
+    >
+      {/* Waveform icon — three bars of varying height */}
+      <svg width="18" height="14" viewBox="0 0 18 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0"  y="4"  width="2.5" height="6"  rx="1.25" fill={active ? '#c9a96e' : 'rgba(201,169,110,0.55)'} />
+        <rect x="4"  y="1"  width="2.5" height="12" rx="1.25" fill={active ? '#c9a96e' : 'rgba(201,169,110,0.55)'} />
+        <rect x="8"  y="0"  width="2.5" height="14" rx="1.25" fill={active ? '#c9a96e' : 'rgba(201,169,110,0.55)'} />
+        <rect x="12" y="2"  width="2.5" height="10" rx="1.25" fill={active ? '#c9a96e' : 'rgba(201,169,110,0.55)'} />
+        <rect x="16" y="5"  width="2"   height="4"  rx="1"    fill={active ? '#c9a96e' : 'rgba(201,169,110,0.55)'} />
+      </svg>
+      {active && (
+        <span style={{
+          position: 'absolute', inset: 0, borderRadius: 10,
+          background: 'radial-gradient(circle, rgba(201,169,110,0.12) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+      )}
+    </button>
+  )
+}
+
 // ─── ClientDrawer ─────────────────────────────────────────────────────────────
 
 function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection }) {
@@ -703,6 +747,10 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   const [editingCommBody,      setEditingCommBody]      = useState('')
   const [deleteCommTarget,     setDeleteCommTarget]     = useState(null)
   const [drawerToast,          setDrawerToast]          = useState(null)
+
+  // Studio Assistant state
+  const [speakerActive,        setSpeakerActive]        = useState(false)
+  const [conciergeCopied,      setConciergeCopied]      = useState(false)
 
   const consultRef    = useRef(null)
   const sectionRefs   = useRef({})
@@ -731,6 +779,8 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       setEditingCommBody('')
       setDeleteCommTarget(null)
       setSectionOrder(loadSectionOrder())
+      setSpeakerActive(false)
+      setConciergeCopied(false)
     }
   }, [isOpen])
 
@@ -896,8 +946,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
 
   function addCommEntry() {
     if (!commForm.body.trim()) return
-
-    // Duplicate prevention — block if same channel and body within 10 seconds
     const comms = client.communications || []
     const isDuplicate = comms.some(c =>
       c.channel === commForm.channel &&
@@ -908,7 +956,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       showDrawerToast('Duplicate entry blocked')
       return
     }
-
     const entry = mkComm({
       channel: commForm.channel,
       subject: commForm.channel === 'Email' ? commForm.subject.trim() : '',
@@ -932,8 +979,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       ),
       updatedAt: new Date().toISOString(),
     })
-
-    // Persist to Supabase in background
     supabase
       .from('crm_clients_v1')
       .update({ communications: (client.communications || []).map(c =>
@@ -943,17 +988,14 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       .then(({ error }) => {
         if (error) console.error('[MACRI] saveCommEdit error:', error.message)
       })
-
     setEditingCommId(null)
     setEditingCommBody('')
     showDrawerToast('Entry updated')
   }
 
   function deleteCommEntry(commId) {
-    // Optimistic UI — remove instantly from local state
     const original = client.communications || []
     const filtered = original.filter(c => c.id !== commId)
-
     onUpdate({
       ...client,
       communications: filtered,
@@ -961,8 +1003,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
     })
     setDeleteCommTarget(null)
     showDrawerToast('Entry removed')
-
-    // Background Supabase delete
     supabase
       .from('crm_clients_v1')
       .update({ communications: filtered })
@@ -970,7 +1010,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       .then(({ error }) => {
         if (error) {
           console.error('[MACRI] deleteCommEntry error:', error.message)
-          // Restore entry if Supabase fails
           onUpdate({
             ...client,
             communications: original,
@@ -1121,8 +1160,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         return (
           <>
             <DragHeader label="Pipeline Stage" />
-
-            {/* Deposit toggle — shown for tattoo_scheduled and in_progress */}
             {(client.stage === 'tattoo_scheduled' || client.stage === 'in_progress') && (
               <div
                 onClick={toggleDeposit}
@@ -1135,7 +1172,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                   transition: 'all 0.15s',
                 }}
               >
-                {/* Toggle pill */}
                 <div style={{
                   width: 36, height: 20, borderRadius: 99, flexShrink: 0,
                   background: depositPaid ? '#7aab8f' : '#3a3a37',
@@ -1165,8 +1201,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 </div>
               </div>
             )}
-
-            {/* Stage selector */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {STAGES.map(stage => {
                 const active = client.stage === stage
@@ -1301,7 +1335,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         return (
           <div ref={consultRef}>
             <DragHeader label="Consultation Log" badge={client.consultationCount || 0} />
-
             {!addConsultOpen && (
               <button
                 onClick={() => setAddConsultOpen(true)}
@@ -1315,7 +1348,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 Add Consultation
               </button>
             )}
-
             {addConsultOpen && (
               <div style={{
                 background: 'rgba(201,169,110,0.04)',
@@ -1402,7 +1434,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 </div>
               </div>
             )}
-
             {consults.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {consults.map(c => (
@@ -1457,13 +1488,11 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         return (
           <>
             <DragHeader label="Communications" badge={commEntries.length} mono />
-
             {commEntries.length === 0 && !commLogOpen && (
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--muted)', padding: '8px 0 12px' }}>
                 No messages logged yet.
               </div>
             )}
-
             {commEntries.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
                 {commEntries.map(entry => {
@@ -1476,8 +1505,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
 
                   return (
                     <div key={entry.id} style={{ background: 'var(--surface2)', borderRadius: 10, overflow: 'hidden' }}>
-
-                      {/* Header row */}
                       <div
                         onClick={() => setExpandedComms(p => ({ ...p, [entry.id]: !p[entry.id] }))}
                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', minHeight: 44, flexWrap: 'wrap' }}
@@ -1519,8 +1546,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                         }}>
                           {formatTs(entry.timestamp)}
                         </span>
-
-                        {/* Pencil edit icon */}
                         <button
                           onClick={e => {
                             e.stopPropagation()
@@ -1540,8 +1565,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                         >
                           ✎
                         </button>
-
-                        {/* Trash delete icon */}
                         <button
                           onClick={e => {
                             e.stopPropagation()
@@ -1559,7 +1582,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                         >
                           🗑
                         </button>
-
                         {isDraft && (
                           <button
                             onClick={e => { e.stopPropagation(); markCommSent(entry.id) }}
@@ -1573,13 +1595,10 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                             Mark Sent
                           </button>
                         )}
-
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', flexShrink: 0 }}>
                           {expanded ? '▲' : '▼'}
                         </span>
                       </div>
-
-                      {/* Delete confirmation tooltip */}
                       {isPendingDelete && (
                         <div style={{
                           background: 'rgba(240,149,149,0.08)',
@@ -1618,8 +1637,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                           </div>
                         </div>
                       )}
-
-                      {/* Expanded body */}
                       {expanded && (
                         <div style={{
                           background: 'var(--bg)', borderRadius: 8,
@@ -1687,7 +1704,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 })}
               </div>
             )}
-
             {!commLogOpen ? (
               <button
                 onClick={() => setCommLogOpen(true)}
@@ -1841,7 +1857,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 </button>
               </div>
             </div>
-
             {activity.length === 0 ? (
               <div style={{
                 fontFamily: 'var(--font-body)', fontSize: 13,
@@ -1871,7 +1886,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         return (
           <>
             <DragHeader label="Payment History" badge={sessions.length || null} mono />
-
             <button
               onClick={() => setLogSessionOpen(true)}
               style={{
@@ -1887,13 +1901,11 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
             >
               + Log Session
             </button>
-
             {sessions.length === 0 && (
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--muted)', padding: '8px 0 4px' }}>
                 No sessions logged yet.
               </div>
             )}
-
             {sessions.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {sessions.map(s => {
@@ -1944,7 +1956,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                           {expanded ? '▲' : '▼'}
                         </span>
                       </div>
-
                       {expanded && (
                         <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 10 }}>
@@ -1980,9 +1991,9 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                             <button
                               onClick={e => {
                                 e.stopPropagation()
-                                const firstName = (client.name || 'Client').split(' ')[0]
+                                const fn = (client.name || 'Client').split(' ')[0]
                                 const params = new URLSearchParams({
-                                  name: firstName,
+                                  name: fn,
                                   style: s.tattooDescription || '',
                                   placement: s.placement || '',
                                   date: s.date || '',
@@ -2020,6 +2031,379 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 })}
               </div>
             )}
+          </>
+        )
+      }
+
+      // ─── Studio Assistant Operations ─────────────────────────────────────────
+      case 'studioAssistant': {
+        const conciergeMessage = client.agentConciergeMessage || ''
+        const intakeSummary    = client.agentIntakeSummary    || ''
+        const callLog          = client.agentCallLog          || []
+
+        return (
+          <>
+            {/* Section header */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: '10px',
+                  letterSpacing: '0.14em', textTransform: 'uppercase',
+                  color: 'var(--gold)', fontWeight: 700,
+                }}>
+                  Studio Assistant Operations
+                </span>
+                <div style={{
+                  flex: 1, height: 1,
+                  background: 'linear-gradient(to right, rgba(201,169,110,0.3), transparent)',
+                }} />
+              </div>
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: '10px',
+                color: 'var(--muted)', letterSpacing: '0.06em',
+              }}>
+                AI agent outputs for this client
+              </div>
+            </div>
+
+            {/* ── Panel 1: Intake Coordinator ────────────────────────────── */}
+            <div style={{
+              background: 'var(--bg)',
+              border: '1px solid rgba(201,169,110,0.18)',
+              borderRadius: 12,
+              marginBottom: 12,
+              overflow: 'hidden',
+            }}>
+              {/* Panel header */}
+              <div style={{
+                padding: '11px 16px',
+                borderBottom: '1px solid rgba(201,169,110,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: intakeSummary ? '#7aab8f' : 'rgba(201,169,110,0.35)',
+                    boxShadow: intakeSummary ? '0 0 6px rgba(122,171,143,0.6)' : 'none',
+                    flexShrink: 0,
+                  }} />
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '10px',
+                    letterSpacing: '0.12em', textTransform: 'uppercase',
+                    color: 'var(--gold)', fontWeight: 700,
+                  }}>
+                    Intake Coordinator
+                  </span>
+                </div>
+                <SpeakerButton
+                  active={speakerActive}
+                  onClick={() => setSpeakerActive(p => !p)}
+                />
+              </div>
+
+              {/* Panel body */}
+              <div style={{ padding: '14px 16px' }}>
+                {intakeSummary ? (
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 13,
+                    color: 'var(--text)', lineHeight: 1.7,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  }}>
+                    {intakeSummary}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* Skeleton lines — placeholder for future agent output */}
+                    {[100, 85, 92, 60].map((w, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          height: 11, borderRadius: 6,
+                          width: `${w}%`,
+                          background: 'rgba(201,169,110,0.07)',
+                        }}
+                      />
+                    ))}
+                    <div style={{
+                      marginTop: 6,
+                      fontFamily: 'var(--font-mono)', fontSize: '10px',
+                      color: 'rgba(122,120,111,0.5)', letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                    }}>
+                      Awaiting agent summary
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Panel 2: The Concierge ─────────────────────────────────── */}
+            <div style={{
+              background: 'var(--bg)',
+              border: '1px solid rgba(201,169,110,0.18)',
+              borderRadius: 12,
+              marginBottom: 12,
+              overflow: 'hidden',
+            }}>
+              {/* Panel header */}
+              <div style={{
+                padding: '11px 16px',
+                borderBottom: '1px solid rgba(201,169,110,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: conciergeMessage ? '#7aab8f' : 'rgba(201,169,110,0.35)',
+                    boxShadow: conciergeMessage ? '0 0 6px rgba(122,171,143,0.6)' : 'none',
+                    flexShrink: 0,
+                  }} />
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '10px',
+                    letterSpacing: '0.12em', textTransform: 'uppercase',
+                    color: 'var(--gold)', fontWeight: 700,
+                  }}>
+                    The Concierge
+                  </span>
+                </div>
+                {/* Stage context badge */}
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: '9px',
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: STAGE_COLORS[client.stage]?.color ?? 'var(--muted)',
+                  background: (STAGE_COLORS[client.stage]?.bg ?? 'rgba(122,120,111,0.12)'),
+                  border: `1px solid ${STAGE_COLORS[client.stage]?.color ?? 'transparent'}22`,
+                  borderRadius: 4, padding: '2px 7px',
+                }}>
+                  {STAGE_LABELS[client.stage] ?? client.stage}
+                </span>
+              </div>
+
+              {/* Draft area */}
+              <div style={{ padding: '14px 16px' }}>
+                {conciergeMessage ? (
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 13,
+                    color: 'var(--text)', lineHeight: 1.7,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    marginBottom: 14,
+                  }}>
+                    {conciergeMessage}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                    {[100, 78, 88, 55, 70].map((w, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          height: 11, borderRadius: 6,
+                          width: `${w}%`,
+                          background: 'rgba(201,169,110,0.07)',
+                        }}
+                      />
+                    ))}
+                    <div style={{
+                      marginTop: 6,
+                      fontFamily: 'var(--font-mono)', fontSize: '10px',
+                      color: 'rgba(122,120,111,0.5)', letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                    }}>
+                      Awaiting personalized draft
+                    </div>
+                  </div>
+                )}
+
+                {/* Approve and Copy button */}
+                <button
+                  onClick={() => {
+                    if (!conciergeMessage) return
+                    navigator.clipboard.writeText(conciergeMessage).then(() => {
+                      setConciergeCopied(true)
+                      setTimeout(() => setConciergeCopied(false), 2200)
+                    })
+                  }}
+                  style={{
+                    width: '100%', minHeight: 44, borderRadius: 9,
+                    border: `1px solid ${conciergeCopied ? 'rgba(122,171,143,0.5)' : 'rgba(201,169,110,0.3)'}`,
+                    background: conciergeCopied
+                      ? 'rgba(122,171,143,0.1)'
+                      : conciergeMessage
+                      ? 'rgba(201,169,110,0.08)'
+                      : 'rgba(201,169,110,0.03)',
+                    fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
+                    color: conciergeCopied
+                      ? '#7aab8f'
+                      : conciergeMessage
+                      ? 'var(--gold)'
+                      : 'rgba(201,169,110,0.3)',
+                    cursor: conciergeMessage ? 'pointer' : 'default',
+                    transition: 'all 0.2s',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  {conciergeCopied ? (
+                    <>
+                      <span style={{ fontSize: 15 }}>✓</span>
+                      Copied to Clipboard
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 14, opacity: conciergeMessage ? 1 : 0.4 }}>⎘</span>
+                      Approve and Copy Message
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* ── Panel 3: Voice Agent Call Log ──────────────────────────── */}
+            <div style={{
+              background: 'var(--bg)',
+              border: '1px solid rgba(201,169,110,0.18)',
+              borderRadius: 12,
+              overflow: 'hidden',
+            }}>
+              {/* Panel header */}
+              <div style={{
+                padding: '11px 16px',
+                borderBottom: '1px solid rgba(201,169,110,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: callLog.length > 0 ? '#7aab8f' : 'rgba(201,169,110,0.35)',
+                    boxShadow: callLog.length > 0 ? '0 0 6px rgba(122,171,143,0.6)' : 'none',
+                    flexShrink: 0,
+                  }} />
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '10px',
+                    letterSpacing: '0.12em', textTransform: 'uppercase',
+                    color: 'var(--gold)', fontWeight: 700,
+                  }}>
+                    Voice Agent Call Log
+                  </span>
+                </div>
+                {callLog.length > 0 && (
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '10px',
+                    color: 'var(--gold)',
+                    background: 'rgba(201,169,110,0.1)',
+                    border: '1px solid rgba(201,169,110,0.2)',
+                    borderRadius: 4, padding: '1px 7px',
+                  }}>
+                    {callLog.length}
+                  </span>
+                )}
+              </div>
+
+              {/* Scrollable call feed */}
+              <div style={{
+                maxHeight: 200, overflowY: 'auto',
+                padding: callLog.length === 0 ? '14px 16px' : '8px 0',
+              }}>
+                {callLog.length === 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Placeholder call entries */}
+                    {[
+                      { duration: '4:32', label: 'Intro call — booking intent confirmed' },
+                      { duration: '2:14', label: 'Follow up — deposit question' },
+                    ].map((item, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          padding: '10px 16px',
+                          borderBottom: i === 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                          opacity: 0.28,
+                          display: 'flex', alignItems: 'flex-start', gap: 12,
+                        }}
+                      >
+                        <div style={{
+                          width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+                          background: 'rgba(201,169,110,0.08)',
+                          border: '1px solid rgba(201,169,110,0.12)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M2 2C2 2 3 5 6 6C9 7 10 10 10 10" stroke="rgba(201,169,110,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
+                          </svg>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontFamily: 'var(--font-body)', fontSize: 12,
+                            color: 'var(--text)', lineHeight: 1.4,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {item.label}
+                          </div>
+                          <div style={{
+                            fontFamily: 'var(--font-mono)', fontSize: 10,
+                            color: 'var(--muted)', marginTop: 3,
+                          }}>
+                            {item.duration}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{
+                      padding: '4px 16px 12px',
+                      fontFamily: 'var(--font-mono)', fontSize: '10px',
+                      color: 'rgba(122,120,111,0.4)', letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                    }}>
+                      No calls logged yet
+                    </div>
+                  </div>
+                ) : (
+                  callLog.map((call, i) => (
+                    <div
+                      key={call.id || i}
+                      style={{
+                        padding: '10px 16px',
+                        borderBottom: i < callLog.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                        display: 'flex', alignItems: 'flex-start', gap: 12,
+                      }}
+                    >
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+                        background: 'rgba(122,171,143,0.1)',
+                        border: '1px solid rgba(122,171,143,0.2)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                          <path d="M2 2C2 2 3 5 6 6C9 7 10 10 10 10" stroke="#7aab8f" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {call.summary && (
+                          <div style={{
+                            fontFamily: 'var(--font-body)', fontSize: 12,
+                            color: 'var(--text)', lineHeight: 1.5, marginBottom: 3,
+                          }}>
+                            {call.summary}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {call.timestamp && (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)' }}>
+                              {formatTs(call.timestamp)}
+                            </span>
+                          )}
+                          {call.duration && (
+                            <span style={{
+                              fontFamily: 'var(--font-mono)', fontSize: 10,
+                              color: 'var(--gold)', opacity: 0.7,
+                            }}>
+                              {call.duration}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </>
         )
       }

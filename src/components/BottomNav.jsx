@@ -93,40 +93,62 @@ export default function BottomNav() {
           background: 'var(--surface)',
           borderTop: '1px solid var(--surface2)',
           borderRadius: '16px 16px 0 0',
-          padding: '20px 0 32px',
           maxHeight: '70vh',
           overflowY: 'auto',
           transition: 'bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
-        <div style={{
-          width: '36px',
-          height: '4px',
-          background: 'var(--surface2)',
-          borderRadius: '2px',
-          margin: '0 auto 20px',
-        }} />
-        {MORE_ITEMS.map(({ label, path }) => (
-          <button
-            key={path}
-            onClick={() => handleMoreItem(path)}
-            style={{
-              display: 'block',
-              width: '100%',
-              padding: '14px 28px',
-              background: 'transparent',
-              border: 'none',
-              textAlign: 'left',
-              fontFamily: 'var(--font-body)',
-              fontSize: '15px',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              letterSpacing: '0.01em',
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        {/* Tappable close handle */}
+        <div
+          onClick={() => setMoreOpen(false)}
+          style={{
+            padding: '16px 0 8px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+          }}
+        >
+          <div style={{
+            width: '36px',
+            height: '4px',
+            background: 'var(--muted)',
+            borderRadius: '2px',
+          }} />
+          <span style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '10px',
+            color: 'var(--muted)',
+            letterSpacing: '0.04em',
+          }}>
+            tap to close
+          </span>
+        </div>
+
+        <div style={{ padding: '8px 0 32px' }}>
+          {MORE_ITEMS.map(({ label, path }) => (
+            <button
+              key={path}
+              onClick={() => handleMoreItem(path)}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '14px 28px',
+                background: 'transparent',
+                border: 'none',
+                textAlign: 'left',
+                fontFamily: 'var(--font-body)',
+                fontSize: '15px',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                letterSpacing: '0.01em',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="bottom-nav-bar">

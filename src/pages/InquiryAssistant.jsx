@@ -124,7 +124,7 @@ function buildPrompt({ source, timing, contentType, pricingModel, customPrice, i
   const textTemplate = TEXT_TEMPLATES[timing] ?? TEXT_TEMPLATES.recent
 
   const lines = [
-    'You are composing a client response on behalf of Saul Gutierrez, a tattoo artist based in Elk Grove, CA with a private studio. Saul specializes in Watercolor, Black and Gray Realism, Sketch Art, Abstract, and Stippled/Pointillism tattoos. His standard rate is $250/hr.',
+    'You are composing a client response on behalf of Saul Gutierrez, a tattoo artist based in Elk Grove, CA with a private studio. Saul specializes in Watercolor, Black and Gray Realism, Sketch Art, Abstract, and Stippled/Pointillism tattoos. His standard rate is $250/hr. STRICT RULES: Never use hyphens, dashes, or em dashes anywhere in your output. Use commas, periods, or line breaks instead. The pipe character | is only allowed in the signature line.',
     '',
     'Context for this response:',
     `- CHANNEL: Client reached out via ${sourceLabel}`,

@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
 
 const HomeIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -31,52 +32,173 @@ const ProjectsIcon = () => (
   </svg>
 )
 
-const SettingsIcon = () => (
+const MoreIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/>
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+    <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>
   </svg>
 )
 
 const NAV_ITEMS = [
-  { label: 'Home',     path: '/',        icon: <HomeIcon />,     end: true },
-  { label: 'Inquiry',  path: '/inquiry', icon: <InquiryIcon /> },
-  { label: 'CRM',      path: '/crm',     icon: <CRMIcon /> },
+  { label: 'Home',     path: '/',         icon: <HomeIcon />,     end: true },
+  { label: 'Inquiry',  path: '/inquiry',  icon: <InquiryIcon /> },
+  { label: 'CRM',      path: '/crm',      icon: <CRMIcon /> },
   { label: 'Projects', path: '/projects', icon: <ProjectsIcon /> },
-  { label: 'Settings', path: '/settings', icon: <SettingsIcon /> },
+]
+
+const MORE_ITEMS = [
+  { label: 'Consultation',   path: '/consultation' },
+  { label: 'Session Prep',   path: '/session-prep' },
+  { label: 'Finances',       path: '/finances' },
+  { label: 'Supplies',       path: '/supplies' },
+  { label: 'Color Lab',      path: '/colorlab' },
+  { label: 'Content Studio', path: '/contentstudio' },
+  { label: 'Agent Queue',    path: '/agents' },
+  { label: 'Dev Queue',      path: '/dev-queue' },
+  { label: 'Settings',       path: '/settings' },
 ]
 
 export default function BottomNav() {
+  const [moreOpen, setMoreOpen] = useState(false)
+  const navigate = useNavigate()
+
+  function handleMoreItem(path) {
+    setMoreOpen(false)
+    navigate(path)
+  }
+
   return (
-    <div className="bottom-nav-bar">
-      {NAV_ITEMS.map(({ label, path, icon, end }) => (
-        <NavLink
-          key={path}
-          to={path}
-          end={end}
-          style={({ isActive }) => ({
+    <>
+      {moreOpen && (
+        <div
+          onClick={() => setMoreOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99,
+            background: 'rgba(0,0,0,0.5)',
+          }}
+        />
+      )}
+
+      <div
+        style={{
+          position: 'fixed',
+          bottom: moreOpen ? 0 : '-100%',
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          background: 'var(--surface)',
+          borderTop: '1px solid var(--surface2)',
+          borderRadius: '16px 16px 0 0',
+          padding: '20px 0 32px',
+          transition: 'bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+      >
+        <div style={{
+          width: '36px',
+          height: '4px',
+          background: 'var(--surface2)',
+          borderRadius: '2px',
+          margin: '0 auto 20px',
+        }} />
+        {MORE_ITEMS.map(({ label, path }) => (
+          <button
+            key={path}
+            onClick={() => handleMoreItem(path)}
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: '14px 28px',
+              background: 'transparent',
+              border: 'none',
+              textAlign: 'left',
+              fontFamily: 'var(--font-body)',
+              fontSize: '15px',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              letterSpacing: '0.01em',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bottom-nav-bar">
+        {NAV_ITEMS.map(({ label, path, icon, end }) => (
+          <NavLink
+            key={path}
+            to={path}
+            end={end}
+            style={({ isActive }) => ({
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              flex: 1,
+              textDecoration: 'none',
+              color: isActive ? 'var(--gold)' : 'var(--muted)',
+              paddingBottom: '2px',
+              position: 'relative',
+              transition: 'color 0.15s',
+            })}
+          >
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <span style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: '20%',
+                    right: '20%',
+                    height: '2px',
+                    background: 'var(--gold)',
+                    borderRadius: '0 0 2px 2px',
+                  }} />
+                )}
+                {icon}
+                <span style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '9px',
+                  letterSpacing: '0.04em',
+                }}>
+                  {label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
+
+        <button
+          onClick={() => setMoreOpen(v => !v)}
+          style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '3px',
+            gap: '4px',
             flex: 1,
-            textDecoration: 'none',
-            color: isActive ? 'var(--gold)' : 'var(--muted)',
+            background: 'transparent',
+            border: 'none',
+            color: moreOpen ? 'var(--gold)' : 'var(--muted)',
+            cursor: 'pointer',
             paddingBottom: '2px',
             transition: 'color 0.15s',
-          })}
+          }}
         >
-          {icon}
+          <MoreIcon />
           <span style={{
             fontFamily: 'var(--font-body)',
             fontSize: '9px',
             letterSpacing: '0.04em',
           }}>
-            {label}
+            More
           </span>
-        </NavLink>
-      ))}
-    </div>
+        </button>
+      </div>
+    </>
   )
 }

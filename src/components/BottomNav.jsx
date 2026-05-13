@@ -78,6 +78,7 @@ export default function BottomNav() {
             inset: 0,
             zIndex: 99,
             background: 'rgba(0,0,0,0.5)',
+            touchAction: 'none',
           }}
         />
       )}
@@ -88,11 +89,13 @@ export default function BottomNav() {
           bottom: moreOpen ? 0 : '-100%',
           left: 0,
           right: 0,
-          zIndex: 100,
+          zIndex: 101,
           background: 'var(--surface)',
           borderTop: '1px solid var(--surface2)',
           borderRadius: '16px 16px 0 0',
           padding: '20px 0 32px',
+          maxHeight: '70vh',
+          overflowY: 'auto',
           transition: 'bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >

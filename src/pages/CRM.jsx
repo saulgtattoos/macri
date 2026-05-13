@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { useOutletContext, useLocation } from 'react-router-dom'
-import { STAGES } from '../constants/stages'
 import supabase from '../lib/supabase'
 import { loadClients as loadClientsDB, saveClient, deleteClient, seedFromLocalStorage } from '../lib/crmService'
 import {
@@ -11,21 +10,52 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-// ─── constants ────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 export const STORAGE_KEY = 'macri_crm_clients'
-const SECTION_ORDER_KEY = 'macri_drawer_section_order'
+const SECTION_ORDER_KEY  = 'macri_drawer_section_order'
 
+// 10 unified pipeline stages — matches ProjectWall exactly
+export const STAGES = [
+  'new_inquiry',
+  'active_dialogue',
+  'awaiting_response',
+  'consultation_scheduled',
+  'consultation_completed',
+  'tattoo_scheduled',
+  'in_progress',
+  'healed',
+  'void',
+  'archived',
+  'on_hold',
+]
 
-const STAGE_STYLE = {
-  'Inquiry':          { bg: 'rgba(91,141,184,0.18)',  color: '#78aed4' },
-  'Inquiry Response': { bg: 'rgba(100,160,210,0.18)', color: '#64b4e0' },
-  'Consultation':     { bg: 'rgba(201,169,110,0.18)', color: '#c9a96e' },
-  'Design Phase':     { bg: 'rgba(167,139,250,0.18)', color: '#a78bfa' },
-  'Approval':         { bg: 'rgba(251,146,60,0.18)',  color: '#fb923c' },
-  'Scheduled':        { bg: 'rgba(52,211,153,0.15)',  color: '#34d399' },
-  'Completed':        { bg: 'rgba(122,171,143,0.2)',  color: '#7aab8f' },
-  'Archive':          { bg: 'rgba(122,120,111,0.18)', color: '#7a786f' },
+const STAGE_LABELS = {
+  new_inquiry:             'New Inquiry',
+  active_dialogue:         'Active Dialogue',
+  awaiting_response:       'Awaiting Response',
+  consultation_scheduled:  'Consult Scheduled',
+  consultation_completed:  'Consult Completed',
+  tattoo_scheduled:        'Tattoo Scheduled',
+  in_progress:             'In Progress',
+  healed:                  'Healed',
+  void:                    'Void',
+  archived:                'Archived',
+  on_hold:                 'On Hold',
+}
+
+const STAGE_COLORS = {
+  new_inquiry:             { bg: 'rgba(55,138,221,0.15)',  color: '#378ADD' },
+  active_dialogue:         { bg: 'rgba(196,147,74,0.15)',  color: '#C4934A' },
+  awaiting_response:       { bg: 'rgba(212,135,74,0.15)',  color: '#D4874A' },
+  consultation_scheduled:  { bg: 'rgba(29,158,117,0.15)', color: '#1D9E75' },
+  consultation_completed:  { bg: 'rgba(122,171,143,0.15)',color: '#7AAB8F' },
+  tattoo_scheduled:        { bg: 'rgba(139,111,212,0.15)',color: '#8B6FD4' },
+  in_progress:             { bg: 'rgba(85,196,122,0.15)', color: '#55C47A' },
+  healed:                  { bg: 'rgba(122,171,143,0.15)',color: '#7AAB8F' },
+  void:                    { bg: 'rgba(240,149,149,0.15)',color: '#F09595' },
+  archived:                { bg: 'rgba(122,120,111,0.15)',color: '#7A786F' },
+  on_hold:                 { bg: 'rgba(122,120,111,0.15)',color: '#7A786F' },
 }
 
 const STATUS_CONFIG = {
@@ -38,13 +68,17 @@ const AVATAR_PALETTE = [
   '#c9a96e', '#7aab8f', '#78aed4', '#a78bfa', '#f87171', '#34d399', '#fb923c',
 ]
 
+// Updated journey checklist — aligned with new 5-stage booking funnel
 const JOURNEY_LABELS = [
   'Inquiry received',
-  'Inquiry response sent',
+  'Initial response sent',
+  'Active dialogue started',
+  'Consultation scheduled',
   'Consultation completed',
-  'Deposit paid',
-  'Appointment scheduled',
+  'Deposit received',
+  'Tattoo appointment scheduled',
   'Tattoo completed',
+  'Healed photo received',
 ]
 
 const AFTERCARE_LABELS = [
@@ -93,14 +127,13 @@ const SECTION_LABELS = {
   paymentHistory:     'Payment History',
 }
 
-// 10 sections for the card back jump menu
 const ALL_JUMP_SECTIONS = [
   { id: 'header',             label: 'Header',                    locked: true },
   { id: 'clientStatus',       label: 'Client Status',             locked: false },
   { id: 'projectDetails',     label: 'Project Details',           locked: false },
   { id: 'pipelineStage',      label: 'Pipeline Stage',            locked: false },
   { id: 'journeyChecklist',   label: 'Journey Checklist',         locked: false },
-  { id: 'aftercareChecklist', label: 'Client Care',       locked: false },
+  { id: 'aftercareChecklist', label: 'Client Care',               locked: false },
   { id: 'consultationLog',    label: 'Consultation Log',          locked: false },
   { id: 'communications',     label: 'Communications',            locked: false },
   { id: 'activityNotes',      label: 'Activity and Notes',        locked: false },
@@ -108,7 +141,7 @@ const ALL_JUMP_SECTIONS = [
   { id: 'bottomActions',      label: 'Persistent Bottom Actions', locked: true },
 ]
 
-// ─── utils ────────────────────────────────────────────────────────────────────
+// ─── Utils ────────────────────────────────────────────────────────────────────
 
 export function mkClient(data = {}) {
   const now = new Date().toISOString()
@@ -116,8 +149,10 @@ export function mkClient(data = {}) {
     id: crypto.randomUUID(),
     name: '', email: '', phone: '', instagram: '',
     tattooIdea: '', style: '', placement: '', size: '', nextAction: '',
-    stage: 'Inquiry', status: null,
-    journeyChecklist:   [false, false, false, false, false, false],
+    stage: 'new_inquiry', projectStage: 'new_inquiry', status: null,
+    depositStatus: '',
+    depositReceived: false,
+    journeyChecklist:   Array(JOURNEY_LABELS.length).fill(false),
     aftercareChecklist: [false, false, false, false, false],
     consultations:  [],
     activityLog:    [],
@@ -237,7 +272,7 @@ function saveSectionOrder(order) {
   localStorage.setItem(SECTION_ORDER_KEY, JSON.stringify(order))
 }
 
-// ─── CSV helpers ──────────────────────────────────────────────────────────────
+// ─── CSV Helpers ──────────────────────────────────────────────────────────────
 
 const CSV_HEADERS = [
   'Date', 'Client Name', 'Phone', 'Email', 'Tattoo Description', 'Placement',
@@ -256,7 +291,7 @@ function csvEsc(val) {
 function buildCSV(clients) {
   const lines = [CSV_HEADERS.join(',')]
   for (const c of clients) {
-    const archived = c.stage === 'Archive' ? 'true' : 'false'
+    const archived = c.stage === 'archived' ? 'true' : 'false'
     const profileCells = [
       '', c.name, c.phone || '', c.email || '',
       '', '', '', '', '', '', '', '', '', '', '', '', '', '',
@@ -310,7 +345,7 @@ function parseCSVText(raw) {
   return rows
 }
 
-// ─── hooks ────────────────────────────────────────────────────────────────────
+// ─── Hooks ────────────────────────────────────────────────────────────────────
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth < 768)
@@ -322,7 +357,7 @@ function useIsMobile() {
   return mobile
 }
 
-// ─── small components ─────────────────────────────────────────────────────────
+// ─── Small Components ─────────────────────────────────────────────────────────
 
 function Avatar({ name, size = 52 }) {
   const color   = avatarColor(name)
@@ -341,7 +376,7 @@ function Avatar({ name, size = 52 }) {
 }
 
 function StageBadge({ stage }) {
-  const s = STAGE_STYLE[stage] ?? STAGE_STYLE['Inquiry']
+  const s = STAGE_COLORS[stage] ?? STAGE_COLORS['new_inquiry']
   return (
     <span style={{
       display: 'inline-block', padding: '3px 8px', borderRadius: '4px',
@@ -349,7 +384,7 @@ function StageBadge({ stage }) {
       fontFamily: 'var(--font-mono)', fontSize: '10px',
       letterSpacing: '0.06em', fontWeight: 500, whiteSpace: 'nowrap',
     }}>
-      {stage}
+      {STAGE_LABELS[stage] ?? stage}
     </span>
   )
 }
@@ -435,34 +470,6 @@ function SortableSection({ id, isEditMode, children }) {
   )
 }
 
-function DetailRow({ label, value }) {
-  if (!value) return null
-  return (
-    <div style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>
-        {label}
-      </span>
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 500, color: '#7a786f', wordBreak: 'break-word' }}>
-        {value}
-      </span>
-    </div>
-  )
-}
-
-function btn(variant) {
-  const base = {
-    border: 'none', borderRadius: '6px', cursor: 'pointer',
-    fontFamily: 'var(--font-body)', fontWeight: 500,
-    transition: 'opacity 0.15s',
-  }
-  if (variant === 'primary') return { ...base, background: 'var(--gold)', color: 'var(--bg)', fontSize: '13px', padding: '10px 20px', fontWeight: 600 }
-  if (variant === 'ghost')   return { ...base, background: 'var(--surface2)', color: 'var(--muted)', fontSize: '12px', padding: '7px 12px', border: '1px solid transparent' }
-  if (variant === 'danger')  return { ...base, background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '12px', padding: '7px 12px', border: '1px solid rgba(239,68,68,0.2)' }
-  if (variant === 'confirm') return { ...base, background: 'rgba(239,68,68,0.25)', color: '#ff6b6b', fontSize: '12px', padding: '7px 12px', border: '1px solid rgba(239,68,68,0.4)', fontWeight: 600 }
-}
-
-// ─── InlineField ──────────────────────────────────────────────────────────────
-
 function InlineField({ label, value, onSave, linkHref }) {
   const [editing, setEditing] = useState(false)
   const [local,   setLocal]   = useState(value || '')
@@ -502,10 +509,7 @@ function InlineField({ label, value, onSave, linkHref }) {
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32 }}>
           {value && linkHref ? (
-            <a
-              href={linkHref}
-              style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 500, color: '#7a786f', textDecoration: 'none' }}
-            >
+            <a href={linkHref} style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 500, color: '#7a786f', textDecoration: 'none' }}>
               {value}
             </a>
           ) : (
@@ -691,13 +695,14 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   const [logSessionOpen,       setLogSessionOpen]       = useState(false)
   const [expandedSessions,     setExpandedSessions]     = useState({})
   const [deleteSessionTarget,  setDeleteSessionTarget]  = useState(null)
-  const [confirmDelete,  setConfirmDelete]  = useState(false)
-  const [deleteFading,   setDeleteFading]   = useState(false)
-  const [sectionOrder,   setSectionOrder]   = useState(loadSectionOrder)
-  const [layoutEditMode, setLayoutEditMode] = useState(false)
-  const [editingCommId,   setEditingCommId]   = useState(null)
-  const [editingCommBody, setEditingCommBody] = useState('')
-  const [drawerToast,     setDrawerToast]     = useState(null)
+  const [confirmDelete,        setConfirmDelete]        = useState(false)
+  const [deleteFading,         setDeleteFading]         = useState(false)
+  const [sectionOrder,         setSectionOrder]         = useState(loadSectionOrder)
+  const [layoutEditMode,       setLayoutEditMode]       = useState(false)
+  const [editingCommId,        setEditingCommId]        = useState(null)
+  const [editingCommBody,      setEditingCommBody]      = useState('')
+  const [deleteCommTarget,     setDeleteCommTarget]     = useState(null)
+  const [drawerToast,          setDrawerToast]          = useState(null)
 
   const consultRef    = useRef(null)
   const sectionRefs   = useRef({})
@@ -724,6 +729,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       setLayoutEditMode(false)
       setEditingCommId(null)
       setEditingCommBody('')
+      setDeleteCommTarget(null)
       setSectionOrder(loadSectionOrder())
     }
   }, [isOpen])
@@ -732,7 +738,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
     setConsultForm({ date: today(), duration: '', notes: '' })
   }, [client?.id])
 
-  // Jump to section when drawer opens
   useEffect(() => {
     if (!isOpen || !jumpSection) return
     const timer = setTimeout(() => {
@@ -753,7 +758,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   if (!client) return null
 
   const firstName = client.name?.split(' ')[0] || 'Client'
-  const journey   = client.journeyChecklist   || [false, false, false, false, false, false]
+  const journey   = client.journeyChecklist   || Array(JOURNEY_LABELS.length).fill(false)
   const aftercare = client.aftercareChecklist || [false, false, false, false, false]
   const consults  = client.consultations      || []
   const activity  = client.activityLog        || []
@@ -772,7 +777,25 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   }
 
   function changeStage(stage) {
-    push({ ...client, stage }, `Stage updated to ${stage}`)
+    const now = new Date().toISOString()
+    const updates = { stage, projectStage: stage }
+    if (stage === 'awaiting_response') {
+      updates.lastContactedAt = now
+    }
+    push({ ...client, ...updates }, `Stage updated to ${STAGE_LABELS[stage] ?? stage}`)
+  }
+
+  function toggleDeposit() {
+    const current = client.depositStatus === 'Paid' || client.depositReceived === true
+    const next = !current
+    push(
+      {
+        ...client,
+        depositStatus:   next ? 'Paid' : '',
+        depositReceived: next,
+      },
+      next ? 'Deposit marked as received' : 'Deposit marked as unpaid'
+    )
   }
 
   function changeStatus(status) {
@@ -813,7 +836,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   }
 
   function saveConsultation() {
-    const isCompleted = client.stage === 'Completed'
+    const isCompleted = client.stage === 'healed'
     const newConsult  = {
       id: crypto.randomUUID(),
       date: consultForm.date,
@@ -827,7 +850,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       consultationCount: (client.consultationCount || 0) + 1,
     }
     if (isCompleted) {
-      updated.journeyChecklist   = [false, false, false, false, false, false]
+      updated.journeyChecklist   = Array(JOURNEY_LABELS.length).fill(false)
       updated.aftercareChecklist = [false, false, false, false, false]
       updated.consultationCount  = 1
     }
@@ -873,12 +896,25 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
 
   function addCommEntry() {
     if (!commForm.body.trim()) return
+
+    // Duplicate prevention — block if same channel and body within 10 seconds
+    const comms = client.communications || []
+    const isDuplicate = comms.some(c =>
+      c.channel === commForm.channel &&
+      c.body.trim() === commForm.body.trim() &&
+      Math.abs(new Date(c.timestamp) - new Date()) < 10000
+    )
+    if (isDuplicate) {
+      showDrawerToast('Duplicate entry blocked')
+      return
+    }
+
     const entry = mkComm({
       channel: commForm.channel,
       subject: commForm.channel === 'Email' ? commForm.subject.trim() : '',
       body: commForm.body.trim(),
     })
-    push({ ...client, communications: [entry, ...(client.communications || [])] })
+    push({ ...client, communications: [entry, ...comms] })
     setCommForm({ channel: 'Text Message', subject: '', body: '' })
     setCommLogOpen(false)
   }
@@ -896,9 +932,53 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       ),
       updatedAt: new Date().toISOString(),
     })
+
+    // Persist to Supabase in background
+    supabase
+      .from('crm_clients_v1')
+      .update({ communications: (client.communications || []).map(c =>
+        c.id === commId ? { ...c, body: editingCommBody } : c
+      )})
+      .eq('id', client.id)
+      .then(({ error }) => {
+        if (error) console.error('[MACRI] saveCommEdit error:', error.message)
+      })
+
     setEditingCommId(null)
     setEditingCommBody('')
-    showDrawerToast('Draft saved')
+    showDrawerToast('Entry updated')
+  }
+
+  function deleteCommEntry(commId) {
+    // Optimistic UI — remove instantly from local state
+    const original = client.communications || []
+    const filtered = original.filter(c => c.id !== commId)
+
+    onUpdate({
+      ...client,
+      communications: filtered,
+      updatedAt: new Date().toISOString(),
+    })
+    setDeleteCommTarget(null)
+    showDrawerToast('Entry removed')
+
+    // Background Supabase delete
+    supabase
+      .from('crm_clients_v1')
+      .update({ communications: filtered })
+      .eq('id', client.id)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[MACRI] deleteCommEntry error:', error.message)
+          // Restore entry if Supabase fails
+          onUpdate({
+            ...client,
+            communications: original,
+            updatedAt: new Date().toISOString(),
+          })
+          showDrawerToast('Could not remove entry')
+        }
+      })
   }
 
   function markCommSent(commId) {
@@ -930,11 +1010,11 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   }
 
   function handleArchive() {
-    changeStage('Archive')
+    changeStage('archived')
   }
 
   function handleUnarchive() {
-    changeStage('Inquiry')
+    changeStage('new_inquiry')
   }
 
   function handleDelete() {
@@ -949,8 +1029,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       setTimeout(() => setConfirmDelete(false), 3500)
     }
   }
-
-  // ─── Layout edit ─────────────────────────────────────────────────────────
 
   function handleDragEnd({ active, over }) {
     if (over && active.id !== over.id) {
@@ -967,7 +1045,9 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
     setLayoutEditMode(false)
   }
 
-  // ─── Section renderers ────────────────────────────────────────────────────
+  const depositPaid = client.depositStatus === 'Paid' || client.depositReceived === true
+
+  // ─── Section Renderers ────────────────────────────────────────────────────
 
   function renderSectionContent(sectionId) {
     switch (sectionId) {
@@ -1022,34 +1102,16 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
           <>
             <DragHeader label="Project Details" />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px 20px' }}>
-              <InlineField
-                label="Phone"
-                value={client.phone}
-                onSave={v => saveField('phone', v)}
-                linkHref={client.phone ? `tel:${client.phone}` : null}
-              />
-              <InlineField
-                label="Email"
-                value={client.email}
-                onSave={v => saveField('email', v)}
-                linkHref={client.email ? `mailto:${client.email}` : null}
-              />
+              <InlineField label="Phone" value={client.phone} onSave={v => saveField('phone', v)} linkHref={client.phone ? `tel:${client.phone}` : null} />
+              <InlineField label="Email" value={client.email} onSave={v => saveField('email', v)} linkHref={client.email ? `mailto:${client.email}` : null} />
               <div style={{ gridColumn: '1 / -1' }}>
-                <InlineField
-                  label="Tattoo Idea"
-                  value={client.tattooIdea}
-                  onSave={v => saveField('tattooIdea', v)}
-                />
+                <InlineField label="Tattoo Idea" value={client.tattooIdea} onSave={v => saveField('tattooIdea', v)} />
               </div>
               <InlineField label="Style"     value={client.style}     onSave={v => saveField('style', v)} />
               <InlineField label="Placement" value={client.placement} onSave={v => saveField('placement', v)} />
               <InlineField label="Size"      value={client.size}      onSave={v => saveField('size', v)} />
               <div style={{ gridColumn: '1 / -1' }}>
-                <InlineField
-                  label="Next Action"
-                  value={client.nextAction}
-                  onSave={v => saveField('nextAction', v)}
-                />
+                <InlineField label="Next Action" value={client.nextAction} onSave={v => saveField('nextAction', v)} />
               </div>
             </div>
           </>
@@ -1059,27 +1121,77 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         return (
           <>
             <DragHeader label="Pipeline Stage" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+            {/* Deposit toggle — shown for tattoo_scheduled and in_progress */}
+            {(client.stage === 'tattoo_scheduled' || client.stage === 'in_progress') && (
+              <div
+                onClick={toggleDeposit}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 16px', borderRadius: 10, cursor: 'pointer',
+                  marginBottom: 16,
+                  background: depositPaid ? 'rgba(122,171,143,0.08)' : 'rgba(122,120,111,0.06)',
+                  border: `1px solid ${depositPaid ? 'rgba(122,171,143,0.3)' : 'rgba(122,120,111,0.2)'}`,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {/* Toggle pill */}
+                <div style={{
+                  width: 36, height: 20, borderRadius: 99, flexShrink: 0,
+                  background: depositPaid ? '#7aab8f' : '#3a3a37',
+                  position: 'relative', transition: 'background 0.2s',
+                }}>
+                  <div style={{
+                    position: 'absolute', top: 3,
+                    left: depositPaid ? 18 : 3,
+                    width: 14, height: 14, borderRadius: 99,
+                    background: '#0e0e0d', transition: 'left 0.2s',
+                  }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                    letterSpacing: '0.08em', textTransform: 'uppercase',
+                    color: depositPaid ? '#7aab8f' : 'var(--muted)',
+                  }}>
+                    {depositPaid ? '$ Deposit Received' : 'Deposit Pending'}
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 12,
+                    color: 'var(--muted)', marginTop: 2,
+                  }}>
+                    {depositPaid ? 'Tap to mark as unpaid' : 'Tap to mark as received'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Stage selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {STAGES.map(stage => {
                 const active = client.stage === stage
+                const sc     = STAGE_COLORS[stage] ?? STAGE_COLORS['new_inquiry']
                 return (
                   <button
                     key={stage}
                     onClick={() => changeStage(stage)}
                     style={{
-                      background: active ? 'rgba(201,169,110,0.08)' : 'transparent',
-                      border: `1px solid ${active ? 'var(--gold)' : 'var(--surface2)'}`,
-                      borderRadius: 8, padding: '13px 16px',
-                      fontFamily: 'var(--font-body)', fontSize: 14,
-                      color: active ? 'var(--gold)' : 'var(--text)',
-                      cursor: 'pointer', textAlign: 'left', minHeight: 48,
+                      background: active ? `${sc.color}14` : 'transparent',
+                      border: `1px solid ${active ? sc.color : 'var(--surface2)'}`,
+                      borderRadius: 8, padding: '11px 16px',
+                      fontFamily: 'var(--font-body)', fontSize: 13,
+                      color: active ? sc.color : 'var(--text)',
+                      cursor: 'pointer', textAlign: 'left', minHeight: 44,
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span>{stage}</span>
+                    <span>{STAGE_LABELS[stage]}</span>
                     {active && (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--gold)', letterSpacing: '0.1em' }}>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 10,
+                        color: sc.color, letterSpacing: '0.1em',
+                      }}>
                         Active
                       </span>
                     )}
@@ -1195,8 +1307,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 onClick={() => setAddConsultOpen(true)}
                 style={{
                   width: '100%', minHeight: 44, borderRadius: 8,
-                  background: 'transparent',
-                  border: '1px solid var(--gold)',
+                  background: 'transparent', border: '1px solid var(--gold)',
                   fontFamily: 'var(--font-body)', fontSize: 13,
                   color: 'var(--gold)', cursor: 'pointer', marginBottom: 14,
                 }}
@@ -1361,8 +1472,12 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                   const isDraft   = isEmail && entry.editable === true
                   const isSent    = isEmail && entry.editable === false
                   const isEditing = editingCommId === entry.id
+                  const isPendingDelete = deleteCommTarget === entry.id
+
                   return (
                     <div key={entry.id} style={{ background: 'var(--surface2)', borderRadius: 10, overflow: 'hidden' }}>
+
+                      {/* Header row */}
                       <div
                         onClick={() => setExpandedComms(p => ({ ...p, [entry.id]: !p[entry.id] }))}
                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', minHeight: 44, flexWrap: 'wrap' }}
@@ -1404,41 +1519,107 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                         }}>
                           {formatTs(entry.timestamp)}
                         </span>
+
+                        {/* Pencil edit icon */}
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            setEditingCommId(entry.id)
+                            setEditingCommBody(entry.body)
+                            setExpandedComms(p => ({ ...p, [entry.id]: true }))
+                          }}
+                          title="Edit entry"
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: 'var(--muted)', fontSize: 13, padding: '4px 6px',
+                            opacity: 0.5, flexShrink: 0, lineHeight: 1,
+                            transition: 'opacity 0.15s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+                        >
+                          ✎
+                        </button>
+
+                        {/* Trash delete icon */}
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            setDeleteCommTarget(entry.id)
+                          }}
+                          title="Delete entry"
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: '#f09595', fontSize: 13, padding: '4px 6px',
+                            opacity: 0.4, flexShrink: 0, lineHeight: 1,
+                            transition: 'opacity 0.15s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
+                        >
+                          🗑
+                        </button>
+
                         {isDraft && (
-                          <>
-                            <button
-                              onClick={e => {
-                                e.stopPropagation()
-                                setEditingCommId(entry.id)
-                                setEditingCommBody(entry.body)
-                                setExpandedComms(p => ({ ...p, [entry.id]: true }))
-                              }}
-                              style={{
-                                background: 'rgba(201,169,110,0.1)', border: '1px solid rgba(201,169,110,0.3)',
-                                borderRadius: 6, padding: '3px 9px', flexShrink: 0,
-                                fontFamily: 'var(--font-mono)', fontSize: 10,
-                                color: '#c9a96e', cursor: 'pointer',
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={e => { e.stopPropagation(); markCommSent(entry.id) }}
-                              style={{
-                                background: 'rgba(122,171,143,0.1)', border: '1px solid rgba(122,171,143,0.3)',
-                                borderRadius: 6, padding: '3px 9px', flexShrink: 0,
-                                fontFamily: 'var(--font-mono)', fontSize: 10,
-                                color: '#7aab8f', cursor: 'pointer',
-                              }}
-                            >
-                              Mark as Sent
-                            </button>
-                          </>
+                          <button
+                            onClick={e => { e.stopPropagation(); markCommSent(entry.id) }}
+                            style={{
+                              background: 'rgba(122,171,143,0.1)', border: '1px solid rgba(122,171,143,0.3)',
+                              borderRadius: 6, padding: '3px 9px', flexShrink: 0,
+                              fontFamily: 'var(--font-mono)', fontSize: 10,
+                              color: '#7aab8f', cursor: 'pointer',
+                            }}
+                          >
+                            Mark Sent
+                          </button>
                         )}
+
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', flexShrink: 0 }}>
                           {expanded ? '▲' : '▼'}
                         </span>
                       </div>
+
+                      {/* Delete confirmation tooltip */}
+                      {isPendingDelete && (
+                        <div style={{
+                          background: 'rgba(240,149,149,0.08)',
+                          border: '1px solid rgba(240,149,149,0.25)',
+                          borderRadius: 8, margin: '0 12px 10px',
+                          padding: '10px 14px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                        }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#f09595' }}>
+                            Remove this entry?
+                          </span>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              onClick={() => setDeleteCommTarget(null)}
+                              style={{
+                                background: 'var(--surface2)', border: 'none',
+                                borderRadius: 6, padding: '5px 10px',
+                                fontFamily: 'var(--font-mono)', fontSize: 10,
+                                color: 'var(--muted)', cursor: 'pointer',
+                              }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => deleteCommEntry(entry.id)}
+                              style={{
+                                background: 'rgba(240,149,149,0.15)',
+                                border: '1px solid rgba(240,149,149,0.4)',
+                                borderRadius: 6, padding: '5px 10px',
+                                fontFamily: 'var(--font-mono)', fontSize: 10,
+                                color: '#f09595', cursor: 'pointer', fontWeight: 700,
+                              }}
+                            >
+                              Yes, delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Expanded body */}
                       {expanded && (
                         <div style={{
                           background: 'var(--bg)', borderRadius: 8,
@@ -1486,7 +1667,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                                     fontSize: 13, fontWeight: 600, color: 'var(--bg)', cursor: 'pointer',
                                   }}
                                 >
-                                  Save Draft
+                                  Save
                                 </button>
                               </div>
                             </>
@@ -1611,7 +1792,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         return (
           <>
             <DragHeader label="Activity and Notes" />
-
             <div style={{ marginBottom: 16 }}>
               <textarea
                 value={noteInput}
@@ -1696,8 +1876,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
               onClick={() => setLogSessionOpen(true)}
               style={{
                 width: '100%', minHeight: 44, borderRadius: 8,
-                background: 'transparent',
-                border: '1px solid var(--gold)',
+                background: 'transparent', border: '1px solid var(--gold)',
                 fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
                 color: 'var(--gold)', cursor: 'pointer',
                 marginBottom: sessions.length ? 16 : 0,
@@ -1710,10 +1889,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
             </button>
 
             {sessions.length === 0 && (
-              <div style={{
-                fontFamily: 'var(--font-body)', fontSize: 13,
-                color: 'var(--muted)', padding: '8px 0 4px',
-              }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--muted)', padding: '8px 0 4px' }}>
                 No sessions logged yet.
               </div>
             )}
@@ -1726,21 +1902,13 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                   const tip  = fmt$(s.tip)
                   return (
                     <div key={s.id} style={{ background: 'var(--surface2)', borderRadius: 10, overflow: 'hidden' }}>
-
-                      {/* Collapsed header row */}
                       <div
                         onClick={() => setExpandedSessions(p => ({ ...p, [s.id]: !p[s.id] }))}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '10px 14px', cursor: 'pointer', minHeight: 44,
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', minHeight: 44 }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <span style={{
-                              fontFamily: 'var(--font-mono)', fontSize: 11,
-                              color: 'var(--muted)', whiteSpace: 'nowrap',
-                            }}>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
                               {formatDate(s.date)}
                             </span>
                             {s.isTouchUp && (
@@ -1757,8 +1925,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                           </div>
                           <div style={{
                             fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)',
-                            marginTop: 2,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}>
                             {s.tattooDescription || '—'}
                           </div>
@@ -1769,10 +1936,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                               {paid}{tip ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}> +{tip}</span> : null}
                             </span>
                           )}
-                          <span style={{
-                            fontFamily: 'var(--font-mono)', fontSize: 10,
-                            color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
-                          }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             {s.paymentMethod}
                           </span>
                         </div>
@@ -1781,23 +1945,22 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                         </span>
                       </div>
 
-                      {/* Expanded details */}
                       {expanded && (
                         <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 10 }}>
                             {[
-                              s.placement       && ['Placement',        s.placement],
-                              fmt$(s.tattooPrice)  && ['Tattoo Price',     fmt$(s.tattooPrice)],
-                              fmt$(s.deposit)      && ['Deposit',          fmt$(s.deposit)],
-                              fmt$(s.depositRefund)&& ['Deposit Refund',   fmt$(s.depositRefund)],
-                              fmt$(s.amountPaid)   && ['Amount Paid',      fmt$(s.amountPaid)],
-                              fmt$(s.tip)          && ['Tip',              fmt$(s.tip)],
-                              s.paymentMethod   && ['Payment Method',   s.paymentMethod],
+                              s.placement        && ['Placement',        s.placement],
+                              fmt$(s.tattooPrice)   && ['Tattoo Price',     fmt$(s.tattooPrice)],
+                              fmt$(s.deposit)       && ['Deposit',          fmt$(s.deposit)],
+                              fmt$(s.depositRefund) && ['Deposit Refund',   fmt$(s.depositRefund)],
+                              fmt$(s.amountPaid)    && ['Amount Paid',      fmt$(s.amountPaid)],
+                              fmt$(s.tip)           && ['Tip',              fmt$(s.tip)],
+                              s.paymentMethod    && ['Payment Method',   s.paymentMethod],
                               (s.paymentMethod === 'Gift Card' && s.giftCardCode) && ['Gift Card Code', s.giftCardCode],
-                              s.discountCode    && ['Discount Code',    s.discountCode],
-                              s.discountApplied && ['Discount Applied', s.discountApplied],
-                              fmt$(s.originalPrice) && ['Original Price', fmt$(s.originalPrice)],
-                              s.notes           && ['Notes',            s.notes],
+                              s.discountCode     && ['Discount Code',    s.discountCode],
+                              s.discountApplied  && ['Discount Applied', s.discountApplied],
+                              fmt$(s.originalPrice) && ['Original Price',   fmt$(s.originalPrice)],
+                              s.notes            && ['Notes',            s.notes],
                             ].filter(Boolean).map(([label, val]) => (
                               <div key={label} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                                 <span style={{
@@ -1807,9 +1970,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                                 }}>
                                   {label}
                                 </span>
-                                <span style={{
-                                  fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)', flex: 1,
-                                }}>
+                                <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)', flex: 1 }}>
                                   {val}
                                 </span>
                               </div>
@@ -1835,8 +1996,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                                 flex: 1, minHeight: 36,
                                 background: 'transparent', border: '1px solid #c9a96e',
                                 color: '#c9a96e', borderRadius: 8, padding: '8px 10px',
-                                fontFamily: 'var(--font-mono)', fontSize: 11,
-                                cursor: 'pointer',
+                                fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer',
                               }}
                             >
                               Aftercare Link
@@ -1847,8 +2007,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                                 flex: 1, minHeight: 36,
                                 background: 'transparent', border: '1px solid #f09595',
                                 color: '#f09595', borderRadius: 8, padding: '8px 10px',
-                                fontFamily: 'var(--font-mono)', fontSize: 11,
-                                cursor: 'pointer',
+                                fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer',
                               }}
                             >
                               Delete Session
@@ -1870,7 +2029,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
     }
   }
 
-  // ─── Drawer layout ────────────────────────────────────────────────────────
+  // ─── Drawer Layout ────────────────────────────────────────────────────────
 
   const drawerStyle = isMobile
     ? {
@@ -1878,9 +2037,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         background: 'var(--surface)',
         transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
         opacity: deleteFading ? 0 : 1,
-        transition: deleteFading
-          ? 'opacity 0.3s'
-          : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: deleteFading ? 'opacity 0.3s' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         pointerEvents: deleteFading ? 'none' : 'auto',
       }
@@ -1890,9 +2047,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
         borderLeft: '1px solid var(--surface2)',
         transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
         opacity: deleteFading ? 0 : 1,
-        transition: deleteFading
-          ? 'opacity 0.3s'
-          : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: deleteFading ? 'opacity 0.3s' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         pointerEvents: deleteFading ? 'none' : 'auto',
       }
@@ -1911,10 +2066,9 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       />
 
       <div style={drawerStyle}>
-
         <div ref={scrollBodyRef} style={{ flex: 1, overflowY: 'auto', paddingBottom: 160 }}>
 
-          {/* Header — locked, not draggable */}
+          {/* Header */}
           <div style={{
             padding: '18px 24px 16px',
             borderBottom: '1px solid var(--surface2)',
@@ -1931,8 +2085,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{
                   fontFamily: 'var(--font-heading)', fontSize: 26, fontWeight: 700,
-                  color: 'var(--text)', lineHeight: 1.1, marginBottom: 6,
-                  wordBreak: 'break-word',
+                  color: 'var(--text)', lineHeight: 1.1, marginBottom: 6, wordBreak: 'break-word',
                 }}>
                   {client.name || 'Unnamed Client'}
                 </div>
@@ -1987,11 +2140,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
               {sectionOrder.map((sectionId, idx) => (
-                <SortableSection
-                  key={sectionId}
-                  id={sectionId}
-                  isEditMode={layoutEditMode}
-                >
+                <SortableSection key={sectionId} id={sectionId} isEditMode={layoutEditMode}>
                   <div
                     ref={el => { sectionRefs.current[sectionId] = el }}
                     style={{
@@ -2008,7 +2157,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
 
         </div>
 
-        {/* Persistent Bottom Actions — locked */}
+        {/* Persistent Bottom Actions */}
         <div style={{
           flexShrink: 0,
           background: 'var(--surface)',
@@ -2028,7 +2177,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
               Start Consult
             </button>
             <button
-              onClick={client.stage === 'Archive' ? handleUnarchive : handleArchive}
+              onClick={client.stage === 'archived' ? handleUnarchive : handleArchive}
               style={{
                 flex: 1, minHeight: 48, borderRadius: 8,
                 border: '1px solid var(--surface2)',
@@ -2037,7 +2186,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 color: 'var(--muted)', cursor: 'pointer',
               }}
             >
-              {client.stage === 'Archive' ? 'Unarchive' : 'Archive'}
+              {client.stage === 'archived' ? 'Unarchive' : 'Archive'}
             </button>
             <button
               onClick={onClose}
@@ -2064,7 +2213,6 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
             </button>
           </div>
         </div>
-
       </div>
 
       {drawerToast && (
@@ -2094,16 +2242,10 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
             width: 400, maxWidth: '92vw',
             border: '1px solid var(--surface2)',
           }}>
-            <div style={{
-              fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 700,
-              color: '#e8e6df', marginBottom: 12,
-            }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 700, color: '#e8e6df', marginBottom: 12 }}>
               Delete Session?
             </div>
-            <p style={{
-              fontFamily: 'var(--font-body)', fontSize: 14,
-              color: '#7a786f', marginBottom: 24, lineHeight: 1.5, margin: '0 0 24px',
-            }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', marginBottom: 24, lineHeight: 1.5, margin: '0 0 24px' }}>
               This will permanently remove this session from the client record. This cannot be undone.
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -2176,10 +2318,7 @@ function AddClientModal({ isOpen, onSave, onClose }) {
 
   return (
     <>
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.7)' }}
-      />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.7)' }} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
@@ -2259,10 +2398,7 @@ function ImportPreviewModal({ isOpen, headers, rows, error, onConfirm, onClose }
   }
   return (
     <>
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.75)' }}
-      />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.75)' }} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
@@ -2272,24 +2408,14 @@ function ImportPreviewModal({ isOpen, headers, rows, error, onConfirm, onClose }
         maxHeight: '80vh', display: 'flex', flexDirection: 'column',
         border: '1px solid var(--surface2)',
       }}>
-        <div style={{
-          fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 700,
-          color: '#e8e6df', marginBottom: 6,
-        }}>
+        <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 700, color: '#e8e6df', marginBottom: 6 }}>
           Import Preview
         </div>
-        <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: 11,
-          color: 'var(--muted)', marginBottom: 16,
-        }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>
           {rows.length} row{rows.length !== 1 ? 's' : ''} found. Review before importing.
         </div>
-
         {error ? (
-          <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: 12,
-            color: '#f09595', marginBottom: 20, flex: 1,
-          }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f09595', marginBottom: 20, flex: 1 }}>
             {error}
           </div>
         ) : (
@@ -2310,7 +2436,6 @@ function ImportPreviewModal({ isOpen, headers, rows, error, onConfirm, onClose }
             </table>
           </div>
         )}
-
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
           <button
             onClick={onClose}
@@ -2341,7 +2466,7 @@ function ImportPreviewModal({ isOpen, headers, rows, error, onConfirm, onClose }
   )
 }
 
-// ─── LogSessionModal ─────────────────────────────────────────────────────────
+// ─── LogSessionModal ──────────────────────────────────────────────────────────
 
 const PAYMENT_METHODS = ['Cash', 'Venmo', 'Zelle', 'CashApp', 'Card', 'Gift Card', 'Other']
 
@@ -2354,9 +2479,8 @@ function LogSessionModal({ isOpen, onSave, onClose }) {
     discountCode: '', originalPrice: '', discountApplied: '', notes: '',
   }
   const [form, setForm] = useState(blankForm)
-  const set = key => val => setForm(f => ({ ...f, [key]: val }))
+  const set  = key => val => setForm(f => ({ ...f, [key]: val }))
   const setE = key => e => set(key)(e.target.value)
-
   const canSave = form.date.trim() && form.tattooDescription.trim()
 
   function handleSave() {
@@ -2407,10 +2531,7 @@ function LogSessionModal({ isOpen, onSave, onClose }) {
 
   return (
     <>
-      <div
-        onClick={handleClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.75)' }}
-      />
+      <div onClick={handleClose} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.75)' }} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
@@ -2420,47 +2541,23 @@ function LogSessionModal({ isOpen, onSave, onClose }) {
         maxHeight: '88vh', overflowY: 'auto',
         padding: 24,
       }}>
-        <div style={{
-          fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 700,
-          color: 'var(--text)', marginBottom: 20,
-        }}>
+        <div style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 20 }}>
           Log Session
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-          {/* Date */}
           <div>
             <span style={labelStyle}>Date *</span>
-            <input
-              type="date" value={form.date} onChange={setE('date')}
-              style={{ ...fieldStyle, colorScheme: 'dark' }}
-              onFocus={focus} onBlur={blur}
-            />
+            <input type="date" value={form.date} onChange={setE('date')} style={{ ...fieldStyle, colorScheme: 'dark' }} onFocus={focus} onBlur={blur} />
           </div>
-
-          {/* Tattoo Description */}
           <div>
             <span style={labelStyle}>Tattoo Description *</span>
-            <textarea
-              rows={2} value={form.tattooDescription} onChange={setE('tattooDescription')}
-              placeholder="Brief description of the tattoo"
-              style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5 }}
-              onFocus={focus} onBlur={blur}
-            />
+            <textarea rows={2} value={form.tattooDescription} onChange={setE('tattooDescription')} placeholder="Brief description of the tattoo" style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5 }} onFocus={focus} onBlur={blur} />
           </div>
-
-          {/* Placement */}
           <div>
             <span style={labelStyle}>Placement</span>
-            <input
-              type="text" value={form.placement} onChange={setE('placement')}
-              placeholder="e.g. Inner forearm"
-              style={fieldStyle} onFocus={focus} onBlur={blur}
-            />
+            <input type="text" value={form.placement} onChange={setE('placement')} placeholder="e.g. Inner forearm" style={fieldStyle} onFocus={focus} onBlur={blur} />
           </div>
-
-          {/* Is Touch Up toggle */}
           <div>
             <span style={labelStyle}>Session Type</span>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -2486,17 +2583,13 @@ function LogSessionModal({ isOpen, onSave, onClose }) {
               })}
             </div>
           </div>
-
-          {/* Money fields */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {moneyField('tattooPrice',  'Tattoo Price')}
-            {moneyField('deposit',      'Deposit')}
-            {moneyField('depositRefund','Deposit Refund')}
-            {moneyField('amountPaid',   'Amount Paid')}
-            {moneyField('tip',          'Tip')}
+            {moneyField('tattooPrice',   'Tattoo Price')}
+            {moneyField('deposit',       'Deposit')}
+            {moneyField('depositRefund', 'Deposit Refund')}
+            {moneyField('amountPaid',    'Amount Paid')}
+            {moneyField('tip',           'Tip')}
           </div>
-
-          {/* Payment Method segmented */}
           <div>
             <span style={labelStyle}>Payment Method</span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -2523,58 +2616,31 @@ function LogSessionModal({ isOpen, onSave, onClose }) {
               })}
             </div>
           </div>
-
-          {/* Gift Card Code — conditional */}
           {form.paymentMethod === 'Gift Card' && (
             <div>
               <span style={labelStyle}>Gift Card Code</span>
-              <input
-                type="text" value={form.giftCardCode} onChange={setE('giftCardCode')}
-                placeholder="Card code or last 4"
-                style={fieldStyle} onFocus={focus} onBlur={blur}
-              />
+              <input type="text" value={form.giftCardCode} onChange={setE('giftCardCode')} placeholder="Card code or last 4" style={fieldStyle} onFocus={focus} onBlur={blur} />
             </div>
           )}
-
-          {/* Discount Code */}
           <div>
             <span style={labelStyle}>Discount Code</span>
-            <input
-              type="text" value={form.discountCode} onChange={setE('discountCode')}
-              placeholder="Optional"
-              style={fieldStyle} onFocus={focus} onBlur={blur}
-            />
+            <input type="text" value={form.discountCode} onChange={setE('discountCode')} placeholder="Optional" style={fieldStyle} onFocus={focus} onBlur={blur} />
           </div>
-
-          {/* Discount fields — conditional on discountCode */}
           {form.discountCode.trim() && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {moneyField('originalPrice', 'Original Price')}
               <div>
                 <span style={labelStyle}>Discount Applied</span>
-                <input
-                  type="text" value={form.discountApplied} onChange={setE('discountApplied')}
-                  placeholder="e.g. 10% or $20"
-                  style={fieldStyle} onFocus={focus} onBlur={blur}
-                />
+                <input type="text" value={form.discountApplied} onChange={setE('discountApplied')} placeholder="e.g. 10% or $20" style={fieldStyle} onFocus={focus} onBlur={blur} />
               </div>
             </div>
           )}
-
-          {/* Notes */}
           <div>
             <span style={labelStyle}>Notes</span>
-            <textarea
-              rows={3} value={form.notes} onChange={setE('notes')}
-              placeholder="Any additional notes"
-              style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5 }}
-              onFocus={focus} onBlur={blur}
-            />
+            <textarea rows={3} value={form.notes} onChange={setE('notes')} placeholder="Any additional notes" style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5 }} onFocus={focus} onBlur={blur} />
           </div>
-
         </div>
 
-        {/* Buttons */}
         <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
           <button
             type="button"
@@ -2614,9 +2680,8 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
   const [activeJump,        setActiveJump]        = useState(null)
   const [backConfirmDelete, setBackConfirmDelete] = useState(false)
   const [cardFading,        setCardFading]        = useState(false)
-  const [jumpSections, setJumpSections] = useState(loadSectionOrder)
+  const [jumpSections,      setJumpSections]      = useState(loadSectionOrder)
 
-  // Refresh jump section order whenever the card flips to back
   useEffect(() => {
     if (flipped) setJumpSections(loadSectionOrder())
   }, [flipped])
@@ -2641,7 +2706,6 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
     }
   }
 
-  // Build the 9-item jump list in current drawer order
   const orderedJumpSections = [
     { id: 'header',        label: 'Header',                    locked: true },
     ...jumpSections.map(id => ({ id, label: SECTION_LABELS[id], locked: false })),
@@ -2657,15 +2721,10 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
         pointerEvents: cardFading ? 'none' : 'auto',
       }}
     >
-      {/* Card wrapper */}
-      <div
-        className="crm-card-scene"
-        style={{ height: '100%', cursor: 'pointer' }}
-        onClick={handleOuterClick}
-      >
+      <div className="crm-card-scene" style={{ height: '100%', cursor: 'pointer' }} onClick={handleOuterClick}>
         <div className={`crm-card-inner${flipped ? ' flipped' : ''}`}>
 
-          {/* ── FRONT ── */}
+          {/* Front */}
           <div
             className="crm-card-face"
             style={{
@@ -2673,26 +2732,16 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
               padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px',
             }}
           >
-            {/* Avatar + status dot */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
               <Avatar name={client.name} size={48} />
               <StatusDot status={client.status} />
             </div>
-
-            {/* Name + status label + idea */}
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <div style={{
-                fontFamily: 'var(--font-heading)', fontSize: '17px', fontWeight: 600,
-                color: 'var(--text)', lineHeight: 1.2,
-              }}>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: '17px', fontWeight: 600, color: 'var(--text)', lineHeight: 1.2 }}>
                 {client.name || 'Unnamed Client'}
               </div>
               {client.status && (
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: 700,
-                  color: STATUS_CONFIG[client.status]?.color,
-                  textTransform: 'uppercase', letterSpacing: '0.1em',
-                }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: 700, color: STATUS_CONFIG[client.status]?.color, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   {STATUS_CONFIG[client.status]?.label}
                 </div>
               )}
@@ -2705,21 +2754,16 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
                 {client.tattooIdea || '—'}
               </div>
             </div>
-
-            {/* Stage badge + View Full Profile button */}
             <div className="card-front-bottom-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <StageBadge stage={client.stage} />
+              <StageBadge stage={client.stage || client.projectStage || 'new_inquiry'} />
               <button
                 onClick={e => { e.stopPropagation(); onOpen(client, null) }}
                 style={{
-                  background: '#c9a96e',
-                  border: 'none',
-                  borderRadius: 6, padding: '0 14px',
-                  minHeight: 44,
+                  background: '#c9a96e', border: 'none', borderRadius: 6,
+                  padding: '0 14px', minHeight: 44,
                   fontFamily: 'var(--font-body)', fontSize: '12px',
                   fontWeight: 600, color: 'var(--bg)', cursor: 'pointer',
-                  transition: 'opacity 0.15s',
-                  whiteSpace: 'nowrap',
+                  transition: 'opacity 0.15s', whiteSpace: 'nowrap',
                 }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
@@ -2729,22 +2773,17 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
             </div>
           </div>
 
-          {/* ── BACK ── */}
+          {/* Back */}
           <div
             className="crm-card-face crm-card-back"
-            style={{
-              background: 'var(--surface)', border: '1px solid var(--surface2)',
-              display: 'flex', flexDirection: 'column',
-            }}
+            style={{ background: 'var(--surface)', border: '1px solid var(--surface2)', display: 'flex', flexDirection: 'column' }}
           >
-            {/* View Full Profile — pinned top, primary CTA */}
             <div style={{ padding: '10px 12px 6px', flexShrink: 0 }}>
               <button
                 onClick={e => { e.stopPropagation(); onOpen(client, null) }}
                 style={{
                   width: '100%', minHeight: 44, padding: '0 14px',
-                  background: '#c9a96e',
-                  border: 'none', borderRadius: 7,
+                  background: '#c9a96e', border: 'none', borderRadius: 7,
                   fontFamily: 'var(--font-body)', fontSize: '13px',
                   fontWeight: 600, color: 'var(--bg)', cursor: 'pointer',
                   transition: 'opacity 0.15s',
@@ -2755,8 +2794,6 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
                 View Full Profile
               </button>
             </div>
-
-            {/* Jump menu — 9 sections */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '2px 12px' }}>
               {orderedJumpSections.map(({ id, label, locked }) => {
                 const isActive = activeJump === id
@@ -2775,22 +2812,16 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
                       borderBottom: '1px solid rgba(255,255,255,0.03)',
                     }}
                     onMouseEnter={e => { if (!locked) e.currentTarget.style.opacity = '1' }}
-                    onMouseLeave={e => {
-                      if (!locked && !isActive) e.currentTarget.style.opacity = '0.4'
-                    }}
+                    onMouseLeave={e => { if (!locked && !isActive) e.currentTarget.style.opacity = '0.4' }}
                   >
                     <span>{label}</span>
                     {locked && (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, opacity: 0.6, letterSpacing: '0.08em' }}>
-                        locked
-                      </span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, opacity: 0.6, letterSpacing: '0.08em' }}>locked</span>
                     )}
                   </div>
                 )
               })}
             </div>
-
-            {/* Bottom bar — back + delete */}
             <div style={{ padding: '10px 12px 12px', flexShrink: 0, borderTop: '1px solid var(--surface2)' }}>
               <button
                 onClick={e => { e.stopPropagation(); setFlipped(false) }}
@@ -2811,8 +2842,7 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
                   fontFamily: 'var(--font-body)', fontSize: 11,
                   color: backConfirmDelete ? '#ef4444' : 'rgba(239,68,68,0.4)',
                   padding: '3px 0', marginTop: 24,
-                  transition: 'color 0.15s',
-                  textAlign: 'center',
+                  transition: 'color 0.15s', textAlign: 'center',
                 }}
               >
                 {backConfirmDelete ? 'Confirm Delete?' : 'Delete Client Permanently'}
@@ -2830,9 +2860,7 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
 
 export default function CRM() {
   const ctx = useOutletContext?.() ?? {}
-  const externalOpenDrawer = ctx.openDrawer ?? null
   const location = useLocation()
-
 
   const [clients,      setClients]      = useState([])
   const [drawerOpen,   setDrawerOpen]   = useState(false)
@@ -2845,7 +2873,7 @@ export default function CRM() {
   const [importHdrs,   setImportHdrs]   = useState([])
   const [importError,  setImportError]  = useState('')
   const importRef = useRef(null)
-  const [cloudIsEmpty, setCloudIsEmpty] = useState(false)
+  const [cloudIsEmpty,       setCloudIsEmpty]       = useState(false)
   const cloudAlreadySeeded = localStorage.getItem('macri_cloud_seeded') === 'true'
   const [syncing,      setSyncing]      = useState(false)
   const [syncToast,    setSyncToast]    = useState(null)
@@ -2874,7 +2902,7 @@ export default function CRM() {
   function handleArchive(id) {
     const target = clients.find(c => c.id === id)
     if (!target) return
-    const archived = { ...target, stage: 'Archive', updatedAt: new Date().toISOString() }
+    const archived = { ...target, stage: 'archived', projectStage: 'archived', updatedAt: new Date().toISOString() }
     persist(clients.map(c => c.id === id ? archived : c))
     saveClient(archived)
   }
@@ -2882,7 +2910,7 @@ export default function CRM() {
   function handleUnarchive(id) {
     const target = clients.find(c => c.id === id)
     if (!target) return
-    const unarchived = { ...target, stage: 'Inquiry', updatedAt: new Date().toISOString() }
+    const unarchived = { ...target, stage: 'new_inquiry', projectStage: 'new_inquiry', updatedAt: new Date().toISOString() }
     persist(clients.map(c => c.id === id ? unarchived : c))
     saveClient(unarchived)
   }
@@ -3019,7 +3047,8 @@ export default function CRM() {
           email:   gc(profile, emailIdx),
           style:   gc(profile, styleIdx),
           source:  gc(profile, srcIdx),
-          stage:   isArchived ? 'Archive' : (csvStage || 'Inquiry'),
+          stage:   isArchived ? 'archived' : (csvStage || 'new_inquiry'),
+          projectStage: isArchived ? 'archived' : (csvStage || 'new_inquiry'),
           sessions: newSessions,
         }))
       }
@@ -3036,7 +3065,7 @@ export default function CRM() {
     setImportError('')
   }
 
-function openDrawer(client, section = null) {
+  function openDrawer(client, section = null) {
     setEditTarget(client)
     setJumpSection(section)
     setDrawerOpen(true)
@@ -3078,20 +3107,20 @@ function openDrawer(client, section = null) {
     : null
 
   const filtered = stageFilter === 'All'
-    ? clients.filter(c => c.stage !== 'Archive')
+    ? clients.filter(c => c.stage !== 'archived')
     : stageFilter === 'Archived'
-    ? clients.filter(c => c.stage === 'Archive')
+    ? clients.filter(c => c.stage === 'archived')
     : clients.filter(c => c.stage === stageFilter)
 
   const stageCounts = {
     ...Object.fromEntries(STAGES.map(s => [s, clients.filter(c => c.stage === s).length])),
-    Archived: clients.filter(c => c.stage === 'Archive').length,
+    Archived: clients.filter(c => c.stage === 'archived').length,
   }
 
   return (
     <div className="page-content" style={{ minHeight: '100%' }}>
 
-      {/* header */}
+      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'flex-start',
         justifyContent: 'space-between', marginBottom: '24px',
@@ -3176,13 +3205,13 @@ function openDrawer(client, section = null) {
         </div>
       </div>
 
-      {/* stage filter chips */}
+      {/* Stage filter chips */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '28px' }}>
-        {['All', ...STAGES.filter(s => s !== 'Archive'), 'Archived'].map(s => {
+        {['All', ...STAGES.filter(s => s !== 'archived' && s !== 'on_hold'), 'Archived'].map(s => {
           const active       = stageFilter === s
           const isArchiveTab = s === 'Archived'
           const count = s === 'All'
-            ? clients.filter(c => c.stage !== 'Archive').length
+            ? clients.filter(c => c.stage !== 'archived').length
             : isArchiveTab
             ? stageCounts.Archived
             : (stageCounts[s] ?? 0)
@@ -3205,7 +3234,7 @@ function openDrawer(client, section = null) {
                 display: 'flex', alignItems: 'center', gap: '6px',
               }}
             >
-              {s}
+              {STAGE_LABELS[s] ?? s}
               <span style={{
                 fontFamily: 'var(--font-mono)', fontSize: '10px',
                 color: active
@@ -3220,11 +3249,11 @@ function openDrawer(client, section = null) {
         })}
       </div>
 
-      {/* grid */}
+      {/* Grid */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: '20px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
-            {stageFilter === 'All' ? 'No clients yet' : stageFilter === 'Archived' ? 'No archived clients' : `No ${stageFilter} clients`}
+            {stageFilter === 'All' ? 'No clients yet' : stageFilter === 'Archived' ? 'No archived clients' : `No ${STAGE_LABELS[stageFilter] ?? stageFilter} clients`}
           </div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--muted)' }}>
             {stageFilter === 'All' ? 'Add your first client or save one from Inquiry Assistant.' : stageFilter === 'Archived' ? 'Archived clients will appear here.' : 'Try a different filter.'}
@@ -3245,13 +3274,7 @@ function openDrawer(client, section = null) {
         </div>
       )}
 
-      <input
-        ref={importRef}
-        type="file"
-        accept=".csv"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
+      <input ref={importRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleFileChange} />
 
       <ImportPreviewModal
         isOpen={importOpen}

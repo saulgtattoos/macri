@@ -8,21 +8,59 @@ const STORAGE_KEY  = 'macri_crm_clients'
 const PROMOTED_KEY = 'macri_wall_first_run_done'
 const API_KEY      = import.meta.env.VITE_ANTHROPIC_KEY
 
-// ─── Pipeline config ──────────────────────────────────────────────────────────
+// ─── Stage Migration Map ──────────────────────────────────────────────────────
+
+const STAGE_MIGRATION_MAP = {
+  'inquiry':          'new_inquiry',
+  'waiting-on-reply': 'awaiting_response',
+  'consultation':     'consultation_scheduled',
+  'scheduled':        'tattoo_scheduled',
+  'deposit-paid':     'tattoo_scheduled',
+  'deposit_paid':     'tattoo_scheduled',
+  'in-progress':      'in_progress',
+}
+
+function migrateStageKey(key) {
+  if (!key) return key
+  return STAGE_MIGRATION_MAP[key] ?? key
+}
+
+async function migrateClients(clients) {
+  const migrated = []
+  for (const client of clients) {
+    const newKey = migrateStageKey(client.projectStage)
+    if (newKey !== client.projectStage) {
+      const updated = {
+        ...client,
+        projectStage: newKey,
+        updatedAt: new Date().toISOString(),
+      }
+      await saveClient(updated)
+      migrated.push(updated)
+    } else {
+      migrated.push(client)
+    }
+  }
+  return migrated
+}
+
+// ─── Pipeline Stages ──────────────────────────────────────────────────────────
 
 const STAGES = [
-  { key: 'inquiry',          label: 'Inquiry',          color: '#378ADD' },
-  { key: 'waiting-on-reply', label: 'Waiting on Reply', color: '#C4934A' },
-  { key: 'consultation',     label: 'Consultation',     color: '#1D9E75' },
-  { key: 'deposit-paid',     label: 'Deposit Paid',     color: '#7AAB8F' },
-  { key: 'scheduled',        label: 'Scheduled',        color: '#8B6FD4' },
-  { key: 'in-progress',      label: 'In Progress',      color: '#C9A96E' },
-  { key: 'healed',           label: 'Healed',           color: '#55C47A' },
-  { key: 'void',             label: 'Void',             color: '#F09595' },
-  { key: 'archived',         label: 'Archived',         color: '#7A786F' },
+  { key: 'new_inquiry',            label: 'New Inquiry',       color: '#378ADD', phase: 'booking'  },
+  { key: 'active_dialogue',        label: 'Active Dialogue',   color: '#C4934A', phase: 'booking'  },
+  { key: 'awaiting_response',      label: 'Awaiting Response', color: '#D4874A', phase: 'booking'  },
+  { key: 'consultation_scheduled', label: 'Consult Scheduled', color: '#1D9E75', phase: 'booking'  },
+  { key: 'consultation_completed', label: 'Consult Completed', color: '#7AAB8F', phase: 'booking'  },
+  { key: 'tattoo_scheduled',       label: 'Tattoo Scheduled',  color: '#8B6FD4', phase: 'active'   },
+  { key: 'in_progress',            label: 'In Progress',       color: '#55C47A', phase: 'active'   },
+  { key: 'healed',                 label: 'Healed',            color: '#7AAB8F', phase: 'done'     },
+  { key: 'void',                   label: 'Void',              color: '#F09595', phase: 'done'     },
+  { key: 'archived',               label: 'Archived',          color: '#7A786F', phase: 'done'     },
+  { key: 'on_hold',                label: 'On Hold',           color: '#7A786F', phase: 'inactive' },
 ]
 
-const ACTIVE_STAGES = STAGES.filter(s => s.key !== 'void' && s.key !== 'archived')
+const ACTIVE_STAGES = STAGES.filter(s => s.phase === 'booking' || s.phase === 'active')
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,12 +71,56 @@ function hexToRgb(hex) {
   return `${r}, ${g}, ${b}`
 }
 
-function isWithin7Days(client) {
-  if (!client.sessionDate) return false
-  const d    = new Date(client.sessionDate)
-  const now  = new Date()
-  const diff = (d - now) / (1000 * 60 * 60 * 24)
-  return diff >= 0 && diff <= 7
+function getDaysElapsed(dateString) {
+  if (!dateString) return 0
+  const diff = Date.now() - new Date(dateString).getTime()
+  return Math.floor(diff / (1000 * 60 * 60 * 24))
+}
+
+function getHoursUntil(dateString) {
+  if (!dateString) return null
+  const diff = new Date(dateString).getTime() - Date.now()
+  return diff > 0 ? Math.floor(diff / (1000 * 60 * 60)) : null
+}
+
+function isStale(client) {
+  return (
+    client.projectStage === 'awaiting_response' &&
+    getDaysElapsed(client.lastContactedAt || client.updatedAt) >= 5 &&
+    getDaysElapsed(client.lastContactedAt || client.updatedAt) < 10
+  )
+}
+
+function isUrgentStale(client) {
+  return (
+    client.projectStage === 'awaiting_response' &&
+    getDaysElapsed(client.lastContactedAt || client.updatedAt) >= 10
+  )
+}
+
+function isConsultSoon(client) {
+  if (client.projectStage !== 'consultation_scheduled') return false
+  const hours = getHoursUntil(client.consultationDate)
+  return hours !== null && hours <= 48
+}
+
+function isConsultToday(client) {
+  if (client.projectStage !== 'consultation_scheduled') return false
+  const hours = getHoursUntil(client.consultationDate)
+  return hours !== null && hours <= 24
+}
+
+function needsDepositBadge(client) {
+  return (
+    client.projectStage === 'tattoo_scheduled' ||
+    client.projectStage === 'in_progress'
+  )
+}
+
+function formatDate(dateString) {
+  if (!dateString) return null
+  const d = new Date(dateString)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 // ─── AI Paste Import Modal ────────────────────────────────────────────────────
@@ -65,7 +147,7 @@ function ImportNotesModal({ isOpen, onClose, onImport }) {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-opus-4-5',
+          model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
           messages: [{
             role: 'user',
@@ -353,9 +435,7 @@ function BulkPromoteModal({ isOpen, clients, onConfirm, onSkip }) {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
                     {sel && (
-                      <span style={{ color: '#0e0e0d', fontSize: 11, fontWeight: 700 }}>
-                        ✓
-                      </span>
+                      <span style={{ color: '#0e0e0d', fontSize: 11, fontWeight: 700 }}>✓</span>
                     )}
                   </div>
                   <span style={{
@@ -364,12 +444,12 @@ function BulkPromoteModal({ isOpen, clients, onConfirm, onSkip }) {
                   }}>
                     {c.name}
                   </span>
-                  {c.stage && (
+                  {c.projectStage && (
                     <span style={{
                       fontFamily: 'var(--font-mono)', fontSize: 10,
                       color: 'var(--muted)', marginLeft: 'auto',
                     }}>
-                      {c.stage}
+                      {c.projectStage}
                     </span>
                   )}
                 </div>
@@ -408,8 +488,35 @@ function BulkPromoteModal({ isOpen, clients, onConfirm, onSkip }) {
 // ─── Board Card ───────────────────────────────────────────────────────────────
 
 function BoardCard({ client, color, onOpen, onDragStart, onDragOver, onDrop }) {
-  const soon = isWithin7Days(client)
-  const rgb  = hexToRgb(color)
+  const stale        = isStale(client)
+  const urgentStale  = isUrgentStale(client)
+  const consultSoon  = isConsultSoon(client)
+  const consultToday = isConsultToday(client)
+  const showDeposit  = needsDepositBadge(client)
+  const depositPaid  = client.depositStatus === 'Paid' || client.depositReceived === true
+  const rgb          = hexToRgb(color)
+
+  const daysElapsed = (stale || urgentStale)
+    ? getDaysElapsed(client.lastContactedAt || client.updatedAt)
+    : 0
+
+  const hoursUntil = consultSoon ? getHoursUntil(client.consultationDate) : null
+
+  const borderLeftColor = urgentStale
+    ? '#D4874A'
+    : stale
+    ? '#C4934A'
+    : consultToday || consultSoon
+    ? '#c9a96e'
+    : color
+
+  const cardBg = urgentStale
+    ? 'rgba(212,135,74,0.10)'
+    : stale
+    ? 'rgba(196,147,74,0.08)'
+    : consultToday
+    ? 'rgba(201,169,110,0.10)'
+    : `rgba(${rgb}, 0.08)`
 
   return (
     <div
@@ -419,41 +526,125 @@ function BoardCard({ client, color, onOpen, onDragStart, onDragOver, onDrop }) {
       onDrop={e => onDrop(e, null, client.id)}
       onClick={() => onOpen(client)}
       style={{
-        background: `rgba(${rgb}, 0.08)`,
+        background: cardBg,
         border: `1px solid rgba(${rgb}, 0.2)`,
-        borderLeft: `3px solid ${color}`,
+        borderLeft: `3px solid ${borderLeftColor}`,
         borderRadius: 8,
         padding: '10px 12px',
         cursor: 'pointer',
         transition: 'all 0.15s',
         userSelect: 'none',
-        outline: soon ? `1px solid rgba(201,169,110,0.5)` : 'none',
+        outline: consultToday ? '1px solid rgba(201,169,110,0.6)' : 'none',
+        boxShadow: urgentStale
+          ? '0 0 0 1px rgba(212,135,74,0.25)'
+          : consultSoon
+          ? '0 0 0 1px rgba(201,169,110,0.2)'
+          : 'none',
       }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = `rgba(${rgb}, 0.14)`
-        e.currentTarget.style.borderColor = `rgba(${rgb}, 0.4)`
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = `rgba(${rgb}, 0.08)`
-        e.currentTarget.style.borderColor = `rgba(${rgb}, 0.2)`
-        e.currentTarget.style.borderLeftColor = color
-      }}
+      onMouseEnter={e => { e.currentTarget.style.background = `rgba(${rgb}, 0.14)` }}
+      onMouseLeave={e => { e.currentTarget.style.background = cardBg }}
     >
+      {/* Client name */}
       <div style={{
         fontFamily: 'var(--font-heading)', fontSize: 13,
-        fontWeight: 600, color: 'var(--text)', lineHeight: 1.3,
+        fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, marginBottom: 3,
       }}>
         {client.name || 'Unnamed'}
       </div>
-      {soon && (
+
+      {/* Style and placement */}
+      {(client.style || client.placement) && (
         <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: 9,
-          color: '#c9a96e', marginTop: 4,
-          textTransform: 'uppercase', letterSpacing: '0.08em',
+          fontFamily: 'var(--font-body)', fontSize: 11,
+          color: 'var(--muted)', lineHeight: 1.4, marginBottom: 4,
+          overflow: 'hidden', textOverflow: 'ellipsis',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
         }}>
-          Session this week
+          {[client.style, client.placement].filter(Boolean).join(', ')}
         </div>
       )}
+
+      {/* Last contacted */}
+      {(client.lastContactedAt || client.updatedAt) && (
+        <div style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10,
+          color: stale || urgentStale ? '#C4934A' : 'var(--muted)',
+          marginBottom: 6,
+        }}>
+          Last contact: {formatDate(client.lastContactedAt || client.updatedAt)}
+        </div>
+      )}
+
+      {/* Badge row */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+
+        {stale && !urgentStale && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: '#C4934A',
+            background: 'rgba(196,147,74,0.15)', border: '1px solid rgba(196,147,74,0.3)',
+            borderRadius: 4, padding: '2px 6px',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+          }}>
+            Stale {daysElapsed}d
+          </div>
+        )}
+
+        {urgentStale && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: '#D4874A',
+            background: 'rgba(212,135,74,0.15)', border: '1px solid rgba(212,135,74,0.4)',
+            borderRadius: 4, padding: '2px 6px',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+          }}>
+            Re-engage {daysElapsed}d
+          </div>
+        )}
+
+        {consultToday && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: '#c9a96e',
+            background: 'rgba(201,169,110,0.15)', border: '1px solid rgba(201,169,110,0.5)',
+            borderRadius: 4, padding: '2px 6px',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+          }}>
+            Today
+          </div>
+        )}
+
+        {consultSoon && !consultToday && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: '#c9a96e',
+            background: 'rgba(201,169,110,0.10)', border: '1px solid rgba(201,169,110,0.3)',
+            borderRadius: 4, padding: '2px 6px',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+          }}>
+            Soon {hoursUntil}h
+          </div>
+        )}
+
+        {showDeposit && depositPaid && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: '#7aab8f',
+            background: 'rgba(122,171,143,0.12)', border: '1px solid rgba(122,171,143,0.3)',
+            borderRadius: 4, padding: '2px 6px',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+          }}>
+            $ Deposit Paid
+          </div>
+        )}
+
+        {showDeposit && !depositPaid && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: '#7a786f',
+            background: 'rgba(122,120,111,0.10)', border: '1px solid rgba(122,120,111,0.25)',
+            borderRadius: 4, padding: '2px 6px',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+          }}>
+            No Deposit
+          </div>
+        )}
+
+      </div>
     </div>
   )
 }
@@ -468,7 +659,11 @@ function BoardColumn({
   const [dragOver, setDragOver] = useState(false)
   const rgb = hexToRgb(stage.color)
 
-  if (activeOnly && (stage.key === 'void' || stage.key === 'archived')) return null
+  // ── CHANGE 2: Only block finalized 'done' stages regardless of toggle ──────
+  // When activeOnly is true:  hide 'done' and 'inactive'
+  // When activeOnly is false: hide only 'done' (on_hold with phase 'inactive' is allowed through)
+  if (activeOnly && (stage.phase === 'done' || stage.phase === 'inactive')) return null
+  if (!activeOnly && stage.phase === 'done') return null
 
   return (
     <div
@@ -476,7 +671,7 @@ function BoardColumn({
       onDragLeave={() => setDragOver(false)}
       onDrop={e => { setDragOver(false); onColumnDrop(e, stage.key) }}
       style={{
-        width: 200, flexShrink: 0,
+        width: 210, flexShrink: 0,
         background: dragOver ? `rgba(${rgb}, 0.06)` : '#161614',
         border: `1px solid ${dragOver ? `rgba(${rgb}, 0.4)` : '#2a2a27'}`,
         borderRadius: 10,
@@ -484,6 +679,7 @@ function BoardColumn({
         transition: 'all 0.15s',
       }}
     >
+      {/* Column header */}
       <div style={{
         background: `rgba(${rgb}, 0.15)`,
         borderBottom: `2px solid ${stage.color}`,
@@ -497,8 +693,7 @@ function BoardColumn({
           {stage.label}
         </span>
         <span style={{
-          background: `rgba(${rgb}, 0.25)`,
-          color: stage.color,
+          background: `rgba(${rgb}, 0.25)`, color: stage.color,
           borderRadius: 99, padding: '1px 7px',
           fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
         }}>
@@ -506,6 +701,7 @@ function BoardColumn({
         </span>
       </div>
 
+      {/* Cards */}
       <div style={{
         padding: '10px 8px',
         display: 'flex', flexDirection: 'column', gap: 6,
@@ -515,8 +711,7 @@ function BoardColumn({
           <div style={{
             fontFamily: 'var(--font-mono)', fontSize: 10,
             color: 'rgba(122,120,111,0.4)', textAlign: 'center',
-            padding: '16px 0', textTransform: 'uppercase',
-            letterSpacing: '0.06em',
+            padding: '16px 0', textTransform: 'uppercase', letterSpacing: '0.06em',
           }}>
             Empty
           </div>
@@ -541,8 +736,8 @@ function BoardColumn({
 // ─── ProjectWall ──────────────────────────────────────────────────────────────
 
 export default function ProjectWall() {
-  const ctx        = useOutletContext?.() ?? {}
-  const navigate   = useNavigate()
+  const ctx      = useOutletContext?.() ?? {}
+  const navigate = useNavigate()
 
   const [clients,      setClients]      = useState([])
   const [activeOnly,   setActiveOnly]   = useState(true)
@@ -551,11 +746,12 @@ export default function ProjectWall() {
   const [dragClientId, setDragClientId] = useState(null)
 
   useEffect(() => {
-    loadClientsDB().then(data => {
-      setClients(data)
+    loadClientsDB().then(async data => {
+      const safe = await migrateClients(data)
+      setClients(safe)
       const done = localStorage.getItem(PROMOTED_KEY)
       if (!done) {
-        const unpromoted = data.filter(c => !c.projectStage)
+        const unpromoted = safe.filter(c => !c.projectStage)
         if (unpromoted.length > 0) setBulkOpen(true)
       }
     })
@@ -572,7 +768,7 @@ export default function ProjectWall() {
   function handleBulkConfirm(ids) {
     const updated = clients.map(c =>
       ids.includes(c.id)
-        ? { ...c, projectStage: 'waiting-on-reply', projectOrder: 0 }
+        ? { ...c, projectStage: 'new_inquiry', projectOrder: 0 }
         : c
     )
     setClients(updated)
@@ -591,20 +787,22 @@ export default function ProjectWall() {
     const now = new Date().toISOString()
     const newClient = {
       id,
-      name:         data.name || 'New Client',
-      phone:        data.phone || '',
-      email:        data.email || '',
-      tattooIdea:   data.tattooIdea || '',
-      style:        data.style || '',
-      placement:    data.placement || '',
-      size:         data.size || '',
-      notes:        data.notes || '',
-      stage:        'Inquiry',
-      projectStage: 'waiting-on-reply',
-      projectOrder: 0,
-      sessions:     [],
-      createdAt:    now,
-      updatedAt:    now,
+      name:            data.name || 'New Client',
+      phone:           data.phone || '',
+      email:           data.email || '',
+      tattooIdea:      data.tattooIdea || '',
+      style:           data.style || '',
+      placement:       data.placement || '',
+      size:            data.size || '',
+      notes:           data.notes || '',
+      depositStatus:   data.depositStatus || '',
+      stage:           'new_inquiry',
+      projectStage:    'new_inquiry',
+      projectOrder:    0,
+      lastContactedAt: now,
+      sessions:        [],
+      createdAt:       now,
+      updatedAt:       now,
     }
     setClients([newClient, ...clients])
     saveClient(newClient)
@@ -622,7 +820,12 @@ export default function ProjectWall() {
     if (!id) return
     const target = clients.find(c => c.id === id)
     if (!target) return
-    const changed = { ...target, projectStage: stageKey, updatedAt: new Date().toISOString() }
+
+    const now = new Date().toISOString()
+    const updates = { projectStage: stageKey, updatedAt: now }
+    if (stageKey === 'awaiting_response') updates.lastContactedAt = now
+
+    const changed = { ...target, ...updates }
     setClients(clients.map(c => c.id === id ? changed : c))
     saveClient(changed)
     setDragClientId(null)
@@ -646,15 +849,13 @@ export default function ProjectWall() {
     const tgtIdx = stageClients.findIndex(c => c.id === targetClientId)
     if (srcIdx < 0 || tgtIdx < 0) return
 
-    const reordered   = [...stageClients]
-    const [moved]     = reordered.splice(srcIdx, 1)
+    const reordered = [...stageClients]
+    const [moved]   = reordered.splice(srcIdx, 1)
     reordered.splice(tgtIdx, 0, moved)
 
     const orderMap = new Map(reordered.map((c, i) => [c.id, i]))
     const updated  = clients.map(c =>
-      orderMap.has(c.id)
-        ? { ...c, projectOrder: orderMap.get(c.id) }
-        : c
+      orderMap.has(c.id) ? { ...c, projectOrder: orderMap.get(c.id) } : c
     )
     setClients(updated)
     updated.filter(c => orderMap.has(c.id)).forEach(c => saveClient(c))
@@ -675,6 +876,13 @@ export default function ProjectWall() {
       .sort((a, b) => (a.projectOrder ?? 0) - (b.projectOrder ?? 0))
   }
 
+  // ── CHANGE 1: visibleStages filter ────────────────────────────────────────
+  // activeOnly true  → booking + active phases only
+  // activeOnly false → all stages (on_hold passes through)
+  const visibleStages = activeOnly
+    ? STAGES.filter(s => s.phase === 'booking' || s.phase === 'active')
+    : STAGES
+
   const totalActive = ACTIVE_STAGES.reduce(
     (sum, s) => sum + (columnMap[s.key]?.length ?? 0), 0
   )
@@ -682,6 +890,7 @@ export default function ProjectWall() {
   return (
     <div className="page-content" style={{ minHeight: '100%' }}>
 
+      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'flex-start',
         justifyContent: 'space-between', marginBottom: 24,
@@ -710,6 +919,8 @@ export default function ProjectWall() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+
+          {/* ── CHANGE 3: Dynamic toggle label ──────────────────────────────── */}
           <div
             onClick={() => setActiveOnly(a => !a)}
             style={{
@@ -736,8 +947,9 @@ export default function ProjectWall() {
               fontFamily: 'var(--font-mono)', fontSize: 11,
               color: activeOnly ? '#c9a96e' : 'var(--muted)',
               textTransform: 'uppercase', letterSpacing: '0.06em',
+              whiteSpace: 'nowrap',
             }}>
-              Active Only
+              {activeOnly ? 'Active Workflow Only' : 'Showing All Stages (inc. On Hold)'}
             </span>
           </div>
 
@@ -771,6 +983,7 @@ export default function ProjectWall() {
         </div>
       </div>
 
+      {/* Board */}
       {wallClients.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
           <div style={{
@@ -815,7 +1028,7 @@ export default function ProjectWall() {
       ) : (
         <div style={{ overflowX: 'auto', paddingBottom: 24 }}>
           <div style={{ display: 'flex', gap: 10, minWidth: 'max-content' }}>
-            {STAGES.map(stage => (
+            {visibleStages.map(stage => (
               <BoardColumn
                 key={stage.key}
                 stage={stage}

@@ -769,7 +769,7 @@ export default function InquiryAssistant() {
 
   // ─── Save to CRM ────────────────────────────────────────────────────────────
 
-  function handleSaveToCRM() {
+  async function handleSaveToCRM() {
     if (savedToCRM || !output || crmSaveRef.current) return
     crmSaveRef.current = true
 
@@ -781,7 +781,7 @@ export default function InquiryAssistant() {
     if (editedText)  newComms.push(mkComm({ channel: 'Text Message', body: editedText, timestamp: now }))
 
     try {
-      const clients     = loadClients()
+      const clients     = await loadClients()
       const clientName  = c.name  || ''
       const clientEmail = c.email || ''
 
@@ -796,28 +796,42 @@ export default function InquiryAssistant() {
 
       if (existingIdx >= 0) {
         const existing = clients[existingIdx]
-        clients[existingIdx] = {
+        const updated = {
           ...existing,
           communications: [...newComms, ...(existing.communications || [])],
-          activityLog: [{ id: crypto.randomUUID(), timestamp: now, text: `${logDate()} Response logged from Inquiry Assistant.` }, ...(existing.activityLog || [])],
+          activityLog: [
+            { id: crypto.randomUUID(), timestamp: now, text: `${logDate()} Response logged from Inquiry Assistant.` },
+            ...(existing.activityLog || []),
+          ],
+          notes: editedEmail || editedText || existing.notes || '',
           updatedAt: now,
         }
-        saveClient(clients[existingIdx])
+        await saveClient(updated)
       } else {
         const client = mkClient({
-          name: clientName, email: clientEmail, phone: c.phone || '',
-          instagram: c.instagram || '',
-          tattooIdea: c.tattooIdea || '', style: c.style || '',
-          placement: c.placement || '', size: c.size || '',
-          stage: 'Inquiry', status: null, consultationCount: 0,
+          name:        clientName,
+          email:       clientEmail,
+          phone:       c.phone      || '',
+          instagram:   c.instagram  || '',
+          tattooIdea:  c.tattooIdea || '',
+          style:       c.style      || '',
+          placement:   c.placement  || '',
+          size:        c.size       || '',
+          stage:       'Inquiry',
+          status:      null,
+          consultationCount: 0,
           communications: newComms,
-          activityLog: [{ id: crypto.randomUUID(), timestamp: now, text: `${logDate()} Added from Inquiry Assistant.` }],
+          notes: editedEmail || editedText || '',
+          activityLog: [
+            { id: crypto.randomUUID(), timestamp: now, text: `${logDate()} Added from Inquiry Assistant.` },
+          ],
         })
-        saveClient(client)
+        await saveClient(client)
       }
 
       setSavedToCRM(true)
       clearSession()
+      setTimeout(() => navigate('/crm'), 1200)
     } catch (err) {
       console.error('[MACRI] CRM save failed:', err)
       crmSaveRef.current = false

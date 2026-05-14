@@ -751,6 +751,8 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   // Studio Assistant state
   const [speakerActive,        setSpeakerActive]        = useState(false)
   const [conciergeCopied,      setConciergeCopied]      = useState(false)
+  const [conciergeLoading,     setConciergeLoading]     = useState(false)
+  const [conciergeError,       setConciergeError]       = useState(null)
 
   const consultRef    = useRef(null)
   const sectionRefs   = useRef({})
@@ -781,6 +783,8 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
       setSectionOrder(loadSectionOrder())
       setSpeakerActive(false)
       setConciergeCopied(false)
+      setConciergeLoading(false)
+      setConciergeError(null)
     }
   }, [isOpen])
 
@@ -2215,30 +2219,71 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
 
                 {/* Approve and Copy button */}
                 <button
-                  onClick={() => {
-                    if (!conciergeMessage) return
-                    navigator.clipboard.writeText(conciergeMessage).then(() => {
+                  disabled={conciergeLoading}
+                  onClick={async () => {
+                    if (conciergeLoading) return
+                    const webhookUrl = import.meta.env.VITE_CONCIERGE_WEBHOOK
+                    if (!webhookUrl) {
+                      setConciergeError('VITE_CONCIERGE_WEBHOOK is not set in your .env file.')
+                      return
+                    }
+                    setConciergeLoading(true)
+                    setConciergeError(null)
+                    try {
+                      const res = await fetch(webhookUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          clientId:           client.id,
+                          clientName:         client.name         || '',
+                          tattooIdea:         client.tattooIdea   || '',
+                          style:              client.style        || '',
+                          placement:          client.placement    || '',
+                          size:               client.size         || '',
+                          agentIntakeSummary: client.agentIntakeSummary || '',
+                        }),
+                      })
+                      if (!res.ok) {
+                        const err = await res.json().catch(() => ({}))
+                        throw new Error(err?.message ?? `Webhook error ${res.status}`)
+                      }
+                      const data = await res.json()
+                      const message = data?.message || data?.agentConciergeMessage || ''
+                      if (!message) throw new Error('No message returned from Concierge agent.')
+                      onUpdate({ ...client, agentConciergeMessage: message })
+                      await navigator.clipboard.writeText(message)
                       setConciergeCopied(true)
                       setTimeout(() => setConciergeCopied(false), 2200)
-                    })
+                    } catch (err) {
+                      setConciergeError(err.message ?? 'Concierge agent failed. Try again.')
+                    } finally {
+                      setConciergeLoading(false)
+                    }
                   }}
                   style={{
                     width: '100%', minHeight: 44, borderRadius: 9,
-                    border: `1px solid ${conciergeCopied ? 'rgba(122,171,143,0.5)' : 'rgba(201,169,110,0.3)'}`,
+                    border: `1px solid ${
+                      conciergeCopied
+                        ? 'rgba(122,171,143,0.5)'
+                        : conciergeLoading
+                        ? 'rgba(201,169,110,0.15)'
+                        : 'rgba(201,169,110,0.3)'
+                    }`,
                     background: conciergeCopied
                       ? 'rgba(122,171,143,0.1)'
-                      : conciergeMessage
-                      ? 'rgba(201,169,110,0.08)'
-                      : 'rgba(201,169,110,0.03)',
+                      : conciergeLoading
+                      ? 'rgba(201,169,110,0.04)'
+                      : 'rgba(201,169,110,0.08)',
                     fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
                     color: conciergeCopied
                       ? '#7aab8f'
-                      : conciergeMessage
-                      ? 'var(--gold)'
-                      : 'rgba(201,169,110,0.3)',
-                    cursor: conciergeMessage ? 'pointer' : 'default',
+                      : conciergeLoading
+                      ? 'rgba(201,169,110,0.4)'
+                      : 'var(--gold)',
+                    cursor: conciergeLoading ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    opacity: conciergeLoading ? 0.7 : 1,
                   }}
                 >
                   {conciergeCopied ? (
@@ -2246,13 +2291,33 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                       <span style={{ fontSize: 15 }}>✓</span>
                       Copied to Clipboard
                     </>
+                  ) : conciergeLoading ? (
+                    <>
+                      <span style={{
+                        width: 12, height: 12, borderRadius: '50%',
+                        border: '2px solid rgba(201,169,110,0.2)',
+                        borderTopColor: 'var(--gold)',
+                        display: 'inline-block',
+                        animation: 'spin 0.7s linear infinite',
+                      }} />
+                      Generating...
+                    </>
                   ) : (
                     <>
-                      <span style={{ fontSize: 14, opacity: conciergeMessage ? 1 : 0.4 }}>⎘</span>
+                      <span style={{ fontSize: 14 }}>&#x2398;</span>
                       Approve and Copy Message
                     </>
                   )}
                 </button>
+                {conciergeError && (
+                  <div style={{
+                    marginTop: 10,
+                    fontFamily: 'var(--font-mono)', fontSize: 11,
+                    color: '#f09595', lineHeight: 1.5,
+                  }}>
+                    {conciergeError}
+                  </div>
+                )}
               </div>
             </div>
 

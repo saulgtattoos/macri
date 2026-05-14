@@ -3124,7 +3124,7 @@ function LogSessionModal({ isOpen, onSave, onClose }) {
 
 // ─── ClientCard ───────────────────────────────────────────────────────────────
 
-function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
+function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete, highlight = false }) {
   const [flipped,           setFlipped]           = useState(false)
   const [activeJump,        setActiveJump]        = useState(null)
   const [backConfirmDelete, setBackConfirmDelete] = useState(false)
@@ -3170,7 +3170,17 @@ function ClientCard({ client, onOpen, onArchive, onUnarchive, onDelete }) {
         pointerEvents: cardFading ? 'none' : 'auto',
       }}
     >
-      <div className="crm-card-scene" style={{ height: '100%', cursor: 'pointer' }} onClick={handleOuterClick}>
+      <div
+        className="crm-card-scene"
+        style={{
+          height: '100%', cursor: 'pointer',
+          borderRadius: 12,
+          boxShadow: highlight ? '0 0 0 2px #c9a96e, 0 0 18px rgba(201,169,110,0.45)' : 'none',
+          transition: 'box-shadow 0.4s ease',
+          animation: highlight ? 'macri-pulse 2.2s ease-out forwards' : 'none',
+        }}
+        onClick={handleOuterClick}
+      >
         <div className={`crm-card-inner${flipped ? ' flipped' : ''}`}>
 
           {/* Front */}
@@ -3326,6 +3336,7 @@ export default function CRM() {
   const cloudAlreadySeeded = localStorage.getItem('macri_cloud_seeded') === 'true'
   const [syncing,      setSyncing]      = useState(false)
   const [syncToast,    setSyncToast]    = useState(null)
+  const [highlightId,  setHighlightId]  = useState(null)
 
   function persist(list) {
     setClients(list)
@@ -3528,6 +3539,14 @@ export default function CRM() {
   }, [location.state])
 
   useEffect(() => {
+    const id = location.state?.highlightClientId
+    if (!id) return
+    setHighlightId(id)
+    const timer = setTimeout(() => setHighlightId(null), 2200)
+    return () => clearTimeout(timer)
+  }, [location.state])
+
+  useEffect(() => {
     loadClientsDB().then(setClients)
   }, [])
 
@@ -3718,6 +3737,7 @@ export default function CRM() {
               onArchive={handleArchive}
               onUnarchive={handleUnarchive}
               onDelete={handleDeleteClient}
+              highlight={highlightId === client.id}
             />
           ))}
         </div>

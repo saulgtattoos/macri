@@ -157,3 +157,8 @@ select option {
     padding-bottom: 72px;
   }
 }
+@keyframes macri-pulse {
+  0%   { box-shadow: 0 0 0 2px #c9a96e, 0 0 18px rgba(201,169,110,0.55); }
+  60%  { box-shadow: 0 0 0 2px rgba(201,169,110,0.6), 0 0 12px rgba(201,169,110,0.25); }
+  100% { box-shadow: none; }
+}

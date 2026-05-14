@@ -831,7 +831,8 @@ export default function InquiryAssistant() {
 
       setSavedToCRM(true)
       clearSession()
-      setTimeout(() => navigate('/crm'), 1200)
+      const savedClientId = existingIdx >= 0 ? clients[existingIdx].id : clientName
+      setTimeout(() => navigate('/crm', { state: { highlightClientId: savedClientId } }), 1200)
     } catch (err) {
       console.error('[MACRI] CRM save failed:', err)
       crmSaveRef.current = false

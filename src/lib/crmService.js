@@ -17,6 +17,8 @@ function toDB(client) {
     agentIntakeSummary,
     agentConciergeMessage,
     agentCallLog,
+    depositReceived,
+    depositStatus,
     ...rest
   } = client
   return {
@@ -34,6 +36,8 @@ function toDB(client) {
     ...(agentIntakeSummary     !== undefined && { agent_intake_summary:     agentIntakeSummary }),
     ...(agentConciergeMessage  !== undefined && { agent_concierge_message:  agentConciergeMessage }),
     ...(agentCallLog           !== undefined && { agent_call_log:           agentCallLog }),
+    ...(depositReceived        !== undefined && { deposit_received:         depositReceived }),
+    ...(depositStatus          !== undefined && { deposit_status:           depositStatus }),
   }
 }
 
@@ -52,6 +56,8 @@ function fromDB(row) {
     agent_intake_summary,
     agent_concierge_message,
     agent_call_log,
+    deposit_received,
+    deposit_status,
     ...rest
   } = row
   return {
@@ -69,6 +75,8 @@ function fromDB(row) {
     ...(agent_intake_summary    !== undefined && { agentIntakeSummary:    agent_intake_summary }),
     ...(agent_concierge_message !== undefined && { agentConciergeMessage: agent_concierge_message }),
     ...(agent_call_log          !== undefined && { agentCallLog:          agent_call_log ?? [] }),
+    ...(deposit_received        !== undefined && { depositReceived:       deposit_received }),
+    ...(deposit_status          !== undefined && { depositStatus:         deposit_status }),
   }
 }
 

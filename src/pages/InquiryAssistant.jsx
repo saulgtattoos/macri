@@ -519,12 +519,10 @@ export default function InquiryAssistant() {
   const [editedText,         setEditedText]         = useState(() => loadSession().editedText         ?? '')
   const [sentAction,         setSentAction]         = useState(null)
 
-  // SMS send state
   const [recipientPhone, setRecipientPhone] = useState(() => loadSession().recipientPhone ?? '')
   const [smsSending,     setSmsSending]     = useState(false)
   const [logSmsToCRM,    setLogSmsToCRM]    = useState(true)
 
-  // Email send state
   const [recipientEmail, setRecipientEmail] = useState(() => loadSession().recipientEmail ?? '')
   const [emailSending,   setEmailSending]   = useState(false)
   const [logEmailToCRM,  setLogEmailToCRM]  = useState(true)
@@ -537,11 +535,10 @@ export default function InquiryAssistant() {
   const canSendSms      = isValidPhone(recipientPhone) && editedText.trim().length > 0 && !smsSending
   const canSendEmail    = isValidEmail(recipientEmail) && editedEmail.trim().length > 0 && !emailSending
 
-  // Resolve phone + email: CRM first, then inquiry output, then empty
   useEffect(() => {
     if (!output) return
-    const firstName    = extractFirstName(editedEmail)
-    const crmClient    = findCRMClient(firstName)
+    const firstName     = extractFirstName(editedEmail)
+    const crmClient     = findCRMClient(firstName)
     const resolvedPhone = crmClient?.phone || output?.client?.phone || ''
     const resolvedEmail = crmClient?.email || output?.client?.email || ''
     setRecipientPhone(resolvedPhone)
@@ -632,21 +629,19 @@ export default function InquiryAssistant() {
     setTimeout(() => setSentAction(null), 2500)
   }
 
+  // ─── UPDATED: Open in Gmail uses direct Gmail compose URL ─────────────────
   function handleOpenInGmail() {
     const firstName = extractFirstName(editedEmail)
     const crmClient = findCRMClient(firstName)
-    const toEmail   = crmClient?.email || output?.client?.email || ''
-    const subject   = encodeURIComponent(output?.subject || '')
+    const toEmail   = recipientEmail || crmClient?.email || output?.client?.email || ''
+    const subject   = encodeURIComponent(`Tattoo Inquiry: ${output?.client?.name || 'New Client'} | Saul Gutierrez`)
     const body      = encodeURIComponent(editedEmail)
 
-    if (isMobile) {
-      window.location.href = `googlegmail:///co?to=${encodeURIComponent(toEmail)}&subject=${subject}&body=${body}`
-    } else {
-      window.open(`mailto:${encodeURIComponent(toEmail)}?subject=${subject}&body=${body}`)
-    }
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(toEmail)}&su=${subject}&body=${body}`
+    window.open(gmailUrl, '_blank')
 
     if (crmClient) {
-      logClientActivity(crmClient.id, `${logDate()} Email sent via Inquiry Assistant.`)
+      logClientActivity(crmClient.id, `${logDate()} Email opened in Gmail via Inquiry Assistant.`)
       advanceToInquiryResponse(crmClient.id)
       tickJourneyResponseSent(crmClient.id)
     }
@@ -941,7 +936,6 @@ export default function InquiryAssistant() {
       {!showOutput && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
-          {/* 1. Source + Inquiry */}
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '10px' }}>
               Inquiry Source
@@ -973,7 +967,6 @@ export default function InquiryAssistant() {
             </div>
           </div>
 
-          {/* 2. Response Timing */}
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '10px' }}>
               Response Timing
@@ -981,7 +974,6 @@ export default function InquiryAssistant() {
             <ChipGroup options={TIMINGS} value={timing} onChange={setTiming} />
           </div>
 
-          {/* 3. Response Goal */}
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '10px' }}>
               Response Goal
@@ -989,7 +981,6 @@ export default function InquiryAssistant() {
             <ChipGroup options={CONTENT_TYPES} value={contentType} onChange={setContentType} />
           </div>
 
-          {/* 4. Pricing */}
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '10px' }}>
               Pricing Model
@@ -1022,7 +1013,6 @@ export default function InquiryAssistant() {
             )}
           </div>
 
-          {/* 5. Options */}
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '16px' }}>
               Options
@@ -1033,7 +1023,6 @@ export default function InquiryAssistant() {
             </div>
           </div>
 
-          {/* Generate */}
           <div>
             <button
               onClick={handleGenerate}
@@ -1074,7 +1063,6 @@ export default function InquiryAssistant() {
       {showOutput && output && (
         <div>
 
-          {/* selections summary */}
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px' }}>
             {[
               SOURCES.find(s => s.id === source)?.promptLabel,
@@ -1098,7 +1086,6 @@ export default function InquiryAssistant() {
             position: 'relative',
           }}>
 
-            {/* tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--surface2)', borderRadius: '10px 10px 0 0', overflow: 'hidden' }}>
               {['email', 'text'].map(tab => (
                 <button
@@ -1121,10 +1108,8 @@ export default function InquiryAssistant() {
               ))}
             </div>
 
-            {/* content */}
             <div style={{ padding: '20px' }}>
 
-              {/* ── Email tab ── */}
               {activeTab === 'email' && (
                 <>
                   <div style={{
@@ -1149,7 +1134,6 @@ export default function InquiryAssistant() {
                     onBlur={e => e.target.style.borderColor = 'transparent'}
                   />
 
-                  {/* Recipient Email field */}
                   <div style={{ marginTop: '16px' }}>
                     <div style={{
                       fontFamily: 'var(--font-mono)', fontSize: '10px',
@@ -1170,10 +1154,8 @@ export default function InquiryAssistant() {
                     />
                   </div>
 
-                  {/* Action row */}
                   <div style={{ marginTop: '14px', display: 'flex', gap: '10px', flexWrap: 'wrap', position: 'relative', zIndex: 10 }}>
 
-                    {/* Send Email via Nodemailer */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={handleSendViaGmail}
@@ -1202,7 +1184,6 @@ export default function InquiryAssistant() {
                       {sentAction === 'emailSent' && <CountdownRing />}
                     </div>
 
-                    {/* Copy Email */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={() => handleCopy('email')}
@@ -1218,7 +1199,6 @@ export default function InquiryAssistant() {
                       {sentAction === 'copyEmail' && <CountdownRing />}
                     </div>
 
-                    {/* Open in Gmail */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={handleOpenInGmail}
@@ -1234,7 +1214,6 @@ export default function InquiryAssistant() {
                       {sentAction === 'gmail' && <CountdownRing />}
                     </div>
 
-                    {/* Save to CRM */}
                     <button
                       onClick={savedToCRM ? undefined : handleSaveToCRM}
                       style={{
@@ -1253,12 +1232,10 @@ export default function InquiryAssistant() {
                     </button>
                   </div>
 
-                  {/* Log to CRM checkbox — shows when valid email entered */}
                   {isValidEmail(recipientEmail) && logCRMCheckbox(logEmailToCRM, () => setLogEmailToCRM(v => !v))}
                 </>
               )}
 
-              {/* ── Text tab ── */}
               {activeTab === 'text' && (
                 <>
                   <textarea
@@ -1269,7 +1246,6 @@ export default function InquiryAssistant() {
                     onBlur={e => e.target.style.borderColor = 'transparent'}
                   />
 
-                  {/* Phone number field */}
                   <div style={{ marginTop: '16px' }}>
                     <div style={{
                       fontFamily: 'var(--font-mono)', fontSize: '10px',
@@ -1290,10 +1266,8 @@ export default function InquiryAssistant() {
                     />
                   </div>
 
-                  {/* Action row */}
                   <div style={{ marginTop: '14px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 10 }}>
 
-                    {/* Send via Twilio */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={handleSendViaTwilio}
@@ -1322,7 +1296,6 @@ export default function InquiryAssistant() {
                       {sentAction === 'twilio' && <CountdownRing />}
                     </div>
 
-                    {/* Copy Text */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={() => handleCopy('text')}
@@ -1338,7 +1311,6 @@ export default function InquiryAssistant() {
                       {sentAction === 'copyText' && <CountdownRing />}
                     </div>
 
-                    {/* Open in Messages */}
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
                         onClick={handleOpenInMessages}
@@ -1354,7 +1326,6 @@ export default function InquiryAssistant() {
                       {sentAction === 'messages' && <CountdownRing />}
                     </div>
 
-                    {/* Save to CRM */}
                     <button
                       onClick={savedToCRM ? undefined : handleSaveToCRM}
                       style={{
@@ -1373,7 +1344,6 @@ export default function InquiryAssistant() {
                     </button>
                   </div>
 
-                  {/* Log to CRM checkbox — only shows when valid phone entered */}
                   {isValidPhone(recipientPhone) && logCRMCheckbox(logSmsToCRM, () => setLogSmsToCRM(v => !v))}
                 </>
               )}
@@ -1381,7 +1351,6 @@ export default function InquiryAssistant() {
             </div>
           </div>
 
-          {/* result navigation */}
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
             <button
               onClick={() => setShowOutput(false)}

@@ -259,6 +259,14 @@ const MAPS = {
       }
     },
   },
+  'studio_inventory_v1': {
+    toDB: (r) => r,
+    fromDB: (r) => r,
+  },
+  'studio_cart_v1': {
+    toDB: (r) => r,
+    fromDB: (r) => r,
+  },
 }
 
 export function makeService(tableName, lsKey) {
@@ -313,3 +321,5 @@ export const draftsService = makeService('macri_content_drafts', 'macri_content_
 export const hashtagsService = makeService('macri_content_hashtags', 'macri_content_hashtags')
 export const sessionPrepService = makeService('macri_session_prep', 'macri_session_prep')
 export const agentQueueService = makeService('macri_agent_queue', 'macri_agent_queue')
+export const studioInventoryService = makeService('studio_inventory_v1', 'studio_inventory_v1')
+export const studioCartService = makeService('studio_cart_v1', 'studio_cart_v1')

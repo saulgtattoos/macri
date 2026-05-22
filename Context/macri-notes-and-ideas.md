@@ -3,7 +3,12 @@ All projects
 MACRI
 Studio management app for tattoo artist Saul Gutierrez. React + Vite + Tailwind. Hosted at macri.vercel.app.
 
+MACRI Acronym
+Managing Artist, Clients, Revenue, Intelligently.
+Referenced in all product copy, GetMacri.com launch content, and any public facing descriptions of the app.
 
+MACRI Origin Story
+MACRI is named after Saul's late mother Macrina. The acronym (Managing Artist, Clients, Revenue, Intelligently) emerged from her name, not the other way around. When presenting the platform to anyone for the first time, lead with the human origin before revealing the operational meaning. That sequence creates connection before function, which is the right order.
 
 How can I help you today?
 

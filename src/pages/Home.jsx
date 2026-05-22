@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { STAGES } from '../constants/stages'
 import { loadClients as loadClientsDB, saveClient } from '../lib/crmService'
 import { sessionsService } from '../lib/dataService'
+import { supabase } from '../lib/supabase'
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
@@ -322,6 +323,17 @@ export default function Home() {
 
   const [clients, setClients] = useState([])
   const [goals,   setGoals]   = useState(loadGoals)
+  const [dailyBrief, setDailyBrief] = useState(null)
+
+  useEffect(() => {
+    const fetchBrief = async () => {
+      const { data, error } = await supabase.rpc('get_daily_brief')
+      console.log('Brief data:', JSON.stringify(data))
+      if (error) console.error('Daily brief error:', error)
+      if (data) setDailyBrief(data.get_daily_brief ?? data)
+    }
+    fetchBrief()
+  }, [])
 
   // Quote
   const [quoteIdx,  setQuoteIdx]  = useState(getDailyIdx)
@@ -1114,6 +1126,34 @@ export default function Home() {
         </span>
       </div>
 
+     {/* ══ DAILY BRIEF ══ */}
+      {dailyBrief && (
+        <div style={{ ...CARD, marginBottom: 12 }}>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
+            Today at a Glance
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <div style={{ background: '#0e0e0d', borderRadius: 10, padding: 12, border: '1px solid #1e1e1b' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', marginBottom: 4 }}>Sessions</p>
+              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: '#e8e6df', fontWeight: 700 }}>
+                {dailyBrief.overview.appointments_count}
+              </p>
+            </div>
+            <div style={{ background: '#0e0e0d', borderRadius: 10, padding: 12, border: '1px solid #1e1e1b' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', marginBottom: 4 }}>Revenue</p>
+              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: '#c9a96e', fontWeight: 700 }}>
+                ${dailyBrief.overview.projected_revenue}
+              </p>
+            </div>
+            <div style={{ background: '#0e0e0d', borderRadius: 10, padding: 12, border: '1px solid #1e1e1b' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', marginBottom: 4 }}>Intake</p>
+              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: '#e8e6df', fontWeight: 700 }}>
+                {dailyBrief.overview.pending_intake_forms}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ══ SECTION 2: Active Session Days ══ */}
       <div style={CARD}>
         <p style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e', marginBottom: 4 }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadClients, saveClients, mkClient } from './CRM'
+import { mkClient } from './CRM'
+import { loadClients, saveClient } from '../lib/crmService'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -333,7 +334,8 @@ export default function Consultation() {
       if (idx >= 0) {
         clients[idx] = {
           ...clients[idx],
-          stage: 'Design Phase',
+          stage: 'consultation_completed',
+        projectStage: 'consultation_completed',
           updatedAt: now,
           consultations: [consultationObj, ...(clients[idx].consultations || [])],
         }
@@ -348,7 +350,8 @@ export default function Consultation() {
         socialHandle: formData.socialHandle,
         referralSource: formData.referralSource,
         firstTimeClient: formData.firstTimeClient,
-        stage: 'Design Phase',
+        stage: 'consultation_completed',
+        projectStage: 'consultation_completed',
         clientTier: formData.clientTier,
         updatedAt: now,
         consultations: [consultationObj],
@@ -357,8 +360,8 @@ export default function Consultation() {
       clients.unshift(newClient)
     }
 
-    saveClients(clients)
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ saved: true }))
+    const recordToSave = existingId !== null ? clients.find(c => c.id === existingId) : clients[0]
+    if (recordToSave) await saveClient(recordToSave)
     localStorage.removeItem(DRAFT_KEY)
 
     if (clientWin.current && !clientWin.current.closed) {
@@ -408,7 +411,7 @@ export default function Consultation() {
       return
     }
 
-    const clients = loadClients()
+    const clients = await loadClients()
     const existing = clients.find(c => {
       const nameMatch = c.name?.toLowerCase() === formData.name.trim().toLowerCase()
       const emailMatch = formData.email && c.email?.toLowerCase() === formData.email.toLowerCase()
@@ -428,7 +431,7 @@ export default function Consultation() {
     const ttsPlayer = new Audio()
     ttsPlayer.src = IOS_WAV
     ttsPlayer.play().catch(() => {})
-    const clients = loadClients()
+    const clients = await loadClients()
     await doSave(clients, dupClient.id, ttsPlayer)
   }
 
@@ -436,7 +439,7 @@ export default function Consultation() {
     const ttsPlayer = new Audio()
     ttsPlayer.src = IOS_WAV
     ttsPlayer.play().catch(() => {})
-    const clients = loadClients()
+    const clients = await loadClients()
     await doSave(clients, null, ttsPlayer)
   }
 

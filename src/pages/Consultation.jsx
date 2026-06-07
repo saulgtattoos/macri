@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { mkClient } from './CRM'
 import { loadClients, saveClient } from '../lib/crmService'
 
@@ -228,6 +229,9 @@ export default function Consultation() {
   const [clientWinOpen, setClientWinOpen]   = useState(false)
   const imageURLs                           = useRef({})
   const fileInputRef                        = useRef(null)
+  const [searchParams]                      = useSearchParams()
+  const [prefillClientId, setPrefillClientId] = useState(null)
+  const [upcomingClients, setUpcomingClients] = useState([])
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
@@ -255,6 +259,78 @@ export default function Consultation() {
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
+  }, [])
+
+  // Prefill from CRM when clientId param is present
+  useEffect(() => {
+    const clientId = searchParams.get('clientId')
+    if (!clientId) return
+    loadClients().then(clients => {
+      const match = clients.find(c => c.id === clientId)
+      if (!match) return
+      setPrefillClientId(clientId)
+      localStorage.removeItem(DRAFT_KEY)
+      setFormData({
+        ...defaultForm,
+        name:            match.name            || '',
+        phone:           match.phone           || '',
+        email:           match.email           || '',
+        socialPlatform:  match.socialPlatform  || 'Instagram',
+        socialHandle:    match.socialHandle    || '',
+        referralSource:  match.referralSource  || '',
+        firstTimeClient: match.firstTimeClient ?? null,
+      })
+      setCurrentStep(0)
+    })
+  }, [])
+
+  // Load upcoming consultations
+  useEffect(() => {
+    loadClients().then(clients => {
+      const upcoming = clients
+        .filter(c => c.stage === 'consultation_scheduled' || c.projectStage === 'consultation_scheduled')
+        .sort((a, b) => {
+          const aDate = a.consultations?.[0]?.consultationDate || ''
+          const bDate = b.consultations?.[0]?.consultationDate || ''
+          return aDate.localeCompare(bDate)
+        })
+      setUpcomingClients(upcoming)
+    })
+  }, [])
+
+  useEffect(() => {
+    const clientId = searchParams.get('clientId')
+    if (!clientId) return
+    loadClients().then(clients => {
+      const match = clients.find(cl => cl.id === clientId)
+      if (!match) return
+      setPrefillClientId(clientId)
+      localStorage.removeItem(DRAFT_KEY)
+      setFormData({
+        ...defaultForm,
+        name:            match.name            || '',
+        phone:           match.phone           || '',
+        email:           match.email           || '',
+        socialPlatform:  match.socialPlatform  || 'Instagram',
+        socialHandle:    match.socialHandle    || '',
+        referralSource:  match.referralSource  || '',
+        firstTimeClient: match.firstTimeClient ?? null,
+      })
+      setCurrentStep(0)
+    })
+  }, [])
+
+  useEffect(() => {
+    loadClients().then(clients => {
+      const upcoming = clients
+        .filter(cl => cl.stage === 'consultation_scheduled' || cl.projectStage === 'consultation_scheduled')
+        .sort((a, b) => {
+          const aDate = a.consultations?.[0]?.consultationDate || ''
+          const bDate = b.consultations?.[0]?.consultationDate || ''
+          return aDate.localeCompare(bDate)
+        })
+      setUpcomingClients(upcoming)
+    })
   }, [])
 
   function openClientMode() {
@@ -412,6 +488,12 @@ export default function Consultation() {
     }
 
     const clients = await loadClients()
+
+    if (prefillClientId) {
+      await doSave(clients, prefillClientId, ttsPlayer)
+      return
+    }
+
     const existing = clients.find(c => {
       const nameMatch = c.name?.toLowerCase() === formData.name.trim().toLowerCase()
       const emailMatch = formData.email && c.email?.toLowerCase() === formData.email.toLowerCase()
@@ -1435,6 +1517,34 @@ export default function Consultation() {
           Client intake wizard
         </div>
       </div>
+
+      {/* Upcoming Consultations */}
+      {upcomingClients.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e', letterSpacing: '0.08em', marginBottom: 10 }}>
+            UPCOMING CONSULTATIONS
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {upcomingClients.map(c => {
+              const date = c.consultations?.[0]?.consultationDate
+              const formatted = date
+                ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : 'Date not set'
+              return (
+                <div key={c.id} style={{ background: '#161614', border: '1px solid rgba(201,169,110,0.15)', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df', fontWeight: 600 }}>{c.name}</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginTop: 2 }}>{formatted}</div>
+                  </div>
+                  <a href={`/consultation?clientId=${c.id}`} style={{ minHeight: 34, padding: '0 14px', background: '#c9a96e', color: '#0e0e0d', borderRadius: 6, fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}>
+                    Begin
+                  </a>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Client Mode */}
       <div style={{ marginBottom: 16 }}>

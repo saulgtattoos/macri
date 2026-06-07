@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useOutletContext, useLocation } from 'react-router-dom'
+import { useOutletContext, useLocation, useNavigate } from 'react-router-dom'
 import supabase from '../lib/supabase'
 import { loadClients as loadClientsDB, saveClient, deleteClient, seedFromLocalStorage } from '../lib/crmService'
 import {
@@ -725,6 +725,7 @@ function SpeakerButton({ active = false, onClick }) {
 // ─── ClientDrawer ─────────────────────────────────────────────────────────────
 
 function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection }) {
+  const navigate = useNavigate()
   const isMobile = useIsMobile()
 
   const [activeAftercarePanel, setActiveAftercarePanel] = useState(null)
@@ -1048,8 +1049,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   }
 
   function handleStartConsult() {
-    setAddConsultOpen(true)
-    setTimeout(() => consultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+    navigate(`/consultation?clientId=${client.id}`)
   }
 
   function handleArchive() {

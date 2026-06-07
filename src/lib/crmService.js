@@ -3,42 +3,36 @@ import supabase from './supabase'
 const LS_KEY = 'macri_crm_clients'
 
 function toDB(client) {
-  const {
-    tattooIdea,
-    nextAction,
-    projectStage,
-    projectOrder,
-    consultationCount,
-    journeyChecklist,
-    aftercareChecklist,
-    activityLog,
-    createdAt,
-    updatedAt,
-    agentIntakeSummary,
-    agentConciergeMessage,
-    agentCallLog,
-    depositReceived,
-    depositStatus,
-    ...rest
-  } = client
-  return {
-    ...rest,
-    ...(tattooIdea             !== undefined && { tattoo_idea:              tattooIdea }),
-    ...(nextAction             !== undefined && { next_action:              nextAction }),
-    ...(projectStage           !== undefined && { project_stage:            projectStage }),
-    ...(projectOrder           !== undefined && { project_order:            projectOrder }),
-    ...(consultationCount      !== undefined && { consultation_count:       consultationCount }),
-    ...(journeyChecklist       !== undefined && { journey_checklist:        journeyChecklist }),
-    ...(aftercareChecklist     !== undefined && { aftercare_checklist:      aftercareChecklist }),
-    ...(activityLog            !== undefined && { activity_log:             activityLog }),
-    ...(createdAt              !== undefined && { created_at:               createdAt }),
-    ...(updatedAt              !== undefined && { updated_at:               updatedAt }),
-    ...(agentIntakeSummary     !== undefined && { agent_intake_summary:     agentIntakeSummary }),
-    ...(agentConciergeMessage  !== undefined && { agent_concierge_message:  agentConciergeMessage }),
-    ...(agentCallLog           !== undefined && { agent_call_log:           agentCallLog }),
-    ...(depositReceived        !== undefined && { deposit_received:         depositReceived }),
-    ...(depositStatus          !== undefined && { deposit_status:           depositStatus }),
-  }
+  // Explicit allowlist — only send columns that exist in crm_clients_v1.
+  // All deeper consultation form fields live inside the consultations JSONB array.
+  const row = {}
+  if (client.id                    !== undefined) row.id                     = client.id
+  if (client.name                  !== undefined) row.name                   = client.name
+  if (client.email                 !== undefined) row.email                  = client.email
+  if (client.phone                 !== undefined) row.phone                  = client.phone
+  if (client.style                 !== undefined) row.style                  = client.style
+  if (client.placement             !== undefined) row.placement              = client.placement
+  if (client.size                  !== undefined) row.size                   = client.size
+  if (client.status                !== undefined) row.status                 = client.status
+  if (client.stage                 !== undefined) row.stage                  = client.stage
+  if (client.tattooIdea            !== undefined) row.tattoo_idea            = client.tattooIdea
+  if (client.nextAction            !== undefined) row.next_action            = client.nextAction
+  if (client.projectStage          !== undefined) row.project_stage          = client.projectStage
+  if (client.projectOrder          !== undefined) row.project_order          = client.projectOrder
+  if (client.consultationCount     !== undefined) row.consultation_count     = client.consultationCount
+  if (client.journeyChecklist      !== undefined) row.journey_checklist      = client.journeyChecklist
+  if (client.aftercareChecklist    !== undefined) row.aftercare_checklist    = client.aftercareChecklist
+  if (client.consultations         !== undefined) row.consultations          = client.consultations
+  if (client.sessions              !== undefined) row.sessions               = client.sessions
+  if (client.activityLog           !== undefined) row.activity_log           = client.activityLog
+  if (client.createdAt             !== undefined) row.created_at             = client.createdAt
+  if (client.updatedAt             !== undefined) row.updated_at             = client.updatedAt
+  if (client.agentIntakeSummary    !== undefined) row.agent_intake_summary   = client.agentIntakeSummary
+  if (client.agentConciergeMessage !== undefined) row.agent_concierge_message = client.agentConciergeMessage
+  if (client.agentCallLog          !== undefined) row.agent_call_log         = client.agentCallLog
+  if (client.depositReceived       !== undefined) row.deposit_received       = client.depositReceived
+  if (client.depositStatus         !== undefined) row.deposit_status         = client.depositStatus
+  return row
 }
 
 function fromDB(row) {

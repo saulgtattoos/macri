@@ -85,3 +85,17 @@ from (
   where n.nspname = 'public' and cl.relkind = 'r'
   group by cl.oid, cl.relname
 ) t;
+
+-- 9. Lock check: every API grant that anon or a signed in user still holds in public.
+--    During live preparation this must return ONLY functions that are safe to call
+--    (get_daily_brief as invoker fails without table access). No tables, views or sequences.
+select 'table/view/sequence' as kind, table_name as name, grantee, privilege_type
+from information_schema.role_table_grants
+where table_schema = 'public' and grantee in ('anon', 'authenticated')
+union all
+select 'function', p.oid::regprocedure::text, r.rolname, 'EXECUTE'
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+cross join (values ('anon'), ('authenticated')) as r(rolname)
+where n.nspname = 'public' and has_function_privilege(r.rolname, p.oid, 'execute')
+order by 1, 2, 3;

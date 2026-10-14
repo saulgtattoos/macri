@@ -264,3 +264,35 @@ test('lockdown is safe to run twice', async () => {
   const r = await as(db, 'anon', null, () => attempt(db.query('select * from public.crm_clients_v1')))
   assert.equal(r.ok, false)
 })
+
+test('rate limit rollback removes only the counter function and table', async () => {
+  const db = await supabaseLikeDb()
+  await db.exec(sqlFile('05_resume_lockdown.sql'))
+  await db.exec(sqlFile('01_rate_limits.sql'))
+  await db.exec(sqlFile('91_rollback_rate_limits.sql'))
+  const fn = await db.query(`select 1 from pg_proc where proname = 'consume_rate_limit'`)
+  assert.equal(fn.rows.length, 0)
+  const tbl = await db.query(`select to_regclass('private.rate_limits') as t`)
+  assert.equal(tbl.rows[0].t, null)
+  const clients = await as(db, 'anon', null, () => attempt(db.query('select * from public.crm_clients_v1')))
+  assert.equal(clients.ok, false, 'still locked after rollback')
+  const svc = await as(db, 'service_role', null, () => db.query('select count(*)::int n from public.crm_clients_v1'))
+  assert.equal(svc.rows[0].n, 1, 'client data untouched')
+})
+
+test('preparation state (lockdown + rate limits, no owner access yet) keeps everything locked', async () => {
+  const db = await supabaseLikeDb()
+  await db.exec(sqlFile('05_resume_lockdown.sql'))
+  await db.exec(sqlFile('01_rate_limits.sql'))
+  await db.exec(`insert into auth.users values ('33333333-3333-4333-8333-333333333333', 'live.owner@example.test')`)
+  for (const role of [['anon', null], ['authenticated', OWNER], ['authenticated', '33333333-3333-4333-8333-333333333333']]) {
+    for (const t of TABLES) {
+      const r = await as(db, role[0], role[1], () => attempt(db.query(`select * from public.${t}`)))
+      assert.equal(r.ok, false, `${role.join(':')} ${t}`)
+    }
+    const rl = await as(db, role[0], role[1], () => attempt(db.query(`select public.consume_rate_limit('x', 60, 1)`)))
+    assert.equal(rl.ok, false, `${role.join(':')} rate limit`)
+  }
+  const grants = await db.query(`select 1 from information_schema.role_table_grants where table_schema = 'public' and grantee in ('anon','authenticated')`)
+  assert.equal(grants.rows.length, 0)
+})

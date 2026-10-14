@@ -86,8 +86,9 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 1. DONE 2026-10-12: live project resumed and locked (verified), signups off, read only inspection complete. n8n check done (automation workspace no longer active; Concierge stays off until automation is rebuilt). Test project created and set up with synthetic data; automated access checks and all eight browser checks pass (sign in, sign out, expired session, failed save labeling, other account, pre login device data, public client pages, phone width). Next: approvals for commit and the staged rollout (.private/SECURITY.md).
 2. DONE 2026-10-13: test project, synthetic data, access checks and browser checks.
 3. DONE 2026-10-13: docs reviewed; local only documents gitignored (founder briefing, project briefing HTML and PDF, Founding Vision). Three local commits on branch security-phase-1 (docs, HomeBase redesign, Security Phase 1). Not pushed.
-4. Coordinated rollout (.private/SECURITY.md), each live step with approval.
-5. Shared session data approach and Finance one ledger spec, then /log, then voice logging.
+4. DONE 2026-10-13: branch pushed; Vercel Preview for security-phase-1 uses only the test project with AI and messaging disabled; preview deployment verified. Production and the live database unchanged.
+5. Coordinated rollout (.private/SECURITY.md), each live step with approval.
+6. Shared session data approach and Finance one ledger spec, then /log, then voice logging.
 
 ## Open Questions for Saul
 - Deposits: when does a deposit count as earned revenue (on receipt, at the session, or when forfeited)?

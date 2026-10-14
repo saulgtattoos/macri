@@ -92,6 +92,7 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 8. NEXT: revoke old provider keys (C4), then one approved paid call to confirm AI and voice use the new keys.
 9. NEXT: owner login password did not match on 2026-10-14 (signed in with a one time link instead). Build a set new password screen (spec agreed in chat, test project first).
 10. Later: cleanup (unused Production variables, stale preview branch, email sender, account 2FA).
+11. DEADLINE: the Production Anthropic key expires 2026-11-12. Create a replacement and update the Vercel server setting before then, or AI stops working.
 
 ## Open Questions for Saul
 - Deposits: when does a deposit count as earned revenue (on receipt, at the session, or when forfeited)?

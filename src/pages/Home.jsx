@@ -1,34 +1,22 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { STAGES } from '../constants/stages'
-import { loadClients as loadClientsDB, saveClient } from '../lib/crmService'
-import { sessionsService } from '../lib/dataService'
+import { loadClients as loadClientsDB } from '../lib/crmService'
 import { supabase } from '../lib/supabase'
-
-// ─── Storage ──────────────────────────────────────────────────────────────────
-
-const LS_GOALS    = 'macri_goals'
-const LS_WELCOME  = 'macri_welcome_last_seen'
-function loadGoals() {
-  try { return JSON.parse(localStorage.getItem(LS_GOALS)) || [] } catch { return [] }
-}
-function saveGoals(list) {
-  localStorage.setItem(LS_GOALS, JSON.stringify(list))
-}
 
 // ─── Quotes ───────────────────────────────────────────────────────────────────
 
 const QUOTES = [
-  { text: 'Your body is a journal, and tattoos are the stories.',                 author: 'Johnny Depp' },
-  { text: 'Art is not what you see, but what you make others see.',               author: 'Edgar Degas' },
-  { text: 'Every artist dips his brush in his own soul.',                         author: 'Henry Ward Beecher' },
-  { text: 'Creativity takes courage.',                                            author: 'Henri Matisse' },
-  { text: 'The purpose of art is washing the dust of daily life off our souls.',  author: 'Pablo Picasso' },
-  { text: 'Art enables us to find ourselves and lose ourselves at the same time.', author: 'Thomas Merton' },
-  { text: "To create one's own world takes courage.",                             author: "Georgia O'Keeffe" },
-  { text: 'An artist is not paid for his labor but for his vision.',              author: 'James Whistler' },
-  { text: 'Great art picks up where nature ends.',                                author: 'Marc Chagall' },
-  { text: 'The job of the artist is always to deepen the mystery.',               author: 'Francis Bacon' },
+  { text: 'Your body is a journal, and tattoos are the stories.',                  author: 'Johnny Depp' },
+  { text: 'Art is not what you see, but what you make others see.',                author: 'Edgar Degas' },
+  { text: 'Every artist dips his brush in his own soul.',                          author: 'Henry Ward Beecher' },
+  { text: 'Creativity takes courage.',                                             author: 'Henri Matisse' },
+  { text: 'The purpose of art is washing the dust of daily life off our souls.',   author: 'Pablo Picasso' },
+  { text: 'Art enables us to find ourselves and lose ourselves at the same time.',  author: 'Thomas Merton' },
+  { text: "To create one's own world takes courage.",                              author: "Georgia O'Keeffe" },
+  { text: 'An artist is not paid for his labor but for his vision.',               author: 'James Whistler' },
+  { text: 'Great art picks up where nature ends.',                                 author: 'Marc Chagall' },
+  { text: 'The job of the artist is always to deepen the mystery.',                author: 'Francis Bacon' },
 ]
 
 function getDailyIdx() {
@@ -45,7 +33,7 @@ function getRefreshIdx(current) {
 
 async function speakText(text) {
   try {
-    const key    = import.meta.env.VITE_ELEVENLABS_KEY
+    const key     = import.meta.env.VITE_ELEVENLABS_KEY
     const voiceId = 'Q2Qd4P9qaDNuBFUcFCQr'
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
@@ -57,8 +45,8 @@ async function speakText(text) {
       }),
     })
     if (!res.ok) return
-    const blob = await res.blob()
-    const url  = URL.createObjectURL(blob)
+    const blob  = await res.blob()
+    const url   = URL.createObjectURL(blob)
     const audio = new Audio(url)
     audio.play()
     audio.onended = () => URL.revokeObjectURL(url)
@@ -99,8 +87,8 @@ function parseSessionDate(str) {
 function getDateRange(period) {
   const now = new Date()
   if (period === 'week') {
-    const day  = now.getDay()
-    const diff = day === 0 ? 6 : day - 1
+    const day   = now.getDay()
+    const diff  = day === 0 ? 6 : day - 1
     const start = new Date(now); start.setDate(now.getDate() - diff); start.setHours(0, 0, 0, 0)
     const end   = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999)
     return { start, end }
@@ -134,6 +122,14 @@ function fmt(n) {
   return '$' + Math.round(n || 0).toLocaleString('en-US')
 }
 
+// ─── Goals storage ────────────────────────────────────────────────────────────
+
+const LS_GOALS = 'macri_goals'
+function loadGoals() {
+  try { return JSON.parse(localStorage.getItem(LS_GOALS)) || [] } catch { return [] }
+}
+function saveGoals(list) { localStorage.setItem(LS_GOALS, JSON.stringify(list)) }
+
 // ─── Pipeline ─────────────────────────────────────────────────────────────────
 
 const PIPELINE_STAGES = STAGES.filter(s => s !== 'Archive')
@@ -148,13 +144,20 @@ const STAGE_COLORS = {
   'Completed':        '#7aab8f',
 }
 
-// ─── Shared card style ────────────────────────────────────────────────────────
+// ─── Welcome helpers ──────────────────────────────────────────────────────────
 
-const CARD = {
-  background: '#161614',
-  border: '1px solid #2a2a27',
-  borderRadius: 12,
-  padding: '20px 24px',
+const LS_WELCOME = 'macri_welcome_last_seen'
+
+function todayISO() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function getGreeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning, Saul.'
+  if (h < 17) return 'Good afternoon, Saul.'
+  return 'Good evening, Saul.'
 }
 
 // ─── Responsive hook ──────────────────────────────────────────────────────────
@@ -169,95 +172,11 @@ function useIsNarrow() {
   return narrow
 }
 
-// ─── Session log helpers ──────────────────────────────────────────────────────
-
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-const STYLE_OPTIONS = [
-  'Watercolor', 'Black and Gray', 'Black and Gray Portrait',
-  'Sketch Art', 'Abstract', 'Stippled Shading', 'Color Realism', 'Fine Line', 'Other',
-]
-
-const PAYMENT_OPTIONS = ['Cash', 'Zelle', 'Venmo', 'Apple Pay']
-
-function mkSF() {
-  return {
-    selectedClientId: null,
-    clientName: '',
-    date: todayISO(),
-    style: 'Watercolor',
-    placement: '',
-    total: '',
-    tip: '',
-    payment: 'Cash',
-    notes: '',
-    film: false,
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    instagramTag: '',
-  }
-}
-
-// ─── CSV helpers ──────────────────────────────────────────────────────────────
-
-function parseCSVManual(text) {
-  const lines = text.split(/\r?\n/)
-  const rows  = []
-  for (const line of lines) {
-    if (!line.trim()) continue
-    const row = []
-    let inQuote = false
-    let cur     = ''
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i]
-      if (ch === '"') {
-        if (inQuote && line[i + 1] === '"') { cur += '"'; i++ }
-        else inQuote = !inQuote
-      } else if (ch === ',' && !inQuote) {
-        row.push(cur.trim()); cur = ''
-      } else {
-        cur += ch
-      }
-    }
-    row.push(cur.trim())
-    rows.push(row)
-  }
-  return rows
-}
-
-function normalizeDate(str) {
-  if (!str || !str.trim()) return todayISO()
-  const s = str.trim()
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-  const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (m1) return `${m1[3]}-${m1[1].padStart(2, '0')}-${m1[2].padStart(2, '0')}`
-  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/)
-  if (m2) {
-    const year = parseInt(m2[3]) < 50 ? `20${m2[3]}` : `19${m2[3]}`
-    return `${year}-${m2[1].padStart(2, '0')}-${m2[2].padStart(2, '0')}`
-  }
-  return todayISO()
-}
-
-// ─── Welcome helpers ──────────────────────────────────────────────────────────
-
-function getGreeting() {
-  const h = new Date().getHours()
-  if (h < 12) return 'Good morning, Saul.'
-  if (h < 17) return 'Good afternoon, Saul.'
-  return 'Good evening, Saul.'
-}
-
-// ─── SVG icons ────────────────────────────────────────────────────────────────
+// ─── Micro icons ──────────────────────────────────────────────────────────────
 
 function IconRefresh() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
       <path d="M13 4A6 6 0 1 0 14 8" stroke="#7a786f" strokeWidth="1.5" strokeLinecap="round"/>
       <path d="M14 1.5V5h-3.5" stroke="#7a786f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
@@ -280,22 +199,6 @@ function IconChevronRight({ color = '#7a786f' }) {
   )
 }
 
-function IconChevronDown({ color = '#7a786f' }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M4 6l4 4 4-4" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
-
-function IconChevronUp({ color = '#7a786f' }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M4 10l4-4 4 4" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
-
 function IconTrash() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -304,15 +207,22 @@ function IconTrash() {
   )
 }
 
-function IconMic({ size = 28, color = 'currentColor' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="2" width="6" height="11" rx="3" />
-      <path d="M5 10a7 7 0 0 0 14 0" />
-      <line x1="12" y1="19" x2="12" y2="22" />
-      <line x1="8" y1="22" x2="16" y2="22" />
-    </svg>
-  )
+// ─── Shared card style ────────────────────────────────────────────────────────
+
+const CARD = {
+  background: 'linear-gradient(160deg, #1a1a17 0%, #161614 100%)',
+  border: '1px solid rgba(255,255,255,0.06)',
+  borderTop: '1px solid rgba(255,255,255,0.09)',
+  borderRadius: 14,
+  padding: '24px 28px',
+}
+
+const LABEL_MONO = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: 10,
+  color: '#7a786f',
+  textTransform: 'uppercase',
+  letterSpacing: '0.1em',
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -321,18 +231,34 @@ export default function Home() {
   const navigate = useNavigate()
   const narrow   = useIsNarrow()
 
-  const [clients, setClients] = useState([])
-  const [goals,   setGoals]   = useState(loadGoals)
+  const [clients,    setClients]    = useState([])
+  const [goals,      setGoals]      = useState(loadGoals)
   const [dailyBrief, setDailyBrief] = useState(null)
 
   useEffect(() => {
     const fetchBrief = async () => {
       const { data, error } = await supabase.rpc('get_daily_brief')
-      console.log('Brief data:', JSON.stringify(data))
       if (error) console.error('Daily brief error:', error)
       if (data) setDailyBrief(data.get_daily_brief ?? data)
     }
     fetchBrief()
+  }, [])
+
+  useEffect(() => {
+    loadClientsDB().then(setClients)
+  }, [])
+
+  // Welcome modal
+  const [welcomeOpen,   setWelcomeOpen]   = useState(false)
+  const [briefingShown, setBriefingShown] = useState(false)
+
+  useEffect(() => {
+    const todayStr = todayISO()
+    const last = localStorage.getItem(LS_WELCOME)
+    if (last !== todayStr) {
+      localStorage.setItem(LS_WELCOME, todayStr)
+      setWelcomeOpen(true)
+    }
   }, [])
 
   // Quote
@@ -352,49 +278,13 @@ export default function Home() {
   const [addGoalOpen, setAddGoalOpen] = useState(false)
   const [goalForm,    setGoalForm]    = useState({ name: '', targetAmount: '', category: 'Rent' })
 
-  // Welcome modal
-  const [welcomeOpen,   setWelcomeOpen]   = useState(false)
-  const [briefingShown, setBriefingShown] = useState(false)
-
-  // Log a Session card
-  const [logCardOpen,  setLogCardOpen]  = useState(true)
-  const [clientMode,   setClientMode]   = useState('existing')
-  const [sf,           setSf]           = useState(mkSF)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-
-  // Voice log
-  const [voiceStatus, setVoiceStatus] = useState('idle')
-  const [voiceMsg,    setVoiceMsg]    = useState('Speak Session')
-  const logMicRef    = useRef(null)
-  const logStreamRef = useRef(null)
-  const logChunksRef = useRef([])
-  const logMimeRef   = useRef('')
-  const logTtsRef    = useRef(null)
-
   // Toast
   const [toast, setToast] = useState(null)
 
-  // Aftercare link
-  const [lastSavedSession, setLastSavedSession] = useState(null)
-
-  // CSV import
-  const [csvOpen, setCsvOpen] = useState(false)
-  const [csvRows, setCsvRows] = useState([])
-  const [csvDups, setCsvDups] = useState([])
-  const fileInputRef = useRef(null)
-
-  useEffect(() => {
-    loadClientsDB().then(setClients)
-  }, [])
-
-  useEffect(() => {
-    const todayStr = todayISO()
-    const last = localStorage.getItem(LS_WELCOME)
-    if (last !== todayStr) {
-      localStorage.setItem(LS_WELCOME, todayStr)
-      setWelcomeOpen(true)
-    }
-  }, [])
+  function showToast(msg, color = '#7aab8f') {
+    setToast({ msg, color })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   // ── Derived: calendar ──
 
@@ -424,30 +314,20 @@ export default function Home() {
   }, [clients])
 
   const bottleneckStage = PIPELINE_STAGES.find(s => stageCounts[s] >= 3) || null
+  const totalActive     = clients.filter(c => c.stage && c.stage !== 'Archive' && c.stage !== 'Completed').length
 
   // ── Derived: earnings ──
 
-  const periodSessions = useMemo(() => filterSessions(clients, period), [clients, period])
-  const revenue        = periodSessions.reduce((s, x) => s + (parseFloat(x.amountPaid) || 0), 0)
-  const tips           = periodSessions.reduce((s, x) => s + (parseFloat(x.tip) || 0), 0)
-  const avgPerSession  = periodSessions.length > 0 ? revenue / periodSessions.length : 0
-  const taxAside       = revenue * 0.28
+  const periodSessions   = useMemo(() => filterSessions(clients, period), [clients, period])
+  const revenue          = periodSessions.reduce((s, x) => s + (parseFloat(x.amountPaid) || 0), 0)
+  const tips             = periodSessions.reduce((s, x) => s + (parseFloat(x.tip) || 0), 0)
+  const avgPerSession    = periodSessions.length > 0 ? revenue / periodSessions.length : 0
+  const taxAside         = revenue * 0.28
 
   const thisMonthRevenue = useMemo(() => {
     return filterSessions(clients, 'month')
       .reduce((s, x) => s + (parseFloat(x.amountPaid) || 0), 0)
   }, [clients])
-
-  // ── Derived: client search ──
-
-  const searchResults = useMemo(() => {
-    const q = (sf.clientName || '').toLowerCase().trim()
-    if (!q || !dropdownOpen) return []
-    return clients
-      .filter(c => c.stage !== 'Archive')
-      .filter(c => (c.name || '').toLowerCase().includes(q))
-      .slice(0, 10)
-  }, [sf.clientName, clients, dropdownOpen])
 
   // ── Handlers: quote ──
 
@@ -510,520 +390,10 @@ export default function Home() {
     saveGoals(updated)
   }
 
-  // ── Handlers: aftercare link ──
-
-  async function handleCopyAftercareLink() {
-    if (!lastSavedSession) return
-    const s = lastSavedSession
-    const params = new URLSearchParams({
-      name: s.name.split(' ')[0],
-      style: s.style,
-      placement: s.placement || '',
-      date: s.date,
-      film: s.film ? 'true' : 'false',
-    })
-    const link = `${window.location.origin}/care/${s.id}?${params}`
-    try {
-      await navigator.clipboard.writeText(link)
-      showToast('Aftercare link copied', '#7aab8f')
-    } catch {
-      showToast('Could not copy link', '#f09595')
-    }
-  }
-
-  // ── Handlers: toast ──
-
-  function showToast(msg, color = '#7aab8f') {
-    setToast({ msg, color })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  // ── Handlers: log session ──
-
-  function clearSF() {
-    setSf({ ...mkSF(), date: todayISO() })
-    setDropdownOpen(false)
-    setLastSavedSession(null)
-  }
-
-  function handleClientSelect(c) {
-    setSf(f => ({ ...f, selectedClientId: c.id, clientName: c.name || '' }))
-    setDropdownOpen(false)
-  }
-
-  function handleLogSave() {
-    if (clientMode === 'existing') {
-      if (!sf.date || !sf.total) return
-      const sessionId = Date.now()
-      const sess4 = {
-        id: sessionId,
-        name: sf.clientName,
-        date: sf.date,
-        style: sf.style,
-        placement: sf.placement,
-        total: parseFloat(sf.total) || 0,
-        tip: parseFloat(sf.tip) || 0,
-        payment: sf.payment,
-        notes: sf.notes,
-        film: sf.film || false,
-        clientId: sf.selectedClientId || null,
-        createdAt: new Date().toISOString(),
-      }
-      sessionsService.saveRecord(sess4)
-
-      let updatedClients = clients
-      if (sf.selectedClientId) {
-        const compatSess = {
-          id: String(sessionId),
-          date: sf.date,
-          tattooDescription: sf.style,
-          placement: sf.placement,
-          isTouchUp: false,
-          deposit: 0,
-          depositRefund: false,
-          tattooPrice: parseFloat(sf.total) || 0,
-          amountPaid: parseFloat(sf.total) || 0,
-          tip: parseFloat(sf.tip) || 0,
-          paymentMethod: sf.payment,
-          giftCardCode: '',
-          discountCode: '',
-          originalPrice: parseFloat(sf.total) || 0,
-          discountApplied: false,
-          notes: sf.notes,
-        }
-        updatedClients = clients.map(c =>
-          c.id === sf.selectedClientId
-            ? { ...c, sessions: [...(c.sessions || []), compatSess] }
-            : c
-        )
-        setClients(updatedClients)
-        saveClient(updatedClients.find(c => c.id === sf.selectedClientId))
-      }
-      const savedSession = { id: String(sessionId), name: sf.clientName, style: sf.style, placement: sf.placement, date: sf.date, film: sf.film || false }
-      showToast('Session logged')
-      clearSF()
-      setLastSavedSession(savedSession)
-
-    } else {
-      if (!sf.firstName.trim() || !sf.lastName.trim()) return
-      const newClientId = crypto.randomUUID()
-      const fullName    = `${sf.firstName.trim()} ${sf.lastName.trim()}`
-      const sessionId   = Date.now()
-
-      const compatSess = {
-        id: String(sessionId),
-        date: sf.date,
-        tattooDescription: sf.style,
-        placement: sf.placement,
-        isTouchUp: false,
-        deposit: 0,
-        depositRefund: false,
-        tattooPrice: parseFloat(sf.total) || 0,
-        amountPaid: parseFloat(sf.total) || 0,
-        tip: parseFloat(sf.tip) || 0,
-        paymentMethod: sf.payment,
-        giftCardCode: '',
-        discountCode: '',
-        originalPrice: parseFloat(sf.total) || 0,
-        discountApplied: false,
-        notes: sf.notes,
-      }
-
-      const newClient = {
-        id: newClientId,
-        name: fullName,
-        firstName: sf.firstName.trim(),
-        lastName: sf.lastName.trim(),
-        email: sf.email.trim(),
-        phone: sf.phone.trim(),
-        instagramTag: sf.instagramTag.trim(),
-        notes: sf.notes.trim(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        stage: 'Lead',
-        contentDrafts: [],
-        sessions: [compatSess],
-        tattooIdea: '', style: sf.style, placement: sf.placement, size: '', nextAction: '',
-        status: null,
-        journeyChecklist:   [false, false, false, false, false, false],
-        aftercareChecklist: [false, false, false, false, false],
-        consultations: [],
-        activityLog: [],
-        communications: [],
-        consultationCount: 0,
-      }
-
-      const sess4 = {
-        id: sessionId,
-        name: fullName,
-        date: sf.date,
-        style: sf.style,
-        placement: sf.placement,
-        total: parseFloat(sf.total) || 0,
-        tip: parseFloat(sf.tip) || 0,
-        payment: sf.payment,
-        notes: sf.notes,
-        film: sf.film || false,
-        clientId: newClientId,
-        createdAt: new Date().toISOString(),
-      }
-
-      const updatedClients = [...clients, newClient]
-      setClients(updatedClients)
-      saveClient(newClient)
-
-      sessionsService.saveRecord(sess4)
-
-      const savedSession = { id: String(sessionId), name: fullName, style: sf.style, placement: sf.placement, date: sf.date, film: sf.film || false }
-      showToast('Session logged and client added to CRM')
-      setClientMode('existing')
-      clearSF()
-      setLastSavedSession(savedSession)
-    }
-  }
-
-  // ── Handlers: voice log ──
-
-  async function handleVoiceTap() {
-    if (voiceStatus === 'processing') return
-
-    if (voiceStatus === 'listening') {
-      if (logMicRef.current) logMicRef.current.stop()
-      return
-    }
-
-    const ttsPlayer = new Audio()
-    ttsPlayer.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAA' +
-      'EAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
-    ttsPlayer.play().catch(() => {})
-    logTtsRef.current = ttsPlayer
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      logStreamRef.current = stream
-      logChunksRef.current = []
-
-      const MIME_PRIORITIES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
-      const mimeType = MIME_PRIORITIES.find(t => MediaRecorder.isTypeSupported(t)) ?? ''
-      logMimeRef.current = mimeType
-
-      const mediaRecorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream)
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) logChunksRef.current.push(e.data) }
-      logMicRef.current = mediaRecorder
-      mediaRecorder.start(100)
-
-      setVoiceStatus('listening')
-      setVoiceMsg('Listening...')
-
-      const silenceCtx    = new (window.AudioContext || window.webkitAudioContext)()
-      const silenceSource = silenceCtx.createMediaStreamSource(stream)
-      const analyser      = silenceCtx.createAnalyser()
-      analyser.fftSize    = 256
-      silenceSource.connect(analyser)
-      const dataArray  = new Uint8Array(analyser.frequencyBinCount)
-      let silenceStart = null
-      const silenceInterval = setInterval(() => {
-        analyser.getByteFrequencyData(dataArray)
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
-        if (avg < 8) {
-          if (!silenceStart) silenceStart = Date.now()
-          else if (Date.now() - silenceStart > 1500) {
-            clearInterval(silenceInterval)
-            silenceCtx.close()
-            mediaRecorder.stop()
-          }
-        } else {
-          silenceStart = null
-        }
-      }, 100)
-
-      const hardStop = setTimeout(() => {
-        clearInterval(silenceInterval)
-        silenceCtx.close()
-        if (mediaRecorder.state === 'recording') mediaRecorder.stop()
-      }, 15000)
-
-      mediaRecorder.onstop = () => {
-        clearTimeout(hardStop)
-        clearInterval(silenceInterval)
-        processVoiceLog()
-      }
-
-    } catch {
-      setVoiceStatus('error')
-      setVoiceMsg('Could not access mic. Try again.')
-      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('Speak Session') }, 3000)
-    }
-  }
-
-  async function processVoiceLog() {
-    try {
-      if (logStreamRef.current) {
-        logStreamRef.current.getTracks().forEach(t => t.stop())
-        logStreamRef.current = null
-      }
-
-      const mime     = logMimeRef.current
-      const isMP4    = mime.startsWith('audio/mp4')
-      const ext      = isMP4 ? 'mp4' : 'webm'
-      const blobType = isMP4 ? 'audio/mp4' : 'audio/webm'
-
-      const blob = new Blob(logChunksRef.current, { type: blobType })
-      logChunksRef.current = []
-      setVoiceStatus('processing')
-      setVoiceMsg('Processing...')
-
-      const elKey = import.meta.env.VITE_ELEVENLABS_KEY
-      const fd    = new FormData()
-      fd.append('file', blob, `recording.${ext}`)
-      fd.append('model_id', 'scribe_v2')
-      const sttRes = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-        method: 'POST',
-        headers: { 'xi-api-key': elKey },
-        body: fd,
-      })
-      if (!sttRes.ok) throw new Error('stt')
-      const sttData    = await sttRes.json()
-      const transcript = sttData.text?.trim()
-      if (!transcript) throw new Error('empty')
-
-      const nowDate = todayISO()
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 500,
-          system: `You are a session logging assistant for tattoo artist Saul Gutierrez. Extract session details from the spoken input and return ONLY a JSON object with these fields: name, date (YYYY-MM-DD), style, placement, total (number), tip (number), payment, notes. If a field is not mentioned use empty string or 0 for numbers. Date defaults to today if not mentioned. Today is ${nowDate}.`,
-          messages: [{ role: 'user', content: transcript }],
-        }),
-      })
-      if (!claudeRes.ok) throw new Error('claude')
-      const claudeData = await claudeRes.json()
-      const raw = claudeData.content[0].text
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/```\s*$/, '')
-      const parsed = JSON.parse(raw)
-
-      let matchedClientId = null
-      if (parsed.name && clientMode === 'existing') {
-        const found = clients.find(c =>
-          (c.name || '').toLowerCase().includes((parsed.name || '').toLowerCase())
-        )
-        if (found) matchedClientId = found.id
-      }
-
-      setSf(f => ({
-        ...f,
-        clientName:       parsed.name       ? parsed.name          : f.clientName,
-        selectedClientId: matchedClientId   ? matchedClientId      : f.selectedClientId,
-        date:             parsed.date       ? parsed.date          : f.date,
-        style:            parsed.style      ? parsed.style         : f.style,
-        placement:        parsed.placement  ? parsed.placement     : f.placement,
-        total:            parsed.total > 0  ? String(parsed.total) : f.total,
-        tip:              parsed.tip   > 0  ? String(parsed.tip)   : f.tip,
-        payment:          parsed.payment    ? parsed.payment       : f.payment,
-        notes:            parsed.notes      ? parsed.notes         : f.notes,
-      }))
-
-      const name     = parsed.name || 'the client'
-      const totalAmt = parsed.total > 0 ? `$${parsed.total}` : 'an amount'
-      const ttsText  = `Got it. Session with ${name} logged for ${totalAmt}.`
-
-      const ttsRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/Q2Qd4P9qaDNuBFUcFCQr', {
-        method: 'POST',
-        headers: {
-          'xi-api-key': import.meta.env.VITE_ELEVENLABS_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: ttsText,
-          model_id: 'eleven_monolingual_v1',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-      })
-      if (ttsRes.ok) {
-        const ttsBlob = await ttsRes.blob()
-        const ttsUrl  = URL.createObjectURL(ttsBlob)
-        logTtsRef.current.src = ttsUrl
-        logTtsRef.current.play()
-      }
-
-      setVoiceStatus('done')
-      setVoiceMsg('Form filled. Review and save.')
-      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('Speak Session') }, 5000)
-
-    } catch {
-      setVoiceStatus('error')
-      setVoiceMsg('Could not process voice. Fill in manually.')
-      setTimeout(() => { setVoiceStatus('idle'); setVoiceMsg('Speak Session') }, 3000)
-    }
-  }
-
-  // ── Handlers: CSV import ──
-
-  function handleImportClick() {
-    fileInputRef.current?.click()
-  }
-
-  function handleCSVFile(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    const reader = new FileReader()
-    reader.onload = ev => {
-      try {
-        const text = ev.target.result
-        const rows = parseCSVManual(text)
-        if (rows.length < 2) return
-        const headers  = rows[0].map(h => h.toLowerCase().trim())
-        const dataRows = rows.slice(1)
-        const getCol   = (row, name) => {
-          const idx = headers.indexOf(name.toLowerCase())
-          return idx >= 0 ? (row[idx] || '') : ''
-        }
-        const currentClients = clients
-        const parsed = []
-        const dups   = []
-        for (const row of dataRows) {
-          const fn = getCol(row, 'firstname').trim()
-          const ln = getCol(row, 'lastname').trim()
-          if (!fn && !ln) continue
-          const obj = {
-            firstName:    fn,
-            lastName:     ln,
-            email:        getCol(row, 'email').trim(),
-            phone:        getCol(row, 'phone').trim(),
-            instagramTag: getCol(row, 'instagramtag').trim(),
-            style:        getCol(row, 'style').trim(),
-            placement:    getCol(row, 'placement').trim(),
-            date:         normalizeDate(getCol(row, 'date')),
-            total:        parseFloat(getCol(row, 'total')) || 0,
-            tip:          parseFloat(getCol(row, 'tip'))   || 0,
-            payment:      getCol(row, 'payment').trim() || 'Cash',
-            notes:        getCol(row, 'notes').trim(),
-          }
-          const fullName = `${fn} ${ln}`.toLowerCase().trim()
-          const em       = obj.email.toLowerCase()
-          const isDup    = currentClients.some(c => {
-            const cName = (c.name || '').toLowerCase()
-            const cFn   = (c.firstName || '').toLowerCase()
-            const cLn   = (c.lastName  || '').toLowerCase()
-            const cEm   = (c.email     || '').toLowerCase().trim()
-            const nameMatch  = fn && ln && (cName === fullName || (cFn === fn.toLowerCase() && cLn === ln.toLowerCase()))
-            const emailMatch = em && cEm && cEm === em
-            return nameMatch || emailMatch
-          })
-          parsed.push(obj)
-          dups.push(isDup)
-        }
-        setCsvRows(parsed)
-        setCsvDups(dups)
-        setCsvOpen(true)
-      } catch {}
-    }
-    reader.readAsText(file)
-  }
-
-  function handleImportAll() {
-    const currentClients = clients
-    const newClients     = []
-    const newSessions    = []
-
-    csvRows.forEach((row, i) => {
-      if (csvDups[i]) return
-      const clientId = crypto.randomUUID()
-      const fullName = `${row.firstName} ${row.lastName}`.trim()
-      const sessions = []
-
-      if (row.total > 0) {
-        const sId = Date.now() + i
-        sessions.push({
-          id: String(sId),
-          date: row.date,
-          tattooDescription: row.style,
-          placement: row.placement,
-          isTouchUp: false,
-          deposit: 0,
-          depositRefund: false,
-          tattooPrice: row.total,
-          amountPaid: row.total,
-          tip: row.tip,
-          paymentMethod: row.payment,
-          giftCardCode: '',
-          discountCode: '',
-          originalPrice: row.total,
-          discountApplied: false,
-          notes: row.notes,
-        })
-        newSessions.push({
-          id: sId,
-          name: fullName,
-          date: row.date,
-          style: row.style,
-          placement: row.placement,
-          total: row.total,
-          tip: row.tip,
-          payment: row.payment,
-          notes: row.notes,
-          clientId,
-          createdAt: new Date().toISOString(),
-        })
-      }
-
-      newClients.push({
-        id: clientId,
-        name: fullName,
-        firstName: row.firstName,
-        lastName: row.lastName,
-        email: row.email,
-        phone: row.phone,
-        instagramTag: row.instagramTag,
-        notes: row.notes,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        stage: 'Lead',
-        contentDrafts: [],
-        sessions,
-        tattooIdea: '', style: row.style, placement: row.placement, size: '', nextAction: '',
-        status: null,
-        journeyChecklist:   [false, false, false, false, false, false],
-        aftercareChecklist: [false, false, false, false, false],
-        consultations: [],
-        activityLog: [],
-        communications: [],
-        consultationCount: 0,
-      })
-    })
-
-    const updatedClients = [...currentClients, ...newClients]
-    setClients(updatedClients)
-    newClients.forEach(c => saveClient(c))
-
-    newSessions.forEach(s => sessionsService.saveRecord(s))
-
-    const importCount = newClients.length
-    const skipCount   = csvDups.filter(Boolean).length
-    const msg = skipCount > 0
-      ? `${importCount} ${importCount === 1 ? 'client' : 'clients'} imported, ${skipCount} ${skipCount === 1 ? 'duplicate' : 'duplicates'} skipped`
-      : `${importCount} ${importCount === 1 ? 'client' : 'clients'} imported`
-    showToast(msg)
-    setCsvOpen(false)
-    setCsvRows([])
-    setCsvDups([])
-  }
-
-  // ── Styles ──
+  // ── Shared field styles ──
 
   const FIELD = {
-    width: '100%', background: '#1e1e1b', border: '1px solid #2a2a27',
+    width: '100%', background: '#1e1e1b', border: '1px solid rgba(255,255,255,0.06)',
     borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
     fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
     boxSizing: 'border-box', minHeight: 44,
@@ -1034,805 +404,464 @@ export default function Home() {
     display: 'block', marginBottom: 6,
   }
 
-  const cols = narrow ? '1fr' : 'repeat(2, 1fr)'
-
-  const isListening = voiceStatus === 'listening'
-  const voiceColor  = voiceStatus === 'error' ? '#f09595'
-    : voiceStatus === 'done'    ? '#7aab8f'
-    : voiceStatus === 'listening' ? '#c9a96e'
-    : '#7a786f'
-
   // ─────────────────────────────────────────────────────────────────────────────
 
+  const outerPad = narrow ? '28px 16px 100px' : '36px 32px 80px'
+
   return (
-    <div style={{ padding: narrow ? '24px 16px 80px' : '24px 24px 80px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ padding: outerPad }}>
 
       <style>{`
-        @keyframes micPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(201,169,110,0.35); }
-          50%       { box-shadow: 0 0 0 10px rgba(201,169,110,0); }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
+        .hb-section { animation: fadeUp 0.35s ease both; }
+        .hb-section:nth-child(1) { animation-delay: 0.00s; }
+        .hb-section:nth-child(2) { animation-delay: 0.05s; }
+        .hb-section:nth-child(3) { animation-delay: 0.10s; }
+        .hb-section:nth-child(4) { animation-delay: 0.15s; }
+        .hb-section:nth-child(5) { animation-delay: 0.20s; }
+        .hb-section:nth-child(6) { animation-delay: 0.25s; }
+        .hb-day-btn:hover { opacity: 0.85; }
+        .hb-period-btn:hover { opacity: 0.85; }
+        .hb-nav-btn { background: none; border: none; cursor: pointer; display: flex; align-items: center; padding: 8px 10px; min-height: 44px; }
+        .hb-nav-btn:hover { opacity: 0.7; }
+        .hb-ghost-btn { background: transparent; border: 1px solid rgba(201,169,110,0.35); border-radius: 8px; padding: 7px 14px; min-height: 40px; font-family: var(--font-mono); font-size: 11px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; transition: border-color 0.15s; }
+        .hb-ghost-btn:hover { border-color: #c9a96e; }
+        .hb-gold-btn { background: #c9a96e; border: none; border-radius: 9px; padding: 11px 24px; min-height: 44px; font-family: var(--font-body); font-size: 14px; font-weight: 600; color: #0e0e0d; cursor: pointer; transition: opacity 0.15s; }
+        .hb-gold-btn:hover { opacity: 0.88; }
+        .hb-muted-btn { background: transparent; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 11px 16px; min-height: 44px; font-family: var(--font-body); font-size: 14px; color: #7a786f; cursor: pointer; }
       `}</style>
 
-      {/* Hidden file input for CSV */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv"
-        style={{ display: 'none' }}
-        onChange={handleCSVFile}
-      />
-
-      {/* ══ HEADER ══ */}
-      <div>
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df' }}>Home Base</span>
-      </div>
-
-      {/* ══ SECTION 1: Daily Quote ══ */}
-      <div style={CARD}>
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={handleRefresh}
-            aria-label="New quote"
-            style={{
-              position: 'absolute', top: 0, right: 0,
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#7a786f', padding: 4, display: 'flex', alignItems: 'center',
-            }}
-          >
-            <IconRefresh />
-          </button>
-
-          <p style={{
-            fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df',
-            fontStyle: 'italic', textAlign: 'center', lineHeight: 1.55, paddingRight: 28,
-          }}>
-            {QUOTES[quoteIdx].text}
-          </p>
-
-          <p style={{
-            fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
-            textAlign: 'center', marginTop: 10,
-          }}>
-            {QUOTES[quoteIdx].author}
-          </p>
-        </div>
-      </div>
-
-      {/* Read aloud toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: -8, paddingLeft: 4 }}>
-        <button
-          onClick={handleToggleReadAloud}
-          aria-label="Toggle read aloud"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '12px 0', minHeight: 44, display: 'flex', alignItems: 'center',
-          }}
-        >
-          <div style={{
-            width: 36, height: 20, borderRadius: 10,
-            background: readAloud ? '#c9a96e' : '#2a2a27',
-            position: 'relative', flexShrink: 0, transition: 'background 0.2s',
-          }}>
-            <span style={{
-              position: 'absolute', top: 2, width: 16, height: 16, borderRadius: 8,
-              background: '#e8e6df', display: 'block',
-              left: readAloud ? 18 : 2, transition: 'left 0.2s',
-            }} />
-          </div>
-        </button>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
-          Read quote aloud
-        </span>
-      </div>
-
-     {/* ══ DAILY BRIEF ══ */}
-      {dailyBrief && (
-        <div style={{ ...CARD, marginBottom: 12 }}>
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-            Today at a Glance
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-            <div style={{ background: '#0e0e0d', borderRadius: 10, padding: 12, border: '1px solid #1e1e1b' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', marginBottom: 4 }}>Sessions</p>
-              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: '#e8e6df', fontWeight: 700 }}>
-                {dailyBrief.overview.appointments_count}
-              </p>
-            </div>
-            <div style={{ background: '#0e0e0d', borderRadius: 10, padding: 12, border: '1px solid #1e1e1b' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', marginBottom: 4 }}>Revenue</p>
-              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: '#c9a96e', fontWeight: 700 }}>
-                ${dailyBrief.overview.projected_revenue}
-              </p>
-            </div>
-            <div style={{ background: '#0e0e0d', borderRadius: 10, padding: 12, border: '1px solid #1e1e1b' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', marginBottom: 4 }}>Intake</p>
-              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: '#e8e6df', fontWeight: 700 }}>
-                {dailyBrief.overview.pending_intake_forms}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* ══ SECTION 2: Active Session Days ══ */}
-      <div style={CARD}>
-        <p style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e', marginBottom: 4 }}>
-          Active Session Days
+      {/* ══ PAGE HEADER ══ */}
+      <div className="hb-section" style={{ marginBottom: 36 }}>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6 }}>
+          HomeBase
         </p>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginBottom: 16 }}>
-          tap an active day to view sessions
-        </p>
+        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: narrow ? 28 : 34, color: '#e8e6df', fontWeight: 600, lineHeight: 1.15, margin: 0 }}>
+          {getGreeting()}
+        </h1>
+      </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <button
-            onClick={handlePrevMonth}
-            aria-label="Previous month"
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#7a786f', padding: '8px 12px', minHeight: 44,
-              display: 'flex', alignItems: 'center',
-            }}
-          >
-            <IconChevronLeft />
-          </button>
+      {/* ══ TWO ZONE LAYOUT ══ */}
+      <div style={{
+        display: narrow ? 'flex' : 'grid',
+        flexDirection: narrow ? 'column' : undefined,
+        gridTemplateColumns: narrow ? undefined : '1fr 380px',
+        gap: 24,
+        alignItems: 'start',
+      }}>
 
-          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#e8e6df' }}>
-            {MONTH_NAMES[calMonth]} {calYear}
-          </span>
+        {/* ── LEFT MAIN COLUMN ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
 
-          <button
-            onClick={handleNextMonth}
-            disabled={isCurrentMonth}
-            aria-label="Next month"
-            style={{
-              background: 'none', border: 'none',
-              cursor: isCurrentMonth ? 'default' : 'pointer',
-              padding: '8px 12px', minHeight: 44, display: 'flex', alignItems: 'center',
-            }}
-          >
-            <IconChevronRight color={isCurrentMonth ? '#3a3a37' : '#7a786f'} />
-          </button>
-        </div>
+          {/* ══ TODAY AT A GLANCE ══ */}
+          {dailyBrief && (
+            <div className="hb-section" style={CARD}>
+              <p style={{ ...LABEL_MONO, marginBottom: 18 }}>Today at a Glance</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
 
-        <div style={{ maxWidth: 480, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
-            {DAY_LABELS.map(l => (
-              <div key={l} style={{
-                textAlign: 'center', fontFamily: 'var(--font-mono)',
-                fontSize: 10, color: '#7a786f', paddingBottom: 4,
-              }}>
-                {l}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-            {calCells.map((day, idx) => {
-              if (day === null) return <div key={`ph-${idx}`} style={{ height: 36 }} />
-              const key      = `${yearStr}-${monthStr}-${String(day).padStart(2, '0')}`
-              const active   = !!sessionMap[key]
-              const isToday  = isCurrentMonth && day === today.getDate()
-              const expanded = expandedDay === key
-              return (
-                <button
-                  key={key}
-                  onClick={() => handleDayClick(key)}
-                  style={{
-                    width: 36, height: 36, borderRadius: '50%',
-                    background: active ? '#c9a96e' : '#1e1e1b',
-                    color: active ? '#0e0e0d' : '#7a786f',
-                    border: isToday ? '2px solid #c9a96e' : 'none',
-                    cursor: active ? 'pointer' : 'default',
-                    fontFamily: 'var(--font-mono)', fontSize: 12,
-                    fontWeight: active ? 600 : 400,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    margin: '0 auto',
-                    outline: expanded ? '2px solid #c9a96e' : 'none',
-                    outlineOffset: 2,
-                    transition: 'background 0.15s',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {day}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {expandedDay && sessionMap[expandedDay] && (
-          <div style={{ marginTop: 16, borderTop: '1px solid #2a2a27', paddingTop: 12 }}>
-            {sessionMap[expandedDay].map((s, i, arr) => (
-              <div
-                key={s.id || i}
-                style={{
-                  paddingTop: i === 0 ? 0 : 10, paddingBottom: 10,
-                  borderBottom: i < arr.length - 1 ? '1px solid #2a2a27' : 'none',
-                }}
-              >
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#e8e6df', marginBottom: 2 }}>
-                  {s.clientName}
-                </p>
-                {s.tattooDescription && (
-                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', marginBottom: 2 }}>
-                    {s.tattooDescription}
+                {/* Sessions tile */}
+                <div style={{ background: '#0e0e0d', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ ...LABEL_MONO, marginBottom: 8 }}>Sessions</p>
+                  <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color: '#e8e6df', fontWeight: 600, lineHeight: 1, margin: 0 }}>
+                    {dailyBrief.overview.appointments_count}
                   </p>
-                )}
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f' }}>
-                  Paid {fmt(s.amountPaid)}
-                  {parseFloat(s.tip) > 0 ? ` + ${fmt(s.tip)} tip` : ''}
-                </p>
+                </div>
+
+                {/* Revenue tile — gold accent border */}
+                <div style={{ background: '#0e0e0d', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '2px solid rgba(201,169,110,0.5)' }}>
+                  <p style={{ ...LABEL_MONO, marginBottom: 8 }}>Revenue</p>
+                  <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color: '#c9a96e', fontWeight: 600, lineHeight: 1, margin: 0 }}>
+                    ${dailyBrief.overview.projected_revenue}
+                  </p>
+                </div>
+
+                {/* Intake tile */}
+                <div style={{ background: '#0e0e0d', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ ...LABEL_MONO, marginBottom: 8 }}>Intake</p>
+                  <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color: '#e8e6df', fontWeight: 600, lineHeight: 1, margin: 0 }}>
+                    {dailyBrief.overview.pending_intake_forms}
+                  </p>
+                </div>
+
               </div>
-            ))}
-          </div>
-        )}
-
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginTop: 14 }}>
-          {activeCount} active {activeCount === 1 ? 'day' : 'days'} this month
-        </p>
-      </div>
-
-      {/* ══ SECTION 3: Studio Pipeline ══ */}
-      <div style={CARD}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e' }}>
-            Studio Pipeline
-          </span>
-          <button
-            onClick={() => navigate('/crm')}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
-              padding: '8px 4px', minHeight: 44,
-            }}
-          >
-            Full Board
-          </button>
-        </div>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: narrow ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-          gap: 8,
-        }}>
-          {PIPELINE_STAGES.map(stage => (
-            <div key={stage} style={{
-              background: '#1e1e1b', border: '1px solid #2a2a27',
-              borderRadius: 8, padding: '12px 8px', textAlign: 'center',
-            }}>
-              <div style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: STAGE_COLORS[stage] || '#7a786f',
-                margin: '0 auto 8px',
-              }} />
-              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 24, color: '#e8e6df', lineHeight: 1 }}>
-                {stageCounts[stage]}
-              </p>
-              <p style={{
-                fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f',
-                textTransform: 'uppercase', marginTop: 4, letterSpacing: '0.05em', lineHeight: 1.3,
-              }}>
-                {stage}
-              </p>
             </div>
-          ))}
-        </div>
+          )}
 
-        {bottleneckStage && (
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#f09595', marginTop: 14 }}>
-            {bottleneckStage} is getting full. Check your schedule.
-          </p>
-        )}
-      </div>
-
-      {/* ══ SECTION 4: Earnings and Metrics ══ */}
-      <div style={CARD}>
-        <p style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e', marginBottom: 16 }}>
-          Earnings and Metrics
-        </p>
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {[
-            { key: 'week',  label: 'This Week' },
-            { key: 'month', label: 'This Month' },
-            { key: 'ytd',   label: 'YTD' },
-          ].map(({ key, label }) => (
+          {/* ══ DAILY QUOTE ══ */}
+          <div className="hb-section" style={{ position: 'relative', padding: narrow ? '44px 20px' : '52px 40px', textAlign: 'center' }}>
             <button
-              key={key}
-              onClick={() => setPeriod(key)}
+              onClick={handleRefresh}
+              aria-label="New quote"
               style={{
-                background: period === key ? '#c9a96e' : '#1e1e1b',
-                border: '1px solid #2a2a27',
-                borderRadius: 8, padding: '6px 14px', minHeight: 44,
-                fontFamily: 'var(--font-mono)', fontSize: 11,
-                color: period === key ? '#0e0e0d' : '#7a786f',
-                cursor: 'pointer', transition: 'background 0.15s, color 0.15s',
+                position: 'absolute', top: 12, right: 12,
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 8, opacity: 0.6, display: 'flex', alignItems: 'center',
               }}
             >
-              {label}
+              <IconRefresh />
             </button>
-          ))}
-        </div>
 
-        <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-            {[
-              { label: 'Revenue',         value: fmt(revenue),       color: '#e8e6df', sub: null },
-              { label: 'Tips',            value: fmt(tips),          color: '#c9a96e', sub: null },
-              { label: 'Avg per Session', value: fmt(avgPerSession), color: '#e8e6df', sub: null },
-              { label: 'Tax Aside',       value: fmt(taxAside),      color: '#c9a96e', sub: '28% rule' },
-            ].map(({ label, value, color, sub }) => (
-              <div key={label} style={{
-                background: '#1e1e1b', border: '1px solid #2a2a27',
-                borderRadius: 8, padding: 16, textAlign: 'center',
-              }}>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginBottom: 6 }}>
-                  {label}
-                </p>
-                <p style={{ fontFamily: 'var(--font-heading)', fontSize: 28, color, lineHeight: 1 }}>
-                  {value}
-                </p>
-                {sub && (
-                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 4 }}>
-                    {sub}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ══ SECTION 5: Goal Progress Bars ══ */}
-      <div style={CARD}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e' }}>
-            Goals
-          </span>
-          <button
-            onClick={() => setAddGoalOpen(true)}
-            style={{
-              background: 'transparent', border: '1px solid #c9a96e',
-              borderRadius: 8, padding: '6px 12px', minHeight: 44,
-              fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e', cursor: 'pointer',
-            }}
-          >
-            Add Goal
-          </button>
-        </div>
-
-        {goals.length === 0 ? (
-          <p style={{
-            fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f',
-            textAlign: 'center', padding: '16px 0',
-          }}>
-            No goals yet. Tap Add Goal to get started.
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {goals.map(goal => {
-              const target = parseFloat(goal.targetAmount) || 0
-              const pct    = target > 0 ? Math.min(thisMonthRevenue / target, 1) : 0
-              return (
-                <div key={goal.id}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {goal.name}
-                      </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', flexShrink: 0 }}>
-                        {goal.category}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteGoal(goal.id)}
-                      aria-label="Delete goal"
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '8px 8px', minHeight: 44, minWidth: 44,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      }}
-                    >
-                      <IconTrash />
-                    </button>
-                  </div>
-                  <div style={{ height: 6, background: '#2a2a27', borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
-                    <div style={{
-                      height: '100%', width: `${pct * 100}%`,
-                      background: '#7aab8f', borderRadius: 3, transition: 'width 0.3s',
-                    }} />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#e8e6df' }}>
-                      {fmt(thisMonthRevenue)}
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
-                      {fmt(target)}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ══ SECTION 6: Log a Session ══ */}
-      <div style={CARD}>
-        {/* Card header */}
-        <button
-          onClick={() => setLogCardOpen(o => !o)}
-          style={{
-            width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: 0, marginBottom: logCardOpen ? 20 : 0,
-          }}
-        >
-          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#c9a96e' }}>
-            Log a Session
-          </span>
-          {logCardOpen ? <IconChevronUp color="#7a786f" /> : <IconChevronDown color="#7a786f" />}
-        </button>
-
-        {logCardOpen && (
-          <>
-            {/* ── Voice Log ── */}
-            <div style={{
-              background: '#1e1e1b',
-              border: '1px solid rgba(201,169,110,0.2)',
-              borderRadius: 10,
-              padding: '16px 20px',
-              marginBottom: 24,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 12,
+            <p style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: narrow ? 20 : 24,
+              color: '#e8e6df',
+              fontStyle: 'italic',
+              lineHeight: 1.6,
+              margin: '0 0 16px',
+              maxWidth: 560,
+              marginLeft: 'auto',
+              marginRight: 'auto',
             }}>
-              <div style={{ width: '100%' }}>
-                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 13, color: '#c9a96e', marginBottom: 4 }}>
-                  Voice Log
-                </div>
-                <p style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: '#7a786f', margin: 0 }}>
-                  Tap the mic and speak the session details. MACRI fills in the form.
-                </p>
-              </div>
+              {QUOTES[quoteIdx].text}
+            </p>
 
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
+              {QUOTES[quoteIdx].author}
+            </p>
+
+            {/* Read aloud toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 20 }}>
               <button
-                onClick={handleVoiceTap}
-                disabled={voiceStatus === 'processing'}
-                style={{
-                  width: 72, height: 72, borderRadius: '50%',
-                  background: '#161614',
-                  border: isListening ? '2px solid #c9a96e' : '2px solid #2a2a27',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: voiceStatus === 'processing' ? 'default' : 'pointer',
-                  outline: 'none',
-                  animation: isListening ? 'micPulse 1.4s ease-in-out infinite' : 'none',
-                  transition: 'border-color 0.2s',
-                }}
+                onClick={handleToggleReadAloud}
+                aria-label="Toggle read aloud"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0', display: 'flex', alignItems: 'center' }}
               >
-                <IconMic size={28} color={isListening ? '#c9a96e' : '#7a786f'} />
+                <div style={{
+                  width: 32, height: 18, borderRadius: 9,
+                  background: readAloud ? '#c9a96e' : 'rgba(255,255,255,0.08)',
+                  position: 'relative', flexShrink: 0, transition: 'background 0.2s',
+                }}>
+                  <span style={{
+                    position: 'absolute', top: 2, width: 14, height: 14, borderRadius: 7,
+                    background: '#e8e6df', display: 'block',
+                    left: readAloud ? 16 : 2, transition: 'left 0.2s',
+                  }} />
+                </div>
               </button>
-
-              <p style={{
-                fontFamily: 'var(--font-mono)', fontSize: 11,
-                color: voiceColor, margin: 0, textAlign: 'center', minHeight: 16,
-              }}>
-                {voiceMsg}
-              </p>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', letterSpacing: '0.06em' }}>
+                Read aloud
+              </span>
             </div>
+          </div>
 
-            {/* ── Form ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 14 }}>
+          {/* ══ EARNINGS ══ */}
+          <div className="hb-section" style={CARD}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <p style={LABEL_MONO}>Earnings</p>
 
-              {/* Client Mode toggle — full width */}
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
+              {/* Segmented period selector */}
+              <div style={{
+                display: 'flex', gap: 2,
+                background: 'rgba(255,255,255,0.04)',
+                borderRadius: 8, padding: 3,
+              }}>
                 {[
-                  { key: 'existing', label: 'Existing Client' },
-                  { key: 'new',      label: 'New Client' },
+                  { key: 'week',  label: 'Week' },
+                  { key: 'month', label: 'Month' },
+                  { key: 'ytd',   label: 'YTD' },
                 ].map(({ key, label }) => (
                   <button
                     key={key}
-                    onClick={() => { setClientMode(key); clearSF() }}
+                    className="hb-period-btn"
+                    onClick={() => setPeriod(key)}
                     style={{
-                      flex: 1, minHeight: 44,
-                      background: clientMode === key ? '#c9a96e' : '#1e1e1b',
-                      border: '1px solid #2a2a27',
-                      borderRadius: 8,
-                      fontFamily: 'var(--font-body)', fontSize: 14,
-                      color: clientMode === key ? '#0e0e0d' : '#7a786f',
-                      cursor: 'pointer',
-                      transition: 'background 0.15s, color 0.15s',
+                      background:   period === key ? '#c9a96e' : 'transparent',
+                      border:       'none',
+                      borderRadius: 6,
+                      padding:      '5px 12px',
+                      minHeight:    32,
+                      fontFamily:   'var(--font-mono)',
+                      fontSize:     11,
+                      color:        period === key ? '#0e0e0d' : '#7a786f',
+                      cursor:       'pointer',
+                      transition:   'background 0.15s, color 0.15s',
+                      letterSpacing: '0.04em',
                     }}
                   >
                     {label}
                   </button>
                 ))}
               </div>
+            </div>
 
-              {/* New Client fields */}
-              {clientMode === 'new' && (
-                <>
-                  <div>
-                    <label style={LABEL}>First Name *</label>
-                    <input
-                      style={FIELD}
-                      value={sf.firstName}
-                      onChange={e => setSf(f => ({ ...f, firstName: e.target.value }))}
-                      placeholder="First name"
-                    />
-                  </div>
-                  <div>
-                    <label style={LABEL}>Last Name *</label>
-                    <input
-                      style={FIELD}
-                      value={sf.lastName}
-                      onChange={e => setSf(f => ({ ...f, lastName: e.target.value }))}
-                      placeholder="Last name"
-                    />
-                  </div>
-                  <div>
-                    <label style={LABEL}>Email</label>
-                    <input
-                      type="email"
-                      style={FIELD}
-                      value={sf.email}
-                      onChange={e => setSf(f => ({ ...f, email: e.target.value }))}
-                      placeholder="email@example.com"
-                    />
-                  </div>
-                  <div>
-                    <label style={LABEL}>Phone</label>
-                    <input
-                      type="tel"
-                      style={FIELD}
-                      value={sf.phone}
-                      onChange={e => setSf(f => ({ ...f, phone: e.target.value }))}
-                      placeholder="555 555 5555"
-                    />
-                  </div>
-                  <div>
-                    <label style={LABEL}>Instagram</label>
-                    <input
-                      style={FIELD}
-                      value={sf.instagramTag}
-                      onChange={e => setSf(f => ({ ...f, instagramTag: e.target.value }))}
-                      placeholder="@handle"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Existing Client search — full width */}
-              {clientMode === 'existing' && (
-                <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
-                  <label style={LABEL}>Client</label>
-                  <input
-                    style={FIELD}
-                    value={sf.clientName}
-                    onChange={e => {
-                      setSf(f => ({ ...f, clientName: e.target.value, selectedClientId: null }))
-                      setDropdownOpen(true)
-                    }}
-                    onFocus={() => { if (sf.clientName) setDropdownOpen(true) }}
-                    onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
-                    placeholder="Search by name..."
-                  />
-                  {dropdownOpen && searchResults.length > 0 && (
-                    <div style={{
-                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                      background: '#1e1e1b', border: '1px solid #2a2a27',
-                      borderRadius: 8, marginTop: 4, maxHeight: 240, overflowY: 'auto',
-                    }}>
-                      {searchResults.map(c => (
-                        <button
-                          key={c.id}
-                          onMouseDown={() => handleClientSelect(c)}
-                          style={{
-                            width: '100%', background: 'none', border: 'none',
-                            borderBottom: '1px solid #2a2a27',
-                            padding: '10px 14px', minHeight: 44,
-                            textAlign: 'left', cursor: 'pointer',
-                            fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df',
-                          }}
-                        >
-                          {c.name}
-                          {c.stage && (
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginLeft: 10 }}>
-                              {c.stage}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {[
+                { label: 'Revenue',         value: fmt(revenue),       color: '#e8e6df', sub: null },
+                { label: 'Tips',            value: fmt(tips),          color: '#c9a96e', sub: null },
+                { label: 'Avg per Session', value: fmt(avgPerSession), color: '#e8e6df', sub: null },
+                { label: 'Tax Aside',       value: fmt(taxAside),      color: '#c9a96e', sub: '28% rule' },
+              ].map(({ label, value, color, sub }) => (
+                <div key={label} style={{
+                  background: '#0e0e0d',
+                  border: '1px solid rgba(255,255,255,0.04)',
+                  borderRadius: 10, padding: '16px 18px',
+                }}>
+                  <p style={{ ...LABEL_MONO, marginBottom: 8 }}>{label}</p>
+                  <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color, fontWeight: 600, lineHeight: 1, margin: 0 }}>
+                    {value}
+                  </p>
+                  {sub && (
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 5 }}>{sub}</p>
                   )}
                 </div>
-              )}
+              ))}
+            </div>
+          </div>
 
-              {/* Session date */}
-              <div>
-                <label style={LABEL}>Session Date</label>
-                <input
-                  type="date"
-                  style={FIELD}
-                  value={sf.date}
-                  onChange={e => setSf(f => ({ ...f, date: e.target.value }))}
-                />
-              </div>
+          {/* ══ SESSION CALENDAR ══ */}
+          <div className="hb-section" style={CARD}>
+            <p style={{ ...LABEL_MONO, marginBottom: 18 }}>Session Days</p>
 
-              {/* Style */}
-              <div>
-                <label style={LABEL}>Style</label>
-                <select
-                  style={{ ...FIELD, appearance: 'none' }}
-                  value={sf.style}
-                  onChange={e => setSf(f => ({ ...f, style: e.target.value }))}
-                >
-                  {STYLE_OPTIONS.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <button className="hb-nav-btn" onClick={handlePrevMonth} aria-label="Previous month">
+                <IconChevronLeft />
+              </button>
+              <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#e8e6df' }}>
+                {MONTH_NAMES[calMonth]} {calYear}
+              </span>
+              <button
+                className="hb-nav-btn"
+                onClick={handleNextMonth}
+                disabled={isCurrentMonth}
+                aria-label="Next month"
+                style={{ opacity: isCurrentMonth ? 0.25 : 1, cursor: isCurrentMonth ? 'default' : 'pointer' }}
+              >
+                <IconChevronRight />
+              </button>
+            </div>
 
-              {/* Placement */}
-              <div>
-                <label style={LABEL}>Placement</label>
-                <input
-                  style={FIELD}
-                  value={sf.placement}
-                  onChange={e => setSf(f => ({ ...f, placement: e.target.value }))}
-                  placeholder="e.g. Left forearm"
-                />
-              </div>
-
-              {/* Total */}
-              <div>
-                <label style={LABEL}>Total ($)</label>
-                <input
-                  type="number"
-                  style={FIELD}
-                  value={sf.total}
-                  onChange={e => setSf(f => ({ ...f, total: e.target.value }))}
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-
-              {/* Tip */}
-              <div>
-                <label style={LABEL}>Tip ($)</label>
-                <input
-                  type="number"
-                  style={FIELD}
-                  value={sf.tip}
-                  onChange={e => setSf(f => ({ ...f, tip: e.target.value }))}
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-
-              {/* Payment Method */}
-              <div>
-                <label style={LABEL}>Payment Method</label>
-                <select
-                  style={{ ...FIELD, appearance: 'none' }}
-                  value={sf.payment}
-                  onChange={e => setSf(f => ({ ...f, payment: e.target.value }))}
-                >
-                  {PAYMENT_OPTIONS.map(p => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Notes — full width */}
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={LABEL}>Notes</label>
-                <textarea
-                  style={{ ...FIELD, resize: 'vertical', minHeight: 80 }}
-                  value={sf.notes}
-                  onChange={e => setSf(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="Optional notes..."
-                  rows={3}
-                />
-              </div>
-
-              {/* Film toggle — full width */}
-              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 12, minHeight: 44 }}>
-                <button
-                  type="button"
-                  onClick={() => setSf(f => ({ ...f, film: !f.film }))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '12px 0', display: 'flex', alignItems: 'center' }}
-                >
-                  <div style={{
-                    width: 36, height: 20, borderRadius: 10,
-                    background: sf.film ? '#c9a96e' : '#2a2a27',
-                    position: 'relative', flexShrink: 0, transition: 'background 0.2s',
-                  }}>
-                    <span style={{
-                      position: 'absolute', top: 2, width: 16, height: 16, borderRadius: 8,
-                      background: '#e8e6df', display: 'block',
-                      left: sf.film ? 18 : 2, transition: 'left 0.2s',
-                    }} />
+            <div style={{ maxWidth: 400, margin: '0 auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
+                {DAY_LABELS.map(l => (
+                  <div key={l} style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: '#7a786f', letterSpacing: '0.06em' }}>
+                    {l}
                   </div>
-                </button>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
-                  Applied Protective Film
-                </span>
+                ))}
               </div>
-
-              {/* Save button — full width */}
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button
-                  onClick={clearSF}
-                  style={{
-                    background: 'transparent', border: '1px solid #2a2a27',
-                    borderRadius: 8, padding: '10px 16px', minHeight: 44,
-                    fontFamily: 'var(--font-body)', fontSize: 14,
-                    color: '#7a786f', cursor: 'pointer',
-                  }}
-                >
-                  Clear
-                </button>
-                <button
-                  onClick={handleLogSave}
-                  style={{
-                    background: '#c9a96e', border: 'none',
-                    borderRadius: 8, padding: '10px 24px', minHeight: 44,
-                    fontFamily: 'var(--font-body)', fontSize: 14,
-                    fontWeight: 600, color: '#0e0e0d', cursor: 'pointer',
-                  }}
-                >
-                  Log Session
-                </button>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+                {calCells.map((day, idx) => {
+                  if (day === null) return <div key={`ph-${idx}`} style={{ height: 34 }} />
+                  const key      = `${yearStr}-${monthStr}-${String(day).padStart(2, '0')}`
+                  const active   = !!sessionMap[key]
+                  const isToday  = isCurrentMonth && day === today.getDate()
+                  const expanded = expandedDay === key
+                  return (
+                    <button
+                      key={key}
+                      className="hb-day-btn"
+                      onClick={() => handleDayClick(key)}
+                      style={{
+                        width: '100%', aspectRatio: '1 / 1', maxWidth: 34, borderRadius: '50%',
+                        background: active ? '#c9a96e' : 'transparent',
+                        color:  active ? '#0e0e0d' : '#7a786f',
+                        border: isToday && !active ? '1px solid rgba(201,169,110,0.4)' : 'none',
+                        cursor: active ? 'pointer' : 'default',
+                        fontFamily: 'var(--font-mono)', fontSize: 11,
+                        fontWeight: active ? 600 : 400,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto',
+                        outline: expanded ? '2px solid rgba(201,169,110,0.6)' : 'none',
+                        outlineOffset: 2,
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      {day}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            {lastSavedSession && (
-              <button
-                onClick={handleCopyAftercareLink}
-                style={{
-                  width: '100%', minHeight: 48,
-                  background: '#c9a96e', border: 'none',
-                  borderRadius: 10, marginTop: 4,
-                  fontFamily: 'var(--font-body)', fontSize: 14,
-                  fontWeight: 600, color: '#0e0e0d', cursor: 'pointer',
-                }}
-              >
-                Generate Aftercare Link
-              </button>
+            {expandedDay && sessionMap[expandedDay] && (
+              <div style={{ marginTop: 18, borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 14 }}>
+                {sessionMap[expandedDay].map((s, i, arr) => (
+                  <div
+                    key={s.id || i}
+                    style={{
+                      paddingTop: i === 0 ? 0 : 10,
+                      paddingBottom: 10,
+                      borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                    }}
+                  >
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#e8e6df', marginBottom: 2 }}>
+                      {s.clientName}
+                    </p>
+                    {s.tattooDescription && (
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginBottom: 2 }}>
+                        {s.tattooDescription}
+                      </p>
+                    )}
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
+                      Paid {fmt(s.amountPaid)}
+                      {parseFloat(s.tip) > 0 ? ` + ${fmt(s.tip)} tip` : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
-          </>
-        )}
+
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 14, letterSpacing: '0.06em' }}>
+              {activeCount} active {activeCount === 1 ? 'day' : 'days'} this month
+            </p>
+          </div>
+
+        </div>
+
+        {/* ── RIGHT SUPPORTING COLUMN ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* ══ STUDIO PIPELINE ══ */}
+          <div className="hb-section" style={CARD}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <p style={LABEL_MONO}>Studio Pipeline</p>
+              <button
+                className="hb-ghost-btn"
+                onClick={() => navigate('/projects')}
+              >
+                Full Board
+              </button>
+            </div>
+
+            {/* Active client count hero number */}
+            <div style={{ marginBottom: 20, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 42, color: '#e8e6df', fontWeight: 600, lineHeight: 1, margin: 0 }}>
+                {totalActive}
+              </p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 5, letterSpacing: '0.08em' }}>
+                Active clients
+              </p>
+            </div>
+
+            {/* Stage breakdown */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {PIPELINE_STAGES.map(stage => {
+                const count = stageCounts[stage]
+                const color = STAGE_COLORS[stage] || '#7a786f'
+                return (
+                  <div key={stage} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', flex: 1, letterSpacing: '0.04em' }}>
+                      {stage}
+                    </span>
+                    <span style={{
+                      fontFamily: 'var(--font-heading)', fontSize: 14,
+                      color: count > 0 ? '#e8e6df' : '#3a3a37',
+                      fontWeight: 600, minWidth: 20, textAlign: 'right',
+                    }}>
+                      {count}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {bottleneckStage && (
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#f09595', marginTop: 16, letterSpacing: '0.06em' }}>
+                {bottleneckStage} is filling up. Check your schedule.
+              </p>
+            )}
+          </div>
+
+          {/* ══ GOALS ══ */}
+          <div className="hb-section" style={CARD}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <p style={LABEL_MONO}>Goals</p>
+              <button
+                className="hb-ghost-btn"
+                onClick={() => setAddGoalOpen(true)}
+              >
+                Add Goal
+              </button>
+            </div>
+
+            {goals.length === 0 ? (
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', textAlign: 'center', padding: '20px 0' }}>
+                No goals yet.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {goals.map(goal => {
+                  const target = parseFloat(goal.targetAmount) || 0
+                  const pct    = target > 0 ? Math.min(thisMonthRevenue / target, 1) : 0
+                  const pctInt = Math.round(pct * 100)
+                  return (
+                    <div key={goal.id}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#e8e6df', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {goal.name}
+                          </span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            {goal.category}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: pct >= 1 ? '#7aab8f' : '#7a786f' }}>
+                            {pctInt}%
+                          </span>
+                          <button
+                            onClick={() => handleDeleteGoal(goal.id)}
+                            aria-label="Delete goal"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center', opacity: 0.6 }}
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginBottom: 5 }}>
+                        <div style={{
+                          height: '100%', width: `${pct * 100}%`,
+                          background: pct >= 1 ? '#7aab8f' : '#c9a96e',
+                          borderRadius: 2, transition: 'width 0.4s ease',
+                        }} />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e8e6df' }}>
+                          {fmt(thisMonthRevenue)}
+                        </span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f' }}>
+                          {fmt(target)}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ══ LOG SESSION CTA ══ */}
+          <div className="hb-section" style={{
+            ...CARD,
+            display: 'flex', flexDirection: 'column', gap: 10,
+            alignItems: 'stretch', textAlign: 'center',
+          }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Ready to log a session?
+            </p>
+            <button
+              className="hb-gold-btn"
+              onClick={() => navigate('/session-prep')}
+            >
+              Log a Session
+            </button>
+          </div>
+
+        </div>
       </div>
 
-      {/* ── Import Past Clients button ── */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <button
-          onClick={handleImportClick}
-          style={{
-            background: 'transparent',
-            border: '1px solid #2a2a27',
-            borderRadius: 8,
-            padding: '10px 20px',
-            minHeight: 44,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: '#7a786f',
-            cursor: 'pointer',
-          }}
-        >
-          Import Past Clients
-        </button>
-      </div>
-
-      {/* ══ Add Goal Modal ══ */}
+      {/* ══ ADD GOAL MODAL ══ */}
       {addGoalOpen && (
         <div
           onClick={() => setAddGoalOpen(false)}
           style={{
             position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.75)',
+            background: 'rgba(0,0,0,0.78)',
             zIndex: 500,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: 20,
@@ -1841,11 +870,13 @@ export default function Home() {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#161614', border: '1px solid #2a2a27',
-              borderRadius: 12, padding: 24, width: '100%', maxWidth: 480,
+              background: '#161614',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 16, padding: 28,
+              width: '100%', maxWidth: 440,
             }}
           >
-            <p style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df', marginBottom: 20 }}>
+            <p style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df', marginBottom: 22 }}>
               Add Goal
             </p>
 
@@ -1865,12 +896,12 @@ export default function Home() {
                 type="number"
                 value={goalForm.targetAmount}
                 onChange={e => setGoalForm(f => ({ ...f, targetAmount: e.target.value }))}
-                placeholder="e.g. 2000"
+                placeholder="2000"
                 style={FIELD}
               />
             </div>
 
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 26 }}>
               <label style={LABEL}>Category</label>
               <select
                 value={goalForm.category}
@@ -1884,133 +915,14 @@ export default function Home() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setAddGoalOpen(false)}
-                style={{
-                  background: 'transparent', border: '1px solid #2a2a27',
-                  borderRadius: 8, padding: '10px 16px',
-                  fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveGoal}
-                style={{
-                  background: '#c9a96e', border: 'none',
-                  borderRadius: 8, padding: '10px 16px',
-                  fontFamily: 'var(--font-body)', fontSize: 14,
-                  fontWeight: 600, color: '#0e0e0d', cursor: 'pointer',
-                }}
-              >
-                Save Goal
-              </button>
+              <button className="hb-muted-btn" onClick={() => setAddGoalOpen(false)}>Cancel</button>
+              <button className="hb-gold-btn" onClick={handleSaveGoal}>Save Goal</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══ CSV Preview Modal ══ */}
-      {csvOpen && (
-        <div
-          onClick={() => setCsvOpen(false)}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.8)',
-            zIndex: 600,
-            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-            padding: 20, overflowY: 'auto',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: '#161614', border: '1px solid #2a2a27',
-              borderRadius: 12, padding: 24, width: '100%', maxWidth: 640,
-              marginTop: 40, marginBottom: 40,
-            }}
-          >
-            <p style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df', marginBottom: 6 }}>
-              Import Past Clients
-            </p>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginBottom: 20 }}>
-              {csvRows.length} {csvRows.length === 1 ? 'row' : 'rows'} found
-              {csvDups.filter(Boolean).length > 0 && ` · ${csvDups.filter(Boolean).length} ${csvDups.filter(Boolean).length === 1 ? 'duplicate' : 'duplicates'} will be skipped`}
-            </p>
-
-            <div style={{ overflowX: 'auto', marginBottom: 20 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                <thead>
-                  <tr>
-                    {['First Name', 'Last Name', 'Email', 'Style', 'Total'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', color: '#7a786f', padding: '6px 10px', borderBottom: '1px solid #2a2a27' }}>
-                        {h}
-                      </th>
-                    ))}
-                    <th style={{ textAlign: 'left', color: '#7a786f', padding: '6px 10px', borderBottom: '1px solid #2a2a27' }}>
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {csvRows.slice(0, 10).map((row, i) => (
-                    <tr key={i} style={{ opacity: csvDups[i] ? 0.45 : 1 }}>
-                      <td style={{ padding: '8px 10px', color: '#e8e6df', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.firstName}</td>
-                      <td style={{ padding: '8px 10px', color: '#e8e6df', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.lastName}</td>
-                      <td style={{ padding: '8px 10px', color: '#7a786f', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.email || ''}</td>
-                      <td style={{ padding: '8px 10px', color: '#7a786f', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.style || ''}</td>
-                      <td style={{ padding: '8px 10px', color: '#7a786f', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>{row.total > 0 ? `$${row.total}` : ''}</td>
-                      <td style={{ padding: '8px 10px', borderBottom: '1px solid rgba(42,42,39,0.5)' }}>
-                        {csvDups[i] && (
-                          <span style={{
-                            fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f',
-                            background: '#2a2a27', borderRadius: 4, padding: '2px 6px',
-                          }}>
-                            Duplicate
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {csvRows.length > 10 && (
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginTop: 8, textAlign: 'center' }}>
-                  Showing first 10 of {csvRows.length} rows
-                </p>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => { setCsvOpen(false); setCsvRows([]); setCsvDups([]) }}
-                style={{
-                  background: 'transparent', border: '1px solid #2a2a27',
-                  borderRadius: 8, padding: '10px 16px', minHeight: 44,
-                  fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleImportAll}
-                disabled={csvRows.filter((_, i) => !csvDups[i]).length === 0}
-                style={{
-                  background: '#c9a96e', border: 'none',
-                  borderRadius: 8, padding: '10px 20px', minHeight: 44,
-                  fontFamily: 'var(--font-body)', fontSize: 14,
-                  fontWeight: 600, color: '#0e0e0d', cursor: 'pointer',
-                  opacity: csvRows.filter((_, i) => !csvDups[i]).length === 0 ? 0.4 : 1,
-                }}
-              >
-                Import All
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ Welcome Modal ══ */}
+      {/* ══ WELCOME MODAL (unchanged logic) ══ */}
       {welcomeOpen && (
         <div
           style={{
@@ -2022,27 +934,18 @@ export default function Home() {
           }}
         >
           <div style={{
-            background: '#161614', border: '1px solid #2a2a27',
-            borderRadius: 16, padding: 32, width: '100%', maxWidth: 480,
+            background: '#161614',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 18, padding: 32,
+            width: '100%', maxWidth: 460,
           }}>
-            <p style={{
-              fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
-              textTransform: 'uppercase', textAlign: 'center', letterSpacing: '0.1em',
-            }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', textAlign: 'center', letterSpacing: '0.12em' }}>
               MACRI
             </p>
-
-            <p style={{
-              fontFamily: 'var(--font-heading)', fontSize: 24, color: '#e8e6df',
-              textAlign: 'center', marginTop: 12,
-            }}>
+            <p style={{ fontFamily: 'var(--font-heading)', fontSize: 24, color: '#e8e6df', textAlign: 'center', marginTop: 12 }}>
               {getGreeting()}
             </p>
-
-            <p style={{
-              fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f',
-              textAlign: 'center', marginTop: 8,
-            }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', textAlign: 'center', marginTop: 8 }}>
               Your studio is ready. What would you like to do?
             </p>
 
@@ -2051,24 +954,22 @@ export default function Home() {
                 onClick={() => setBriefingShown(true)}
                 style={{
                   width: '100%', minHeight: 48, borderRadius: 10,
-                  background: '#1e1e1b', border: '1px solid #2a2a27',
+                  background: '#1e1e1b', border: '1px solid rgba(255,255,255,0.06)',
                   color: '#e8e6df', fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer',
                 }}
               >
                 Run my briefing
               </button>
-
               <button
                 onClick={() => { speakText(QUOTES[quoteIdx].text); setWelcomeOpen(false) }}
                 style={{
                   width: '100%', minHeight: 48, borderRadius: 10,
-                  background: '#1e1e1b', border: '1px solid #c9a96e',
+                  background: '#1e1e1b', border: '1px solid rgba(201,169,110,0.3)',
                   color: '#c9a96e', fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer',
                 }}
               >
                 Read me something inspiring
               </button>
-
               <button
                 onClick={() => setWelcomeOpen(false)}
                 style={{
@@ -2083,10 +984,7 @@ export default function Home() {
             </div>
 
             {briefingShown && (
-              <p style={{
-                fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
-                textAlign: 'center', marginTop: 16,
-              }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', textAlign: 'center', marginTop: 16 }}>
                 Briefing agent arrives June 1.
               </p>
             )}
@@ -2094,7 +992,7 @@ export default function Home() {
             <button
               onClick={() => setWelcomeOpen(false)}
               style={{
-                display: 'block', width: '100%', marginTop: 16,
+                display: 'block', width: '100%', marginTop: 14,
                 background: 'none', border: 'none', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
                 textAlign: 'center', minHeight: 44,
@@ -2106,7 +1004,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ══ Toast ══ */}
+      {/* ══ TOAST ══ */}
       {toast && (
         <div style={{
           position: 'fixed', bottom: 96, left: '50%', transform: 'translateX(-50%)',

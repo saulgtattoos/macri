@@ -1,6 +1,6 @@
 # MACRI Status
 
-Last updated: 2026-10-11 (Security Phase 1 implemented and tested locally; not deployed; live database unchanged)
+Last updated: 2026-10-13 (paused before cutover; live database locked; Production unchanged)
 GitHub main: 7196e73 (2026-06-06). Local Mac repo: in sync with GitHub, large uncommitted work (see Local Repository).
 Stale branch on GitHub: claude/start-macri-dev-server-n7Cgv (April v1 only, safe to delete later).
 
@@ -87,7 +87,7 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 2. DONE 2026-10-13: test project, synthetic data, access checks and browser checks.
 3. DONE 2026-10-13: docs reviewed; local only documents gitignored (founder briefing, project briefing HTML and PDF, Founding Vision). Three local commits on branch security-phase-1 (docs, HomeBase redesign, Security Phase 1). Not pushed.
 4. DONE 2026-10-13: branch pushed; Vercel Preview for security-phase-1 uses only the test project with AI and messaging disabled; preview deployment verified. Production and the live database unchanged.
-5. Coordinated rollout (.private/SECURITY.md), each live step with approval.
+5. Live preparation DONE 2026-10-13 (owner account, rate limit table, Production server settings, cutover package, full data export with restore drill). Cutover plan shown to Saul and awaiting approval; resume at step C0 (.private/SECURITY.md, FINAL CUTOVER PLAN). Live database remains locked; Production unchanged.
 6. Shared session data approach and Finance one ledger spec, then /log, then voice logging.
 
 ## Open Questions for Saul

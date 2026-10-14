@@ -1,29 +1,28 @@
 # MACRI Status
 
-Last updated: 2026-10-13 (paused before cutover; live database locked; Production unchanged)
-GitHub main: 7196e73 (2026-06-06). Local Mac repo: in sync with GitHub, large uncommitted work (see Local Repository).
+Last updated: 2026-10-14 (Security Phase 1 live: new app in Production, owner only database access; old key revocation pending)
+GitHub main: 646b4a5 (2026-10-14, fast forwarded from security-phase-1). Local Mac repo: branch security-phase-1, clean, in sync with GitHub.
 Stale branch on GitHub: claude/start-macri-dev-server-n7Cgv (April v1 only, safe to delete later).
 
 Public repo rule: this file is safe to commit. Unresolved security findings, the rollout plan and dashboard steps live in .private/SECURITY.md (gitignored, local only). Never copy them here.
 
 ## Current Focus
-Security Phase 1 rollout preparation. The live Supabase project is paused (restorable until 2027-07-24); it will be resumed and immediately locked (supabase/security/05_resume_lockdown.sql) before inspection. Session logging (/log) and Finance remain planning only.
+Security Phase 1 is live (cutover 2026-10-14). Remaining: revoke the old provider keys (C4), a password reset screen for the owner login, then cleanup. Session logging (/log) and Finance remain planning only.
 
 ## Security Phase 1 (public summary)
 Decisions: single owner account with email and password; signed aftercare links for new links, with old links keeping basic care instructions; a separate Supabase test project with synthetic data only.
-Built locally (uncommitted):
+Built and live in Production since 2026-10-14:
 - Owner login, an auth gate on all owner panels, Settings page with sign out. Public client pages (/consultation/client, /care) stay public.
 - Server side owner checks on every /api route that costs money or sends messages; paid service keys move to server only env.
 - Signed aftercare links with server side prompts and abuse limits; legacy links show the full written care guide plus a note to request an updated link.
 - Database access rules (supabase/security/*.sql) giving only the owner account access, plus a rollback that keeps data restricted.
 - Failed saves are no longer reported as database saves; device only data shows a persistent warning banner.
 - Local tooling: npm run dev:api (local /api on port 3001), dev:test and dev:api:test (test project only, guarded), test (71 tests), check:access (test project).
-Remaining before rollout: Saul's read only checks, test project setup and pass, then a coordinated cutover. Details: .private/SECURITY.md.
+Remaining: old key revocation, owner password reset screen, cleanup. Details: .private/SECURITY.md.
 
-## Local Repository (checked 2026-10-11)
-- Path: ~/Desktop/macri. Branch: main, tracking origin/main, at 7196e73. 0 ahead, 0 behind after fetch. No stashes.
-- Uncommitted: HomeBase redesign (src/pages/Home.jsx), Security Phase 1 changes (api/, src/, supabase/, scripts/, tests/, config), docs moved into Context/, merged CLAUDE.md, Context/macri-notes-and-ideas.md additions.
-- Untracked docs: Context/CLAUDE.md, Context/MACRI_CONTEXT.md, Context/README.md, Context/macri-roadmap.md, Founding Vision/, MACRI html file.pdf, MACRI_Founder_Briefing.md, macri_project_briefing.html.
+## Local Repository (checked 2026-10-14)
+- Path: ~/Desktop/macri. Branch: security-phase-1 (same commit as main, 646b4a5), clean, pushed. No stashes.
+- Local only documents (founder briefing, project briefing HTML and PDF, Founding Vision) are gitignored.
 - Gitignored local only files: .env, .env.local, .env.test.local (when created), .private/, MACRI_v1_standalone_demo_archive.txt (must never be committed).
 - Before any commit: review the untracked docs for anything that should stay private.
 
@@ -87,8 +86,12 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 2. DONE 2026-10-13: test project, synthetic data, access checks and browser checks.
 3. DONE 2026-10-13: docs reviewed; local only documents gitignored (founder briefing, project briefing HTML and PDF, Founding Vision). Three local commits on branch security-phase-1 (docs, HomeBase redesign, Security Phase 1). Not pushed.
 4. DONE 2026-10-13: branch pushed; Vercel Preview for security-phase-1 uses only the test project with AI and messaging disabled; preview deployment verified. Production and the live database unchanged.
-5. Live preparation DONE 2026-10-13 (owner account, rate limit table, Production server settings, cutover package, full data export with restore drill). Cutover plan shown to Saul and awaiting approval; resume at step C0 (.private/SECURITY.md, FINAL CUTOVER PLAN). Live database remains locked; Production unchanged.
+5. Live preparation DONE 2026-10-13 (owner account, rate limit table, Production server settings, cutover package, full data export with restore drill).
 6. Shared session data approach and Finance one ledger spec, then /log, then voice logging.
+7. DONE 2026-10-14: cutover approved and run. Retired intake webhook disabled; device copies of local data saved from both browsers; main fast forwarded and deployed to Production; owner only database access applied. Outside checks 23 of 23 pass; Saul confirmed clients, inventory, session prep and Daily Brief load with no device only warning.
+8. NEXT: revoke old provider keys (C4), then one approved paid call to confirm AI and voice use the new keys.
+9. NEXT: owner login password did not match on 2026-10-14 (signed in with a one time link instead). Build a set new password screen (spec agreed in chat, test project first).
+10. Later: cleanup (unused Production variables, stale preview branch, email sender, account 2FA).
 
 ## Open Questions for Saul
 - Deposits: when does a deposit count as earned revenue (on receipt, at the session, or when forfeited)?

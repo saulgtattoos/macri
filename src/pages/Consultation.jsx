@@ -460,7 +460,7 @@ export default function Consultation() {
         text: saveResult.ok
           ? `${firstName} consultation saved. They are now on your Project Wall.`
           : `${firstName} consultation saved on this device only. It did not reach the database.`,
-        model_id: 'eleven_monolingual_v1',
+        model_id: 'eleven_multilingual_v2',
         voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       })
       if (res.ok) {

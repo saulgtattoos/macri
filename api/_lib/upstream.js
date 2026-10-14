@@ -5,7 +5,7 @@ export const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-20250514'
 export const MAX_CLAUDE_TOKENS = 2000
 
 export const VOICE_ID = 'Q2Qd4P9qaDNuBFUcFCQr'
-export const TTS_MODELS = new Set(['eleven_monolingual_v1', 'eleven_turbo_v2'])
+export const TTS_MODELS = new Set(['eleven_multilingual_v2', 'eleven_turbo_v2'])
 export const STT_MODEL = 'scribe_v2'
 
 export class NotConfiguredError extends Error {}

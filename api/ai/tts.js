@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   const body = getBody(req)
   if (!body) return res.status(400).json({ error: 'Invalid JSON' })
   const { text, voice_settings } = body
-  const model_id = body.model_id ?? 'eleven_monolingual_v1'
+  const model_id = body.model_id ?? 'eleven_multilingual_v2'
 
   if (!isStr(text, 1500) || !text.trim()) return res.status(400).json({ error: 'text is required (max 1500 characters)' })
   if (!TTS_MODELS.has(model_id)) return res.status(400).json({ error: 'Model not allowed' })

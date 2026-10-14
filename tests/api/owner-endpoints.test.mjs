@@ -104,6 +104,15 @@ test('tts: always uses the fixed voice id and returns audio', async () => {
   assert.equal(res.statusCode, 200)
   assert.equal(res.headers['content-type'], 'audio/mpeg')
   assert.ok(paidCalls(calls)[0].url.endsWith('/Q2Qd4P9qaDNuBFUcFCQr'))
+  assert.equal(JSON.parse(paidCalls(calls)[0].opts.body).model_id, 'eleven_multilingual_v2')
+})
+
+test('tts: the retired eleven_monolingual_v1 model is refused before any paid call', async () => {
+  const calls = stubFetch([])
+  const res = mockRes()
+  await tts(mockReq({ headers: ownerHeaders(), body: { text: 'hi', model_id: 'eleven_monolingual_v1' } }), res)
+  assert.equal(res.statusCode, 400)
+  assert.equal(paidCalls(calls).length, 0)
 })
 
 test('tts: rejects overlong text and bad settings', async () => {

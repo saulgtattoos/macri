@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
 import { loadClients as loadClientsDB, saveClient } from '../lib/crmService'
+import { claudeFetch } from '../lib/api'
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY  = 'macri_crm_clients'
 const PROMOTED_KEY = 'macri_wall_first_run_done'
-const API_KEY      = import.meta.env.VITE_ANTHROPIC_KEY
 
 // ─── Stage Migration Map ──────────────────────────────────────────────────────
 
@@ -138,42 +138,33 @@ function ImportNotesModal({ isOpen, onClose, onImport }) {
     setPreview(null)
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
-          messages: [{
-            role: 'user',
-            content: `You are a data extraction assistant for a tattoo studio app called MACRI.
+      const res = await claudeFetch({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        messages: [{
+          role: 'user',
+          content: `You are a data extraction assistant for a tattoo studio app called MACRI.
 
 Extract client data from the following consultation note and return ONLY a valid JSON object with no markdown, no explanation, and no extra text.
 
 The JSON must match this exact shape:
 {
-  "name": "string or empty string",
-  "phone": "string or empty string",
-  "email": "string or empty string",
-  "tattooIdea": "string summarizing the tattoo concept in one to two sentences",
-  "style": "string — pick the closest from: Watercolor, Black and Gray Realism, Sketch Art, Abstract, Stippled Shading, Color Realism, Black and Gray Portrait — or leave empty if unclear",
-  "placement": "string or empty string",
-  "size": "string or empty string",
-  "estimatedHours": "string or empty string",
-  "depositStatus": "string — Paid, Void, or empty string",
-  "colors": "string summarizing color preferences or empty string",
-  "notes": "string with any additional context worth keeping"
+"name": "string or empty string",
+"phone": "string or empty string",
+"email": "string or empty string",
+"tattooIdea": "string summarizing the tattoo concept in one to two sentences",
+"style": "string — pick the closest from: Watercolor, Black and Gray Realism, Sketch Art, Abstract, Stippled Shading, Color Realism, Black and Gray Portrait — or leave empty if unclear",
+"placement": "string or empty string",
+"size": "string or empty string",
+"estimatedHours": "string or empty string",
+"depositStatus": "string — Paid, Void, or empty string",
+"colors": "string summarizing color preferences or empty string",
+"notes": "string with any additional context worth keeping"
 }
 
 Consultation note:
 ${text}`,
-          }],
-        }),
+        }],
       })
 
       const data   = await res.json()

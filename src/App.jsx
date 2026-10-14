@@ -17,6 +17,9 @@ import ColorLab from './pages/ColorLab'
 import ContentStudio from './pages/ContentStudio'
 import AgentQueue from './pages/AgentQueue'
 import AftercarePortal from './pages/AftercarePortal'
+import Settings from './pages/Settings'
+import RequireAuth from './components/RequireAuth'
+import SyncStatusBanner from './components/SyncStatusBanner'
 
 function AppShell() {
   const [drawerOpen,    setDrawerOpen]    = useState(false)
@@ -37,6 +40,7 @@ function AppShell() {
 
   return (
     <div className="app-outer" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <SyncStatusBanner />
       <Sidebar />
       <div className="mobile-header" style={{ flexDirection: 'column', gap: '3px' }}>
         <span style={{
@@ -78,6 +82,7 @@ export default function App() {
       <Routes>
         <Route path="/consultation/client" element={<ConsultationClient />} />
         <Route path="/care/:sessionId" element={<AftercarePortal />} />
+        <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
           <Route path="/"             element={<Home />} />
           <Route path="/inquiry"      element={<InquiryAssistant />} />
@@ -92,7 +97,8 @@ export default function App() {
           <Route path="/contentstudio" element={<ContentStudio />} />
           <Route path="/agents"       element={<AgentQueue />} />
           <Route path="/dev-queue"    element={<DevQueue />} />
-          <Route path="/settings"     element={<Placeholder name="Settings" />} />
+          <Route path="/settings"     element={<Settings />} />
+        </Route>
         </Route>
       </Routes>
     </BrowserRouter>

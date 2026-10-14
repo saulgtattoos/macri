@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 
 // TODO replace with Saul's actual phone number before going live
 const SAUL_PHONE_NUMBER = '+12097517285'
@@ -10,6 +10,35 @@ function getHealingPhase(days) {
   if (days <= 14) return 'Settling Phase'
   if (days <= 30) return 'Final Heal'
   return 'Healed'
+}
+
+const SILENT_WAV = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAEAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
+
+// Shrinks a photo to at most 1600px and re-encodes as JPEG so it fits the upload limit.
+function resizeImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, 1600 / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1])
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image')) }
+    img.src = url
+  })
+}
+
+function postAftercare(body) {
+  return fetch('/api/aftercare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 }
 
 function computeDays(dateStr) {
@@ -29,6 +58,7 @@ function computeDays(dateStr) {
 }
 
 export default function AftercarePortal() {
+  const { sessionId } = useParams()
   const [searchParams] = useSearchParams()
 
   const name = searchParams.get('name') || 'Friend'
@@ -36,13 +66,21 @@ export default function AftercarePortal() {
   const placement = searchParams.get('placement') || ''
   const dateStr = searchParams.get('date') || ''
   const film = searchParams.get('film') === 'true'
+  const exp = Number(searchParams.get('exp'))
+  const sig = searchParams.get('sig') || ''
+
+  // Signed links (new) unlock the audio message and photo check through /api/aftercare.
+  // Unsigned links sent before signing existed keep the full written care guide.
+  const [personalized, setPersonalized] = useState(() => !!sig && exp * 1000 > Date.now())
+  const link = { sessionId, name: searchParams.get('name') || '', style, placement, date: dateStr, film, exp, sig }
 
   const rawDays = computeDays(dateStr)
   const daysSinceSession = Math.min(rawDays, 30)
   const phase = getHealingPhase(rawDays)
   const isFullyHealed = rawDays >= 30
 
-  const [audioState, setAudioState] = useState('loading')
+  const [audioState, setAudioState] = useState('idle')
+  const [audioNote, setAudioNote] = useState('')
   const audioRef = useRef(null)
   const audioUrlRef = useRef(null)
 
@@ -53,110 +91,52 @@ export default function AftercarePortal() {
   const fileInputRef = useRef(null)
 
   useEffect(() => {
-    generateAudio()
     return () => {
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
     }
   }, [])
 
-  async function generateAudio() {
-    try {
-      const sl = (style || '').toLowerCase()
-      const pl = (placement || '').toLowerCase()
-
-      let styleGuide = ''
-      if (sl.includes('watercolor')) {
-        styleGuide = 'Some color blending and softening during healing is completely normal and part of the beauty of this style. After healing protect it from sun with SPF 50.'
-      } else if (sl.includes('black and gray') || sl.includes('portrait')) {
-        styleGuide = 'It may look ashy or dull right now and that is completely normal. Your skin is regenerating over the ink. The depth and contrast will come back once you are fully healed. Keep it moisturized.'
-      } else if (sl.includes('stippled') || sl.includes('pointillism')) {
-        styleGuide = 'The dots may feel raised or bumpy right now. That is completely normal for this style. The texture will smooth out as the skin settles.'
-      } else if (sl.includes('color realism')) {
-        styleGuide = 'The colors may look muted during healing. That is expected. Sun is the biggest threat to color realism so keep it covered and protected. Once the top layer sheds they will pop.'
-      } else if (sl.includes('sketch')) {
-        styleGuide = 'The lines may appear to spread slightly during healing. That is part of the sketch style and completely normal. It will settle into its final look by day 30.'
-      } else if (sl.includes('abstract')) {
-        styleGuide = 'Keep an eye on any raised areas. A little texture during healing is expected but if anything looks swollen or feels hot please reach out to me right away.'
-      }
-
-      let placementAdd = ''
-      if (pl.includes('hand') || pl.includes('finger')) {
-        placementAdd = 'Since it is on your hand please moisturize more frequently, at least 4 times a day. Hands take a beating and that placement needs extra attention.'
-      } else if (pl.includes('rib') || pl.includes('torso') || pl.includes('chest')) {
-        placementAdd = 'Taking deep breaths may feel tight for the first few days. That is normal. Just wear loose breathable clothing and take it easy.'
-      } else if (pl.includes('foot') || pl.includes('ankle')) {
-        placementAdd = 'Keep your foot elevated when resting for the first 48 hours. Avoid tight shoes and socks this week.'
-      } else if (pl.includes('elbow') || pl.includes('knee') || pl.includes('ditch')) {
-        placementAdd = 'The crease area will peel a lot. Please do not pick it. Keep the joint moisturized and avoid bending it aggressively for the first week.'
-      }
-
-      const systemLines = [
-        'You are writing a warm, personal 60 second spoken audio script for tattoo artist Saul Gutierrez to send to a client after their tattoo session.',
-        'Write in first person as Saul. Warm, calm, reassuring tone.',
-        'Zero hyphens or dashes anywhere. No asterisks or special characters. Plain spoken language only.',
-        'Recommend Dial Antibacterial fragrance free soap for cleaning and Lubriderm fragrance free or vitamin enriched unscented lotion for moisturizing.',
-        film ? 'The client has a protective film applied. Advise keeping it on for 3 to 5 days and removing under warm running water before starting the standard routine.' : '',
-        'The script must follow this structure:',
-        `1. Intro: "Hey ${name}, it's Saul..."`,
-        '2. Body: Personalized healing guidance based on style and placement. Reference the specific tattoo style and placement naturally.',
-        styleGuide ? `Style guidance: ${styleGuide}` : '',
-        placementAdd ? `Placement guidance: ${placementAdd}` : '',
-        '3. Sign off: "I\'ve got you. Happy healing."',
-        'Keep total length under 120 words for a 60 second read.',
-      ].filter(Boolean).join(' ')
-
-      const userPrompt = `Client name: ${name}. Tattoo style: ${style || 'custom'}. Placement: ${placement || 'body'}. Day ${daysSinceSession} of healing. Write the full audio script now.`
-
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 400,
-          system: systemLines,
-          messages: [{ role: 'user', content: userPrompt }],
-        }),
-      })
-      if (!claudeRes.ok) throw new Error('claude')
-      const claudeData = await claudeRes.json()
-      const script = claudeData.content[0].text.trim()
-
-      const elRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/Q2Qd4P9qaDNuBFUcFCQr', {
-        method: 'POST',
-        headers: {
-          'xi-api-key': import.meta.env.VITE_ELEVENLABS_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: script, model_id: 'eleven_turbo_v2' }),
-      })
-      if (!elRes.ok) throw new Error('elevenlabs')
-      const blob = await elRes.blob()
-      const url = URL.createObjectURL(blob)
-      audioUrlRef.current = url
-      audioRef.current = new Audio(url)
-      audioRef.current.onended = () => setAudioState('ready')
-      setAudioState('ready')
-    } catch {
-      setAudioState('error')
-    }
-  }
-
-  function handlePlayPause() {
-    if (!audioRef.current || audioState === 'error') return
+  // The message is generated only when the client taps play (one paid request per tap,
+  // limited per link per day on the server).
+  async function handlePlayPause() {
+    if (audioState === 'loading') return
     if (audioState === 'playing') {
-      audioRef.current.pause()
+      audioRef.current?.pause()
       setAudioState('ready')
-    } else {
-      const unlock = new Audio()
-      unlock.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAEAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
-      unlock.play().catch(() => {})
+      return
+    }
+    if (audioState === 'ready' && audioRef.current) {
       audioRef.current.play()
       setAudioState('playing')
+      return
+    }
+
+    // iOS audio unlock: create and unlock the player before any await, then reuse it.
+    const player = new Audio()
+    player.src = SILENT_WAV
+    player.play().catch(() => {})
+    audioRef.current = player
+
+    setAudioState('loading')
+    setAudioNote('')
+    try {
+      const res = await postAftercare({ action: 'audio', link })
+      if (res.status === 403) { setPersonalized(false); return }
+      if (res.status === 429) {
+        setAudioNote('You have heard your message the most times allowed for today. Your care guide below has everything you need.')
+        setAudioState('error')
+        return
+      }
+      if (!res.ok) throw new Error('audio')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      audioUrlRef.current = url
+      player.src = url
+      player.onended = () => setAudioState('ready')
+      player.play()
+      setAudioState('playing')
+    } catch {
+      setAudioState('error')
     }
   }
 
@@ -175,41 +155,15 @@ export default function AftercarePortal() {
     setChecking(true)
     setCheckResult(null)
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = ev => resolve(ev.target.result.split(',')[1])
-        reader.onerror = reject
-        reader.readAsDataURL(imageFile)
-      })
-      const mediaType = imageFile.type || 'image/jpeg'
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 200,
-          system: 'You are the MACRI Concierge, a studio AI assistant for Saul Gutierrez. You specialize in tattoo aftercare guidance. Always recommend Dial Antibacterial fragrance free soap for cleaning and Lubriderm fragrance free or vitamin enriched unscented lotion for moisturizing. If the client has a protective film applied, advise keeping it for 3 to 5 days and removing under warm running water before starting the standard routine. Use zero hyphens or dashes. Write all ranges as X to Y. Analyze the uploaded tattoo photo and classify the healing status as one of three options: Healthy, Dry, or Irritated. Provide a one sentence plain language explanation. Return only a JSON object: {"status": "Healthy or Dry or Irritated", "note": "one sentence explanation"}',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-              { type: 'text', text: `Day ${daysSinceSession} of healing. Style: ${style || 'custom'}. Assess the healing status.` },
-            ],
-          }],
-        }),
-      })
-      if (!claudeRes.ok) throw new Error('claude')
-      const claudeData = await claudeRes.json()
-      const raw = claudeData.content[0].text
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/```\s*$/, '')
-      const parsed = JSON.parse(raw)
-      setCheckResult(parsed)
+      const data = await resizeImage(imageFile)
+      const res = await postAftercare({ action: 'healing-check', link, image: { data, mediaType: 'image/jpeg' } })
+      if (res.status === 403) { setPersonalized(false); return }
+      if (res.status === 429) {
+        setCheckResult({ status: 'Error', note: 'Photo checks are limited each day. Please try again tomorrow or text Saul a photo.' })
+        return
+      }
+      if (!res.ok) throw new Error('check')
+      setCheckResult(await res.json())
     } catch {
       setCheckResult({ status: 'Error', note: 'Could not analyze the image. Please try again.' })
     } finally {
@@ -315,7 +269,19 @@ export default function AftercarePortal() {
 
         <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
+          {!personalized && (
+            <div style={{ background: '#161614', borderRadius: 12, borderTop: '2px solid #7a786f', padding: 20 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e', letterSpacing: '0.08em', marginBottom: 10 }}>
+                A note from Saul
+              </div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df', lineHeight: 1.6 }}>
+                Your care guide below has everything you need to heal well. My personal audio message and the photo healing check are on your newest aftercare link. Text me and I will send you an updated one.
+              </div>
+            </div>
+          )}
+
           {/* Audio Player */}
+          {personalized && (
           <div style={{ background: '#161614', borderRadius: 12, borderTop: '2px solid #c9a96e', padding: 20, textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e', letterSpacing: '0.08em', marginBottom: 20 }}>
               A message from Saul
@@ -326,11 +292,11 @@ export default function AftercarePortal() {
               </div>
             )}
             {audioState === 'error' && (
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', padding: '20px 0' }}>
-                Audio unavailable
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', padding: '20px 0', lineHeight: 1.6 }}>
+                {audioNote || 'Audio unavailable'}
               </div>
             )}
-            {(audioState === 'ready' || audioState === 'playing') && (
+            {(audioState === 'idle' || audioState === 'ready' || audioState === 'playing') && (
               <>
                 <button
                   onClick={handlePlayPause}
@@ -363,6 +329,7 @@ export default function AftercarePortal() {
               </>
             )}
           </div>
+          )}
 
           {/* Care Cards */}
           <div>
@@ -384,6 +351,7 @@ export default function AftercarePortal() {
           </div>
 
           {/* Healing Check */}
+          {personalized && (
           <div>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#c9a96e', marginBottom: 6 }}>
               How Is It Looking?
@@ -499,6 +467,7 @@ export default function AftercarePortal() {
               </div>
             )}
           </div>
+          )}
 
           {/* Footer */}
           <div style={{ textAlign: 'center', padding: '32px 20px' }}>

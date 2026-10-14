@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { loadClients as loadClientsDB } from '../lib/crmService'
 import { agentQueueService, sessionsService, inventoryService } from '../lib/dataService'
+import { claudeFetch } from '../lib/api'
+import { allOk } from '../lib/syncStatus'
 
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
@@ -104,20 +106,11 @@ const S = {
 // ─── Claude API ───────────────────────────────────────────────────────────────
 
 async function callClaude(system, user, maxTokens = 300) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: user }],
-    }),
+  const res = await claudeFetch({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content: user }],
   })
   if (!res.ok) throw new Error('api')
   const data = await res.json()
@@ -737,8 +730,9 @@ export default function AgentQueue() {
       const updated = [...newCards, ...cards]
       setCards(updated)
       saveQueue(updated)
-      newCards.forEach((c) => agentQueueService.saveRecord(c))
-      showToast(`Agents scanned. ${newCards.length} new ${newCards.length === 1 ? 'card' : 'cards'} added.`)
+      const saved = await allOk(newCards.map((c) => agentQueueService.saveRecord(c)))
+      const msg = `Agents scanned. ${newCards.length} new ${newCards.length === 1 ? 'card' : 'cards'} added.`
+      showToast(saved.ok ? msg : `${msg} Saved on this device only. Not saved to the database.`)
     } catch {
       showToast('Agent scan failed. Check your API key.')
     }

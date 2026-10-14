@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { sessionsService, expensesService, goalsService } from '../lib/dataService'
+import { allOk } from '../lib/syncStatus'
 
 // ─── utils ────────────────────────────────────────────────────────────────────
 const uid = () => crypto.randomUUID()
@@ -610,13 +611,13 @@ function IncomeTab({ sessions, setSessions }) {
     const cleaned = nonDupes.map(({ _dupe, ...r }) => r)
     const updated = [...sessions, ...cleaned]
     setSessions(updated)
-    cleaned.forEach(r => sessionsService.saveRecord(r))
+    const saves = cleaned.map(r => sessionsService.saveRecord(r))
     setShowPreview(false)
     setPreviewData([])
     const msg = dupeCount > 0
       ? `${cleaned.length} sessions imported, ${dupeCount} duplicates skipped`
       : `${cleaned.length} sessions imported`
-    showToast(msg)
+    allOk(saves).then((r) => showToast(r.ok ? msg : `${msg} on this device only. Not saved to the database.`))
   }
 
   return (
@@ -818,9 +819,10 @@ function ExpensesTab({ expenses, setExpenses }) {
 
   const handleImport = () => {
     saveExpenses([...expenses, ...previewData])
-    previewData.forEach(r => expensesService.saveRecord(r))
+    const importedMsg = `${previewData.length} expenses imported`
+    allOk(previewData.map(r => expensesService.saveRecord(r)))
+      .then((r) => showToast(r.ok ? importedMsg : `${importedMsg} on this device only. Not saved to the database.`))
     setShowPreview(false)
-    showToast(`${previewData.length} expenses imported`)
     setPreviewData([])
   }
 

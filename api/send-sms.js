@@ -1,16 +1,24 @@
 // api/send-sms.js
-// Vercel serverless function — POST { to, body }
+// Vercel serverless function — POST { to, body }. Owner only.
 // Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER in env
+
+import { requireOwner } from './_lib/auth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  if (!(await requireOwner(req, res))) return
+
   const { to, body } = req.body ?? {}
 
   if (!to || !body) {
     return res.status(400).json({ error: 'Missing required fields: to, body' })
+  }
+
+  if (typeof to !== 'string' || typeof body !== 'string' || body.length > 1600) {
+    return res.status(400).json({ error: 'to must be a phone number and body at most 1600 characters' })
   }
 
   const accountSid = process.env.TWILIO_ACCOUNT_SID
@@ -24,6 +32,9 @@ export default async function handler(req, res) {
   // Normalize phone number — strip everything except digits and leading +
   const normalized = to.replace(/[^\d+]/g, '')
   const phone = normalized.startsWith('+') ? normalized : `+1${normalized}`
+  if (!/^\+\d{10,15}$/.test(phone)) {
+    return res.status(400).json({ error: 'Invalid phone number' })
+  }
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
 

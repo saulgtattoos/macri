@@ -168,6 +168,7 @@ export default function ConsultationClient() {
 
   useEffect(() => {
     function handleMessage(e) {
+      if (e.origin !== window.location.origin) return
       if (e.data?.type === 'RESET_WIZARD') {
         Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
         imageURLs.current = {}
@@ -180,6 +181,11 @@ export default function ConsultationClient() {
         setEstStyle('')
       }
       if (e.data?.type === 'CONSULTATION_SAVED') {
+        // The owner has the answers now; do not leave the client's details on this device.
+        Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
+        imageURLs.current = {}
+        setFormData(defaultForm)
+        localStorage.removeItem(DRAFT_KEY)
         setShowThankYou(true)
         setShowWaiting(false)
       }
@@ -964,7 +970,7 @@ export default function ConsultationClient() {
           <button
             onClick={() => {
               if (window.opener) {
-                window.opener.postMessage({ type: 'CLIENT_FORM_DATA', payload: formData }, '*')
+                window.opener.postMessage({ type: 'CLIENT_FORM_DATA', payload: formData }, window.location.origin)
               }
               setShowWaiting(true)
             }}

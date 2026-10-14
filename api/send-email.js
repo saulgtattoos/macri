@@ -1,14 +1,25 @@
 import { Resend } from 'resend'
+import { requireOwner } from './_lib/auth.js'
+
+const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { to, subject, body } = req.body
+  if (!(await requireOwner(req, res))) return
+
+  const { to, subject, body } = req.body ?? {}
 
   if (!to || !subject || !body) {
     return res.status(400).json({ error: 'Missing required fields: to, subject, body' })
+  }
+
+  if (typeof to !== 'string' || to.length > 254 || !EMAIL_RE.test(to)
+    || typeof subject !== 'string' || subject.length > 200
+    || typeof body !== 'string' || body.length > 20000) {
+    return res.status(400).json({ error: 'Invalid recipient, subject, or body' })
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY)

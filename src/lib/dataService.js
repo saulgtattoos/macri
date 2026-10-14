@@ -1,4 +1,5 @@
 import supabase from './supabase'
+import { reportSyncIssue, resolveLoadIssues } from './syncStatus'
 
 function lsParseArray(key) {
   try {
@@ -272,30 +273,63 @@ const MAPS = {
 export function makeService(tableName, lsKey) {
   const { toDB, fromDB } = MAPS[tableName] || { toDB: (r) => r, fromDB: (r) => r }
 
+  // Falls back to the device copy only when the database fails or has no rows,
+  // and reports it so the app labels what is shown as device only.
   async function loadAll() {
     try {
       const { data, error } = await supabase.from(tableName).select('*')
-      if (!error && data && data.length > 0) return data.map(fromDB)
-    } catch {}
+      if (!error) {
+        if (data && data.length > 0) {
+          resolveLoadIssues(tableName)
+          return data.map(fromDB)
+        }
+        const local = lsParseArray(lsKey)
+        if (local.length) reportSyncIssue({ kind: 'local-only', table: tableName, message: 'Database has no rows; showing records saved on this device only.' })
+        return local
+      }
+      reportSyncIssue({ kind: 'load', table: tableName, message: error.message })
+    } catch (err) {
+      reportSyncIssue({ kind: 'load', table: tableName, message: err?.message })
+    }
     return lsParseArray(lsKey)
   }
 
+  // Writes the device copy immediately, then resolves to { ok } from the database.
+  // ok: false means the record exists on this device only.
   function saveRecord(record) {
-    supabase.from(tableName).upsert(toDB(record)).then(({ error }) => {
-      if (error) console.error(`[MACRI] ${tableName} saveRecord:`, error.message)
-    })
     const list = lsParseArray(lsKey)
     const idx = list.findIndex((r) => r.id === record.id)
     if (idx >= 0) list[idx] = record
     else list.push(record)
     lsWriteArray(lsKey, list)
+
+    return Promise.resolve()
+      .then(() => supabase.from(tableName).upsert(toDB(record)))
+      .then(({ error }) => {
+        if (!error) return { ok: true }
+        console.error(`[MACRI] ${tableName} saveRecord:`, error.message)
+        reportSyncIssue({ kind: 'save', table: tableName, message: error.message })
+        return { ok: false, error }
+      }, (error) => {
+        reportSyncIssue({ kind: 'save', table: tableName, message: error?.message })
+        return { ok: false, error }
+      })
   }
 
   function deleteRecord(id) {
-    supabase.from(tableName).delete().eq('id', id).then(({ error }) => {
-      if (error) console.error(`[MACRI] ${tableName} deleteRecord:`, error.message)
-    })
     lsWriteArray(lsKey, lsParseArray(lsKey).filter((r) => r.id !== id))
+
+    return Promise.resolve()
+      .then(() => supabase.from(tableName).delete().eq('id', id))
+      .then(({ error }) => {
+        if (!error) return { ok: true }
+        console.error(`[MACRI] ${tableName} deleteRecord:`, error.message)
+        reportSyncIssue({ kind: 'delete', table: tableName, message: error.message })
+        return { ok: false, error }
+      }, (error) => {
+        reportSyncIssue({ kind: 'delete', table: tableName, message: error?.message })
+        return { ok: false, error }
+      })
   }
 
   async function seedTable() {

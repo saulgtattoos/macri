@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { loadClients as loadClientsDB, saveClient } from '../lib/crmService'
 import { draftsService, hashtagsService } from '../lib/dataService'
+import { claudeFetch } from '../lib/api'
+import { allOk } from '../lib/syncStatus'
 
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
@@ -315,12 +317,16 @@ function GenerateTab({ clients }) {
       tag,
       createdAt: now(),
     }))
-    records.forEach((r, i) => {
+    const saves = records.map((r, i) => {
       hashtagIds.current[i] = r.id
-      hashtagsService.saveRecord(r)
+      return hashtagsService.saveRecord(r)
     })
-    setHashtagsSaved(true)
-    setTimeout(() => setHashtagsSaved(false), 2000)
+    // "Saved" only after the database confirms; failures show the device only banner.
+    allOk(saves).then((r) => {
+      if (!r.ok) return
+      setHashtagsSaved(true)
+      setTimeout(() => setHashtagsSaved(false), 2000)
+    })
   }
 
   const parseResponse = (text) => {
@@ -348,7 +354,6 @@ function GenerateTab({ clients }) {
     setApiError(null)
     setResults(null)
 
-    const apiKey = import.meta.env.VITE_ANTHROPIC_KEY
     const systemPrompt = `You are a social media content assistant for Saul Gutierrez, a tattoo artist in Elk Grove CA specializing in Watercolor, Black and Gray, Black and Gray Portrait, Sketch Art, Abstract, Stippled Shading, and Color Realism tattoos. Generate three separate captions for the same tattoo post tailored to Instagram, Facebook, and TikTok. Each caption must follow the required format below. Use zero hyphens or dashes anywhere. Write all ranges as X to Y. Keep tone warm, personal, and professional. Never mention sponsorships or paid partnerships.
 
 Required format:
@@ -374,29 +379,20 @@ Short punchy caption optimized for TikTok. Energetic tone. Include 5 hashtags. M
     const userText = `Style: ${style}. Concept: ${concept}. Meaning: ${meaning}. Client tag: ${clientTag}. Consultation notes: ${notes}. Hashtags to use: ${hashtags.join(' ')}. Generate all three platform captions now.`
 
     try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: photoFile.type, data: photoB64 },
-              },
-              { type: 'text', text: userText },
-            ],
-          }],
-        }),
+      const resp = await claudeFetch({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: photoFile.type, data: photoB64 },
+            },
+            { type: 'text', text: userText },
+          ],
+        }],
       })
 
       if (!resp.ok) {
@@ -446,15 +442,19 @@ Short punchy caption optimized for TikTok. Energetic tone. Include 5 hashtags. M
     const drafts = existing ? JSON.parse(existing) : []
     drafts.push(draft)
     localStorage.setItem('macri_content_drafts', JSON.stringify(drafts))
-    draftsService.saveRecord(draft)
+    const saves = [draftsService.saveRecord(draft)]
 
     if (clientId) {
       const target = clients.find(c => c.id === clientId)
-      if (target) saveClient({ ...target, contentDrafts: [...(target.contentDrafts || []), draft.id] })
+      if (target) saves.push(saveClient({ ...target, contentDrafts: [...(target.contentDrafts || []), draft.id] }))
     }
 
-    setDraftSaved(true)
-    setTimeout(() => setDraftSaved(false), 3000)
+    // "Draft saved" only after the database confirms; failures show the device only banner.
+    allOk(saves).then((r) => {
+      if (!r.ok) return
+      setDraftSaved(true)
+      setTimeout(() => setDraftSaved(false), 3000)
+    })
   }
 
   const activeCaption = results

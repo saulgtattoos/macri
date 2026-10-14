@@ -7,6 +7,7 @@ import {
   arrayMove, SortableContext, useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { claudeFetch, sttFetch, ttsFetch } from '../lib/api'
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
@@ -298,7 +299,6 @@ export default function SessionPrep() {
 
       const mime     = mimeTypeRef.current
       const isMP4    = mime.startsWith('audio/mp4')
-      const ext      = isMP4 ? 'mp4' : 'webm'
       const blobType = isMP4 ? 'audio/mp4' : 'audio/webm'
 
       const blob = new Blob(chunksRef.current, { type: blobType })
@@ -306,16 +306,8 @@ export default function SessionPrep() {
       setMicStatus('processing')
       setStatusMsg('Checking off your list...')
 
-      // STT via ElevenLabs Scribe V2
-      const elKey = import.meta.env.VITE_ELEVENLABS_KEY
-      const formData = new FormData()
-      formData.append('file', blob, `recording.${ext}`)
-      formData.append('model_id', 'scribe_v2')
-      const sttRes = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-        method: 'POST',
-        headers: { 'xi-api-key': elKey },
-        body: formData,
-      })
+      // STT via ElevenLabs Scribe V2 (server proxy)
+      const sttRes = await sttFetch(blob)
       if (!sttRes.ok) throw new Error('stt')
       const sttData = await sttRes.json()
       const transcript = sttData.text?.trim()
@@ -328,20 +320,11 @@ export default function SessionPrep() {
       // Claude API to match transcript to checklist items
       const systemPrompt = `You are a session prep assistant for a tattoo studio. The user will speak what they have completed. Match their words to items in this checklist and return ONLY valid JSON: {"checkedItems": [array of exact item strings that were mentioned], "remaining": [array of exact item strings not yet done]}. Checklist: ${JSON.stringify(unchecked)}`
 
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 512,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: transcript }],
-        }),
+      const claudeRes = await claudeFetch({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: transcript }],
       })
       if (!claudeRes.ok) throw new Error('claude')
       const claudeMsg = await claudeRes.json()
@@ -364,14 +347,10 @@ export default function SessionPrep() {
         ? 'You are ready, Saul. Let us get to work.'
         : `Got it, Saul. You still need: ${remaining.join(', ')}.`
 
-      const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/Q2Qd4P9qaDNuBFUcFCQr`, {
-        method: 'POST',
-        headers: { 'xi-api-key': import.meta.env.VITE_ELEVENLABS_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: ttsText,
-          model_id: 'eleven_monolingual_v1',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
+      const ttsRes = await ttsFetch({
+        text: ttsText,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       })
       if (ttsRes.ok) {
         const ttsBlob = await ttsRes.blob()

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { mkClient, mkComm, loadClients } from './CRM'
 import { saveClient } from '../lib/crmService'
+import { apiPost, claudeFetch } from '../lib/api'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -174,22 +175,10 @@ function buildPrompt({ source, timing, contentType, pricingModel, customPrice, i
 }
 
 async function callClaude(prompt) {
-  const key = import.meta.env.VITE_ANTHROPIC_KEY
-  if (!key) throw new Error('VITE_ANTHROPIC_KEY is not set in your .env file.')
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    }),
+  const res = await claudeFetch({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: prompt }],
   })
 
   if (!res.ok) {
@@ -678,13 +667,9 @@ export default function InquiryAssistant() {
     setSmsSending(true)
 
     try {
-      const res = await fetch('/api/send-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to:   normalizePhone(recipientPhone),
-          body: editedText,
-        }),
+      const res = await apiPost('/api/send-sms', {
+        to:   normalizePhone(recipientPhone),
+        body: editedText,
       })
 
       const data = await res.json()
@@ -726,14 +711,10 @@ export default function InquiryAssistant() {
     const subject    = `Tattoo Inquiry: ${clientName || 'New Client'} | Saul Gutierrez`
 
     try {
-      const res = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to:      recipientEmail.trim(),
-          subject,
-          body:    editedEmail,
-        }),
+      const res = await apiPost('/api/send-email', {
+        to:      recipientEmail.trim(),
+        subject,
+        body:    editedEmail,
       })
 
       const data = await res.json()
@@ -781,6 +762,7 @@ export default function InquiryAssistant() {
       const clientEmail = c.email || ''
 
       let existingIdx = -1
+      let saveResult = { ok: false }
       if (clientName) {
         const first = clientName.split(' ')[0].toLowerCase()
         existingIdx = clients.findIndex(cl => cl.name?.split(' ')[0]?.toLowerCase() === first)
@@ -801,7 +783,7 @@ export default function InquiryAssistant() {
           notes: editedEmail || editedText || existing.notes || '',
           updatedAt: now,
         }
-        await saveClient(updated)
+        saveResult = await saveClient(updated)
       } else {
         const client = mkClient({
           name:        clientName,
@@ -821,9 +803,10 @@ export default function InquiryAssistant() {
             { id: crypto.randomUUID(), timestamp: now, text: `${logDate()} Added from Inquiry Assistant.` },
           ],
         })
-        await saveClient(client)
+        saveResult = await saveClient(client)
       }
 
+      if (!saveResult.ok) toast.error('Saved on this device only. Not saved to the database.')
       setSavedToCRM(true)
       clearSession()
       const savedClientId = existingIdx >= 0 ? clients[existingIdx].id : clientName

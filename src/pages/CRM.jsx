@@ -9,6 +9,7 @@ import {
   arrayMove, SortableContext, useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { apiPost } from '../lib/api'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1993,19 +1994,25 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                           </div>
                           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                             <button
-                              onClick={e => {
+                              onClick={async e => {
                                 e.stopPropagation()
                                 const fn = (client.name || 'Client').split(' ')[0]
-                                const params = new URLSearchParams({
-                                  name: fn,
-                                  style: s.tattooDescription || '',
-                                  placement: s.placement || '',
-                                  date: s.date || '',
-                                })
-                                const link = `${window.location.origin}/care/${s.id}?${params}`
-                                navigator.clipboard.writeText(link)
-                                  .then(() => showDrawerToast('Aftercare link copied'))
-                                  .catch(() => showDrawerToast('Could not copy link'))
+                                try {
+                                  const res = await apiPost('/api/aftercare-link', {
+                                    sessionId: String(s.id),
+                                    name: fn,
+                                    style: s.tattooDescription || '',
+                                    placement: s.placement || '',
+                                    date: s.date || '',
+                                    film: s.film === true || s.film === 'true',
+                                  })
+                                  if (!res.ok) throw new Error('link')
+                                  const { path } = await res.json()
+                                  await navigator.clipboard.writeText(`${window.location.origin}${path}`)
+                                  showDrawerToast('Aftercare link copied')
+                                } catch {
+                                  showDrawerToast('Could not create aftercare link')
+                                }
                               }}
                               style={{
                                 flex: 1, minHeight: 36,
@@ -2222,26 +2229,17 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                   disabled={conciergeLoading}
                   onClick={async () => {
                     if (conciergeLoading) return
-                    const webhookUrl = import.meta.env.VITE_CONCIERGE_WEBHOOK
-                    if (!webhookUrl) {
-                      setConciergeError('VITE_CONCIERGE_WEBHOOK is not set in your .env file.')
-                      return
-                    }
                     setConciergeLoading(true)
                     setConciergeError(null)
                     try {
-                      const res = await fetch(webhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          clientId:           client.id,
-                          clientName:         client.name         || '',
-                          tattooIdea:         client.tattooIdea   || '',
-                          style:              client.style        || '',
-                          placement:          client.placement    || '',
-                          size:               client.size         || '',
-                          agentIntakeSummary: client.agentIntakeSummary || '',
-                        }),
+                      const res = await apiPost('/api/concierge', {
+                        clientId:           client.id,
+                        clientName:         client.name         || '',
+                        tattooIdea:         client.tattooIdea   || '',
+                        style:              client.style        || '',
+                        placement:          client.placement    || '',
+                        size:               client.size         || '',
+                        agentIntakeSummary: client.agentIntakeSummary || '',
                       })
                       if (!res.ok) {
                         const err = await res.json().catch(() => ({}))

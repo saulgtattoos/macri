@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { STAGES } from '../constants/stages'
 import { loadClients as loadClientsDB } from '../lib/crmService'
 import { supabase } from '../lib/supabase'
+import { ttsFetch } from '../lib/api'
 
 // ─── Quotes ───────────────────────────────────────────────────────────────────
 
@@ -33,16 +34,10 @@ function getRefreshIdx(current) {
 
 async function speakText(text) {
   try {
-    const key     = import.meta.env.VITE_ELEVENLABS_KEY
-    const voiceId = 'Q2Qd4P9qaDNuBFUcFCQr'
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_monolingual_v1',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
+    const res = await ttsFetch({
+      text,
+      model_id: 'eleven_monolingual_v1',
+      voice_settings: { stability: 0.5, similarity_boost: 0.75 },
     })
     if (!res.ok) return
     const blob  = await res.blob()

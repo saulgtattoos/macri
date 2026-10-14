@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { inksService, palettesService, brandsService, sessionPrepService } from '../lib/dataService'
+import { claudeFetch } from '../lib/api'
+import { allOk, savedMessage } from '../lib/syncStatus'
 
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
@@ -415,8 +417,8 @@ function PalettesTab({ palettes, setPalettes, inks, showToast }) {
     if (!Array.isArray(data.items)) data.items = []
     data.items = [...data.items, ...newItems]
     localStorage.setItem('macri_session_prep', JSON.stringify(data))
-    newItems.forEach((item) => sessionPrepService.saveRecord(item))
-    showToast('Inks added to Session Prep')
+    const saved = await allOk(newItems.map((item) => sessionPrepService.saveRecord(item)))
+    showToast(saved.ok ? 'Inks added to Session Prep' : 'Inks added to Session Prep on this device only. Not saved to the database.')
   }
 
   const d = editDraft
@@ -808,29 +810,20 @@ function AnalyzeTab({ inks, palettes, setPalettes, showToast, onSendToMixingLab 
     setResult(null)
     try {
       const inkList = inks.map((i) => `${i.name} | ${i.brand} | ${i.colorHex} | ${i.colorFamily} | ${i.inStock ? 'In Stock' : 'Out of Stock'}`).join('\n')
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 2000,
-          system: 'You are a professional tattoo ink color consultant for Saul Gutierrez, a tattoo artist in Elk Grove CA. You specialize in color matching between artwork and physical ink collections. Analyze the uploaded design image and identify every distinct color region. For each region recommend the best matching ink from Saul\'s owned collection. If no owned ink matches within acceptable range suggest a mixing recipe using only inks he owns with ratios written as X parts to Y parts. Describe every color in plain language. Warn when two recommended inks may look similar to someone with color vision differences. Use zero hyphens or dashes. Write all ranges as X to Y.',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageBase64 } },
-              {
-                type: 'text',
-                text: `Here is my ink library:\n${inkList || 'No inks in library yet.'}\n\nAnalyze this design and for each color region return a JSON array with this exact shape and nothing else:\n[\n  {\n    "region": "string describing the color area",\n    "targetHex": "#hexcode",\n    "recommendedInk": "exact ink name from library or null",\n    "matchConfidence": "high or medium or low",\n    "mixingRecipe": "X parts InkA to Y parts InkB or null",\n    "warning": "string or null"\n  }\n]\nReturn only the JSON array. No other text before or after.`,
-              },
-            ],
-          }],
-        }),
+      const res = await claudeFetch({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        system: 'You are a professional tattoo ink color consultant for Saul Gutierrez, a tattoo artist in Elk Grove CA. You specialize in color matching between artwork and physical ink collections. Analyze the uploaded design image and identify every distinct color region. For each region recommend the best matching ink from Saul\'s owned collection. If no owned ink matches within acceptable range suggest a mixing recipe using only inks he owns with ratios written as X parts to Y parts. Describe every color in plain language. Warn when two recommended inks may look similar to someone with color vision differences. Use zero hyphens or dashes. Write all ranges as X to Y.',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageBase64 } },
+            {
+              type: 'text',
+              text: `Here is my ink library:\n${inkList || 'No inks in library yet.'}\n\nAnalyze this design and for each color region return a JSON array with this exact shape and nothing else:\n[\n  {\n    "region": "string describing the color area",\n    "targetHex": "#hexcode",\n    "recommendedInk": "exact ink name from library or null",\n    "matchConfidence": "high or medium or low",\n    "mixingRecipe": "X parts InkA to Y parts InkB or null",\n    "warning": "string or null"\n  }\n]\nReturn only the JSON array. No other text before or after.`,
+            },
+          ],
+        }],
       })
       if (!res.ok) throw new Error('api')
       const data = await res.json()
@@ -871,10 +864,9 @@ function AnalyzeTab({ inks, palettes, setPalettes, showToast, onSendToMixingLab 
       createdAt: now(),
     }
     setPalettes((prev) => [newPalette, ...prev])
-    palettesService.saveRecord(newPalette)
+    palettesService.saveRecord(newPalette).then((r) => showToast(savedMessage(r, 'Palette')))
     setShowSaveModal(false)
     setPaletteName('')
-    showToast('Palette saved')
   }
 
   const handleAddToSessionPrep = async () => {
@@ -891,8 +883,8 @@ function AnalyzeTab({ inks, palettes, setPalettes, showToast, onSendToMixingLab 
     if (!Array.isArray(data.items)) data.items = []
     data.items = [...data.items, ...newItems]
     localStorage.setItem('macri_session_prep', JSON.stringify(data))
-    newItems.forEach((item) => sessionPrepService.saveRecord(item))
-    showToast('Inks added to Session Prep')
+    const saved = await allOk(newItems.map((item) => sessionPrepService.saveRecord(item)))
+    showToast(saved.ok ? 'Inks added to Session Prep' : 'Inks added to Session Prep on this device only. Not saved to the database.')
   }
 
   const confidenceColor = (c) => c === 'high' ? '#7aab8f' : c === 'medium' ? '#c9a96e' : '#f09595'
@@ -1066,26 +1058,17 @@ function WitnessTab({ inks, setInks, showToast }) {
     const frame = captureFrame()
     if (!frame) return
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 200,
-          system: 'You are an ink bottle label reader. Look at the image and identify any visible tattoo ink bottle labels. For each label you can read extract the brand name and ink color name. Return only a JSON array: [{"brand":"string","name":"string"}] If no labels are visible return an empty array. Return only JSON.',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: frame } },
-              { type: 'text', text: 'Identify any tattoo ink bottle labels visible in this image.' },
-            ],
-          }],
-        }),
+      const res = await claudeFetch({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 200,
+        system: 'You are an ink bottle label reader. Look at the image and identify any visible tattoo ink bottle labels. For each label you can read extract the brand name and ink color name. Return only a JSON array: [{"brand":"string","name":"string"}] If no labels are visible return an empty array. Return only JSON.',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: frame } },
+            { type: 'text', text: 'Identify any tattoo ink bottle labels visible in this image.' },
+          ],
+        }],
       })
       if (!res.ok) return
       const data = await res.json()
@@ -1142,26 +1125,17 @@ function WitnessTab({ inks, setInks, showToast }) {
     reader.onload = async (e) => {
       const base64 = e.target.result.split(',')[1]
       try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 200,
-            system: 'You are an ink bottle label reader. Look at the image and identify any visible tattoo ink bottle labels. For each label you can read extract the brand name and ink color name. Return only a JSON array: [{"brand":"string","name":"string"}] If no labels are visible return an empty array. Return only JSON.',
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
-                { type: 'text', text: 'Identify any tattoo ink bottle labels visible in this image.' },
-              ],
-            }],
-          }),
+        const res = await claudeFetch({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 200,
+          system: 'You are an ink bottle label reader. Look at the image and identify any visible tattoo ink bottle labels. For each label you can read extract the brand name and ink color name. Return only a JSON array: [{"brand":"string","name":"string"}] If no labels are visible return an empty array. Return only JSON.',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
+              { type: 'text', text: 'Identify any tattoo ink bottle labels visible in this image.' },
+            ],
+          }],
         })
         if (!res.ok) return
         const data = await res.json()
@@ -1195,8 +1169,9 @@ function WitnessTab({ inks, setInks, showToast }) {
       inStock: true, lastUsed: null, notes: '', createdAt: now(),
     }))
     setInks((prev) => [...newInks, ...prev])
-    newInks.forEach((ink) => inksService.saveRecord(ink))
-    showToast(`${pending.length} ${pending.length === 1 ? 'ink' : 'inks'} added to your library`)
+    const addedMsg = `${pending.length} ${pending.length === 1 ? 'ink' : 'inks'} added to your library`
+    allOk(newInks.map((ink) => inksService.saveRecord(ink)))
+      .then((r) => showToast(r.ok ? addedMsg : `${addedMsg} on this device only. Not saved to the database.`))
     setPending([])
   }
 
@@ -1306,23 +1281,14 @@ function MixingLabTab({ inks, palettes, setPalettes, showToast, mixingTargets })
     try {
       const inStockInks = inks.filter((i) => i.inStock)
       const inkList = inStockInks.map((i) => `${i.name} | ${i.brand} | ${i.colorHex}`).join('\n')
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 500,
-          system: 'You are a tattoo ink mixing expert. Given a target hex color and a list of available inks with their hex codes calculate the best mixing recipe to achieve the target using only the available inks. Provide ratios written as X parts to Y parts. Explain in plain language. If the target cannot be closely achieved say so and suggest the nearest achievable mix. Use zero hyphens or dashes. Write all ranges as X to Y.',
-          messages: [{
-            role: 'user',
-            content: `Target hex: ${targetHex}. Available inks:\n${inkList || 'No inks in stock.'}\n\nCalculate the best mixing recipe.`,
-          }],
-        }),
+      const res = await claudeFetch({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 500,
+        system: 'You are a tattoo ink mixing expert. Given a target hex color and a list of available inks with their hex codes calculate the best mixing recipe to achieve the target using only the available inks. Provide ratios written as X parts to Y parts. Explain in plain language. If the target cannot be closely achieved say so and suggest the nearest achievable mix. Use zero hyphens or dashes. Write all ranges as X to Y.',
+        messages: [{
+          role: 'user',
+          content: `Target hex: ${targetHex}. Available inks:\n${inkList || 'No inks in stock.'}\n\nCalculate the best mixing recipe.`,
+        }],
       })
       if (!res.ok) throw new Error('api')
       const data = await res.json()
@@ -1344,7 +1310,7 @@ function MixingLabTab({ inks, palettes, setPalettes, showToast, mixingTargets })
     }
     setPalettes((prev) => [newPalette, ...prev])
     palettesService.saveRecord(newPalette)
-    showToast('Recipe saved to Palettes')
+      .then((r) => showToast(r.ok ? 'Recipe saved to Palettes' : 'Recipe saved on this device only. Not saved to the database.'))
   }
 
   return (

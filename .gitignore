@@ -27,3 +27,14 @@ dist-ssr
 *.sw?
 .vercel
 .env*.local
+
+# Local only. Never commit: real keys or unresolved security details.
+/.private/
+MACRI_v1_standalone_demo_archive.txt
+
+# Local only documents (business strategy, personal story, detailed architecture).
+# Kept out of the public repo; remove a line here to publish that document.
+MACRI_Founder_Briefing.md
+macri_project_briefing.html
+MACRI html file.pdf
+/Founding Vision/

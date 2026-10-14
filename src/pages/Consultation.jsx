@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { mkClient } from './CRM'
 import { loadClients, saveClient } from '../lib/crmService'
+import { ttsFetch } from '../lib/api'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -225,7 +226,11 @@ export default function Consultation() {
   const [manualEstPrice, setManualEstPrice] = useState('')
   const [manualAtMin, setManualAtMin]       = useState(false)
   const [savedConsult, setSavedConsult]     = useState(null)
+  const [savedConsultOk, setSavedConsultOk] = useState(true)
   const clientWin                           = useRef(null)
+  // One save at a time: a second click while saving would pass the duplicate check
+  // before the first save lands and create a duplicate client.
+  const savingRef                           = useRef(false)
   const [clientWinOpen, setClientWinOpen]   = useState(false)
   const imageURLs                           = useRef({})
   const fileInputRef                        = useRef(null)
@@ -253,6 +258,7 @@ export default function Consultation() {
 
   useEffect(() => {
     function handleMessage(e) {
+      if (e.origin !== window.location.origin) return
       if (e.data?.type === 'CLIENT_FORM_DATA') {
         setFormData(prev => ({ ...prev, ...e.data.payload }))
       }
@@ -437,28 +443,25 @@ export default function Consultation() {
     }
 
     const recordToSave = existingId !== null ? clients.find(c => c.id === existingId) : clients[0]
-    if (recordToSave) await saveClient(recordToSave)
+    const saveResult = recordToSave ? await saveClient(recordToSave) : { ok: false }
     localStorage.removeItem(DRAFT_KEY)
+    // Also clear the client form draft (client's name, phone, email) in case the client tab is closed.
+    localStorage.removeItem('macri_consultation_client_draft')
 
     if (clientWin.current && !clientWin.current.closed) {
-      clientWin.current.postMessage({ type: 'CONSULTATION_SAVED' }, '*')
+      clientWin.current.postMessage({ type: 'CONSULTATION_SAVED' }, window.location.origin)
     }
 
     const snapshot = { ...formData }
 
     const firstName = formData.name.trim().split(' ')[0]
     try {
-      const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/Q2Qd4P9qaDNuBFUcFCQr', {
-        method: 'POST',
-        headers: {
-          'xi-api-key': import.meta.env.VITE_ELEVENLABS_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: `${firstName} consultation saved. They are now on your Project Wall.`,
-          model_id: 'eleven_monolingual_v1',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
+      const res = await ttsFetch({
+        text: saveResult.ok
+          ? `${firstName} consultation saved. They are now on your Project Wall.`
+          : `${firstName} consultation saved on this device only. It did not reach the database.`,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       })
       if (res.ok) {
         const blob = await res.blob()
@@ -473,6 +476,7 @@ export default function Consultation() {
     setCurrentStep(0)
     setShowDupModal(false)
     setDupClient(null)
+    setSavedConsultOk(saveResult.ok)
     setSavedConsult(snapshot)
   }
 
@@ -481,48 +485,66 @@ export default function Consultation() {
     ttsPlayer.src = IOS_WAV
     ttsPlayer.play().catch(() => {})
 
+    if (savingRef.current) return
     if (!formData.name.trim()) {
       setNameError(true)
       setCurrentStep(0)
       return
     }
 
-    const clients = await loadClients()
+    savingRef.current = true
+    try {
+      const clients = await loadClients()
 
-    if (prefillClientId) {
-      await doSave(clients, prefillClientId, ttsPlayer)
-      return
+      if (prefillClientId) {
+        await doSave(clients, prefillClientId, ttsPlayer)
+        return
+      }
+
+      const existing = clients.find(c => {
+        const nameMatch = c.name?.toLowerCase() === formData.name.trim().toLowerCase()
+        const emailMatch = formData.email && c.email?.toLowerCase() === formData.email.toLowerCase()
+        return nameMatch || emailMatch
+      })
+
+      if (existing) {
+        setDupClient(existing)
+        setShowDupModal(true)
+        return
+      }
+
+      await doSave(clients, null, ttsPlayer)
+    } finally {
+      savingRef.current = false
     }
-
-    const existing = clients.find(c => {
-      const nameMatch = c.name?.toLowerCase() === formData.name.trim().toLowerCase()
-      const emailMatch = formData.email && c.email?.toLowerCase() === formData.email.toLowerCase()
-      return nameMatch || emailMatch
-    })
-
-    if (existing) {
-      setDupClient(existing)
-      setShowDupModal(true)
-      return
-    }
-
-    await doSave(clients, null, ttsPlayer)
   }
 
   async function handleAddToExisting() {
     const ttsPlayer = new Audio()
     ttsPlayer.src = IOS_WAV
     ttsPlayer.play().catch(() => {})
-    const clients = await loadClients()
-    await doSave(clients, dupClient.id, ttsPlayer)
+    if (savingRef.current) return
+    savingRef.current = true
+    try {
+      const clients = await loadClients()
+      await doSave(clients, dupClient.id, ttsPlayer)
+    } finally {
+      savingRef.current = false
+    }
   }
 
   async function handleCreateNew() {
     const ttsPlayer = new Audio()
     ttsPlayer.src = IOS_WAV
     ttsPlayer.play().catch(() => {})
-    const clients = await loadClients()
-    await doSave(clients, null, ttsPlayer)
+    if (savingRef.current) return
+    savingRef.current = true
+    try {
+      const clients = await loadClients()
+      await doSave(clients, null, ttsPlayer)
+    } finally {
+      savingRef.current = false
+    }
   }
 
   // ── Step renders ──────────────────────────────────────────────────────────────
@@ -1574,7 +1596,7 @@ export default function Consultation() {
               Client view is open
             </span>
             <button
-              onClick={() => clientWin.current?.postMessage({ type: 'RESET_WIZARD' }, '*')}
+              onClick={() => clientWin.current?.postMessage({ type: 'RESET_WIZARD' }, window.location.origin)}
               style={{
                 minHeight: 28,
                 padding: '0 10px',
@@ -1608,7 +1630,7 @@ export default function Consultation() {
           flexWrap: 'wrap',
         }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#c9a96e' }}>
-            {savedConsult.name.trim().split(' ')[0]} saved to studio database.
+            {savedConsult.name.trim().split(' ')[0]} {savedConsultOk ? 'saved to studio database.' : 'saved on this device only. Not saved to the database.'}
           </span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button

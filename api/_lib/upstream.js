@@ -4,7 +4,10 @@ export const CLAUDE_MODELS = new Set(['claude-sonnet-4-20250514', 'claude-sonnet
 export const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-20250514'
 export const MAX_CLAUDE_TOKENS = 2000
 
-export const VOICE_ID = 'Q2Qd4P9qaDNuBFUcFCQr'
+// Separate voices for the in app assistant and client aftercare audio.
+// Both Rachel (stock ElevenLabs voice) since 2026-10-14; the cloned voice needs a paid plan.
+export const ASSISTANT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'
+export const AFTERCARE_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'
 export const TTS_MODELS = new Set(['eleven_multilingual_v2', 'eleven_turbo_v2'])
 export const STT_MODEL = 'scribe_v2'
 
@@ -28,10 +31,10 @@ export function callAnthropic(payload) {
   })
 }
 
-export function callTts({ text, model_id, voice_settings }) {
+export function callTts({ voice_id, text, model_id, voice_settings }) {
   const body = { text, model_id }
   if (voice_settings) body.voice_settings = voice_settings
-  return fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+  return fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
     method: 'POST',
     headers: { 'xi-api-key': key('ELEVENLABS_API_KEY'), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

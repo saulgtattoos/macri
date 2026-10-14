@@ -1,8 +1,8 @@
-// Owner only text to speech with Saul's fixed ElevenLabs voice. Returns audio bytes.
+// Owner only text to speech with the fixed assistant voice. Returns audio bytes.
 
 import { allowPost, getBody, isStr } from '../_lib/http.js'
 import { requireOwner } from '../_lib/auth.js'
-import { callTts, sendAudio, TTS_MODELS, NotConfiguredError } from '../_lib/upstream.js'
+import { callTts, sendAudio, ASSISTANT_VOICE_ID, TTS_MODELS, NotConfiguredError } from '../_lib/upstream.js'
 
 function validSettings(v) {
   if (v === undefined) return true
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   if (!validSettings(voice_settings)) return res.status(400).json({ error: 'Invalid voice_settings' })
 
   try {
-    const upstream = await callTts({ text, model_id, voice_settings })
+    const upstream = await callTts({ voice_id: ASSISTANT_VOICE_ID, text, model_id, voice_settings })
     if (!upstream.ok) return res.status(502).json({ error: `Voice service error ${upstream.status}` })
     return sendAudio(res, upstream)
   } catch (err) {

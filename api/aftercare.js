@@ -9,7 +9,7 @@ import {
   audioScriptRequest, healingCheckRequest, HEALING_IMAGE_MAX_B64, HEALING_IMAGE_TYPES,
   linkSecret, parseHealingResult, verifyLink,
 } from './_lib/aftercare.js'
-import { callAnthropic, callTts, sendAudio, NotConfiguredError } from './_lib/upstream.js'
+import { callAnthropic, callTts, sendAudio, AFTERCARE_VOICE_ID, NotConfiguredError } from './_lib/upstream.js'
 
 export const LIMITS = {
   ipPerHour: 20,
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       if (!claude.ok) return res.status(502).json({ error: 'upstream' })
       const script = (await claude.json())?.content?.[0]?.text?.trim()
       if (!script) return res.status(502).json({ error: 'upstream' })
-      const tts = await callTts({ text: script.slice(0, 1500), model_id: 'eleven_turbo_v2' })
+      const tts = await callTts({ voice_id: AFTERCARE_VOICE_ID, text: script.slice(0, 1500), model_id: 'eleven_turbo_v2' })
       if (!tts.ok) return res.status(502).json({ error: 'upstream' })
       return sendAudio(res, tts)
     }

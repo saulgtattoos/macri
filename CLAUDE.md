@@ -64,7 +64,8 @@ Radius: 12px cards, 8px inputs and buttons. Tap targets minimum 44px, prefer 48p
 Saul Gutierrez | Private studio, Elk Grove CA | $250/hr
 Specialties: Watercolor, Black and Gray Realism, Sketch Art, Abstract, Pointillism
 Consultation: SaulsAppointments.as.me/TattooConsultation | Business email: saulgtattoos@gmail.com
-Signature: Saul | Private Studio, Elk Grove | ElevenLabs Voice ID: Q2Qd4P9qaDNuBFUcFCQr
+Signature: Saul | Private Studio, Elk Grove
+ElevenLabs voices (api/_lib/upstream.js): assistant and aftercare are separate settings, both Rachel 21m00Tcm4TlvDq8ikWAM (stock). Saul's cloned voice Q2Qd4P9qaDNuBFUcFCQr needs a paid ElevenLabs plan.
 
 ## Hard Rules for All Generated Client Text
 Never use hyphens, dashes, or em dashes. Pipe only in the signature line.

@@ -87,7 +87,7 @@ test('valid link audio: script built on the server, fixed voice, audio returned'
   const sent = JSON.parse(paidCalls(calls).find(c => c.url.includes('anthropic')).opts.body)
   assert.ok(sent.system.startsWith('You are writing a warm, personal 60 second spoken audio script'))
   assert.ok(!JSON.stringify(sent).includes('client supplied prompt'))
-  assert.ok(paidCalls(calls).find(c => c.url.includes('elevenlabs')).url.endsWith('/Q2Qd4P9qaDNuBFUcFCQr'))
+  assert.ok(paidCalls(calls).find(c => c.url.includes('elevenlabs')).url.endsWith('/21m00Tcm4TlvDq8ikWAM'))
 })
 
 test('per link audio limit: 4th request in a day is 429 and not paid', async () => {

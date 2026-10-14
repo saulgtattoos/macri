@@ -103,7 +103,7 @@ test('tts: always uses the fixed voice id and returns audio', async () => {
   await tts(mockReq({ headers: ownerHeaders(), body: { text: 'hello', voice_settings: { stability: 0.5, similarity_boost: 0.75 } } }), res)
   assert.equal(res.statusCode, 200)
   assert.equal(res.headers['content-type'], 'audio/mpeg')
-  assert.ok(paidCalls(calls)[0].url.endsWith('/Q2Qd4P9qaDNuBFUcFCQr'))
+  assert.ok(paidCalls(calls)[0].url.endsWith('/21m00Tcm4TlvDq8ikWAM'))
   assert.equal(JSON.parse(paidCalls(calls)[0].opts.body).model_id, 'eleven_multilingual_v2')
 })
 

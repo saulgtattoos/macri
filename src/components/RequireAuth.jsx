@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import supabase from '../lib/supabase'
+import supabase, { authLink } from '../lib/supabase'
 import { bindCacheToUser, settleUntaggedCache, wipeDeviceCache } from '../lib/deviceCache'
 import { apiPost } from '../lib/api'
 import Login from '../pages/Login'
+import SetPassword from '../pages/SetPassword'
 
 // Owner panels render only with a signed in session. This is a convenience
 // gate; access is enforced by /api owner checks and database policies.
@@ -12,6 +13,8 @@ import Login from '../pages/Login'
 // A copy saved before login existed is kept only if the server confirms the owner.
 export default function RequireAuth() {
   const [auth, setAuth] = useState({ loading: true, session: null })
+  // A password reset link signs in first, then asks for the new password.
+  const [recovering, setRecovering] = useState(authLink.recovery)
 
   useEffect(() => {
     let active = true
@@ -33,7 +36,10 @@ export default function RequireAuth() {
     }
 
     supabase.auth.getSession().then(({ data }) => apply(data.session))
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => { apply(session) })
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+      apply(session)
+    })
     return () => {
       active = false
       sub.subscription.unsubscribe()
@@ -41,6 +47,7 @@ export default function RequireAuth() {
   }, [])
 
   if (auth.loading) return <div style={{ minHeight: '100vh', background: '#0e0e0d' }} />
-  if (!auth.session) return <Login />
+  if (!auth.session) return <Login linkError={authLink.linkError} />
+  if (recovering) return <SetPassword email={auth.session.user?.email} onDone={() => setRecovering(false)} />
   return <Outlet />
 }

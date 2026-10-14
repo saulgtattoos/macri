@@ -12,11 +12,11 @@ const LABEL = {
   display: 'block', marginBottom: 6, letterSpacing: '0.04em',
 }
 
-export default function Login() {
+export default function Login({ linkError = '' }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(linkError)
 
   async function handleSubmit(e) {
     e.preventDefault()

@@ -470,13 +470,6 @@ export default function InquiryAssistant() {
   const canSendEmail    = isValidEmail(recipientEmail) && editedEmail.trim().length > 0 && !emailSending && !acceptedBy('email')
 
   useEffect(() => {
-    if (!output) return
-    // Prefilled from the inquiry itself, never from a CRM client guessed by first name.
-    setRecipientPhone(output?.client?.phone || '')
-    setRecipientEmail(output?.client?.email || '')
-  }, [output])
-
-  useEffect(() => {
     if (showOutput) document.querySelector('main')?.scrollTo({ top: 0 })
   }, [showOutput])
 
@@ -515,13 +508,6 @@ export default function InquiryAssistant() {
     if (res?.ok && res.reply) setReplies(prev => ({ ...prev, [res.reply.channel]: res.reply }))
   }
 
-  useEffect(() => {
-    if (output) {
-      setEditedEmail(output.email || '')
-      setEditedText(output.text  || '')
-    }
-  }, [output])
-
   async function handleGenerate() {
     setError(null)
     setOutput(null)
@@ -538,6 +524,12 @@ export default function InquiryAssistant() {
     try {
       const prompt = buildPrompt({ source, timing, contentType, pricingModel, customPrice, includeConsultLink, isCoverup, inquiry })
       const result = await callClaude(prompt)
+      // Filled once per new draft. A reload keeps Saul's edits and the recipient he typed.
+      // Recipients come from the inquiry itself, never from a CRM client guessed by name.
+      setEditedEmail(result.email || '')
+      setEditedText(result.text || '')
+      setRecipientEmail(result.client?.email || '')
+      setRecipientPhone(result.client?.phone || '')
       setOutput(result)
       setActiveTab('email')
       setShowOutput(true)

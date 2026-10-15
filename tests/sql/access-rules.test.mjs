@@ -296,3 +296,48 @@ test('preparation state (lockdown + rate limits, no owner access yet) keeps ever
   const grants = await db.query(`select 1 from information_schema.role_table_grants where table_schema = 'public' and grantee in ('anon','authenticated')`)
   assert.equal(grants.rows.length, 0)
 })
+
+// 06_missing_columns.sql adds nullable text columns only: access and data must not change.
+const NEW_COLUMNS = {
+  macri_expenses: ['vendor', 'payment_method'],
+  macri_finance_goals: ['notes'],
+  macri_content_drafts: ['style', 'concept', 'meaning', 'client_tag'],
+}
+
+test('06 missing columns: keeps rows, policies and grants; runs twice; owner can use new columns, others cannot', async () => {
+  const db = await supabaseLikeDb()
+  await applyAll(db)
+  const policiesBefore = (await db.query(`select tablename, policyname, cmd, roles::text from pg_policies order by 1, 2`)).rows
+  const grantsBefore = (await db.query(`select table_name, grantee, privilege_type from information_schema.role_table_grants where table_schema = 'public' order by 1, 2, 3`)).rows
+  await db.exec(sqlFile('06_missing_columns.sql'))
+  await db.exec(sqlFile('06_missing_columns.sql'))
+  assert.deepEqual((await db.query(`select tablename, policyname, cmd, roles::text from pg_policies order by 1, 2`)).rows, policiesBefore)
+  assert.deepEqual((await db.query(`select table_name, grantee, privilege_type from information_schema.role_table_grants where table_schema = 'public' order by 1, 2, 3`)).rows, grantsBefore)
+  for (const [t, cols] of Object.entries(NEW_COLUMNS)) {
+    const existing = await db.query(`select id, note from public.${t}`)
+    assert.deepEqual(existing.rows, [{ id: 'synthetic-1', note: 'synthetic row' }], `${t} row unchanged`)
+    const info = await db.query(`select column_name, is_nullable, data_type from information_schema.columns where table_name = '${t}' and column_name = any($1)`, [cols])
+    assert.equal(info.rows.length, cols.length, `${t} columns added`)
+    for (const c of info.rows) assert.deepEqual([c.is_nullable, c.data_type], ['YES', 'text'])
+    const setList = cols.map(c => `${c} = 'v'`).join(', ')
+    const own = await as(db, 'authenticated', OWNER, () => attempt(db.query(`update public.${t} set ${setList} where id = 'synthetic-1'`)))
+    assert.equal(own.ok, true, `owner writes new columns on ${t}`)
+    const other = await as(db, 'authenticated', OTHER, () => db.query(`update public.${t} set ${setList}`))
+    assert.equal(other.affectedRows, 0, `other cannot write ${t}`)
+    const anon = await as(db, 'anon', null, () => attempt(db.query(`select ${cols.join(', ')} from public.${t}`)))
+    assert.equal(anon.ok, false, `anon cannot read new columns on ${t}`)
+  }
+})
+
+test('92 rollback removes only the added columns and keeps row level security on', async () => {
+  const db = await supabaseLikeDb()
+  await applyAll(db)
+  await db.exec(sqlFile('06_missing_columns.sql'))
+  await db.exec(sqlFile('92_rollback_missing_columns.sql'))
+  for (const [t, cols] of Object.entries(NEW_COLUMNS)) {
+    const left = await db.query(`select column_name from information_schema.columns where table_name = '${t}' and column_name = any($1)`, [cols])
+    assert.equal(left.rows.length, 0)
+    assert.equal((await db.query(`select id, note from public.${t}`)).rows.length, 1)
+    assert.equal((await db.query(`select relrowsecurity from pg_class where relname = '${t}'`)).rows[0].relrowsecurity, true)
+  }
+})

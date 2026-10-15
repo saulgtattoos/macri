@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { apiPost } from '../lib/api'
+import { localDateISO } from '../lib/localDate'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -220,7 +221,7 @@ function avatarColor(name) {
 }
 
 function today() {
-  return new Date().toISOString().split('T')[0]
+  return localDateISO()
 }
 
 function formatDate(isoDate) {

@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { sessionsService, expensesService, goalsService } from '../lib/dataService'
 import { allOk } from '../lib/syncStatus'
+import { localDateISO, localMonthISO } from '../lib/localDate'
 
 // ─── utils ────────────────────────────────────────────────────────────────────
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 const fmt$ = (n) => `$${Math.abs(Number(n)).toFixed(2)}`
 const fmtSigned = (n) => (n >= 0 ? `+$${n.toFixed(2)}` : `-$${Math.abs(n).toFixed(2)}`)
-const todayISO = () => new Date().toISOString().slice(0, 10)
-const currentYM = () => new Date().toISOString().slice(0, 7)
+const todayISO = () => localDateISO()
+const currentYM = () => localMonthISO()
 
 const parseDate = (str) => {
   if (!str) return ''
@@ -375,7 +376,7 @@ function OverviewTab({ sessions, expenses, goals, onGoalsTabClick }) {
   const taxReserve = grossRevenue * 0.28
   const avgPerSession = fs.length > 0 ? grossRevenue / fs.length : 0
 
-  const thisYM = today.toISOString().slice(0, 7)
+  const thisYM = localMonthISO(today)
   const curGoal = goals.find((g) => g.month === thisYM)
   const curRevenue = sessions
     .filter((s) => s.date && s.date.startsWith(thisYM))
@@ -386,7 +387,7 @@ function OverviewTab({ sessions, expenses, goals, onGoalsTabClick }) {
   const last6 = []
   for (let i = 5; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-    const ym = d.toISOString().slice(0, 7)
+    const ym = localMonthISO(d)
     const ms = sessions.filter((s) => s.date && s.date.startsWith(ym))
     const me = expenses.filter((e) => e.date && e.date.startsWith(ym))
     last6.push({
@@ -553,7 +554,7 @@ function OverviewTab({ sessions, expenses, goals, onGoalsTabClick }) {
 
 // ─── IncomeTab ────────────────────────────────────────────────────────────────
 function IncomeTab({ sessions, setSessions }) {
-  const thisYM = new Date().toISOString().slice(0, 7)
+  const thisYM = localMonthISO()
   const [activeMonth, setActiveMonth] = useState(thisYM)
   const [activePay, setActivePay] = useState('All')
   const [expanded, setExpanded] = useState(null)
@@ -721,7 +722,7 @@ function IncomeTab({ sessions, setSessions }) {
 
 // ─── ExpensesTab ──────────────────────────────────────────────────────────────
 function ExpensesTab({ expenses, setExpenses }) {
-  const thisYM = new Date().toISOString().slice(0, 7)
+  const thisYM = localMonthISO()
   const [activeMonth, setActiveMonth] = useState(thisYM)
   const [activeCat, setActiveCat] = useState('All')
   const [expanded, setExpanded] = useState(null)
@@ -1026,8 +1027,8 @@ const getPeriodRange = (period, customStart, customEnd) => {
 
 function PLTab({ sessions, expenses }) {
   const [period, setPeriod] = useState('month')
-  const [customStart, setCustomStart] = useState(new Date().toISOString().slice(0, 7) + '-01')
-  const [customEnd, setCustomEnd] = useState(new Date().toISOString().slice(0, 10))
+  const [customStart, setCustomStart] = useState(localMonthISO() + '-01')
+  const [customEnd, setCustomEnd] = useState(localDateISO())
   const [showAll, setShowAll] = useState(false)
 
   const { start, end } = getPeriodRange(period, customStart, customEnd)
@@ -1181,7 +1182,7 @@ function PLTab({ sessions, expenses }) {
 
 // ─── GoalsTab ─────────────────────────────────────────────────────────────────
 function GoalsTab({ sessions, goals, setGoals }) {
-  const thisYM = new Date().toISOString().slice(0, 7)
+  const thisYM = localMonthISO()
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(blankGoal())
 
@@ -1327,7 +1328,7 @@ export default function Finance() {
       .then(([s, e, g]) => { setSessions(s); setExpenses(e); setGoals(g) })
   }, [])
 
-  const thisYM = new Date().toISOString().slice(0, 7)
+  const thisYM = localMonthISO()
   const monthRevenue = sessions.filter((s) => s.date && s.date.startsWith(thisYM)).reduce((sum, s) => sum + (s.total || 0), 0)
   const monthExpenses = expenses.filter((e) => e.date && e.date.startsWith(thisYM)).reduce((sum, e) => sum + (e.amount || 0), 0)
   const netProfit = monthRevenue - monthExpenses

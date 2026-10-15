@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
+import {
+  CLIENT_DRAFT_KEY, CHANNEL_NAME, SHARED_DEVICE_MAX_AGE_MS, OWN_DEVICE_MAX_AGE_MS,
+  writeDraft, readDraft, clearDraft, isSharedDevice, withoutMemoryOnly, ageLabel,
+} from '../lib/consultationDraft'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -50,7 +54,58 @@ const SIZE_OPTIONS      = ['Small (1 to 3 inches)', 'Medium (3.5 to 6 inches)', 
 const EST_STYLE_OPTIONS = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading', 'Per Session', 'Fine Line', 'Simple Design']
 const HOURLY_STYLES     = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading']
 
-const DRAFT_KEY = 'macri_consultation_client_draft'
+const DRAFT_KEY = CLIENT_DRAFT_KEY
+// Set by the owner page (signed in) to let a shared device tab resume a saved draft once.
+const RESUME_KEY = 'macri_consultation_resume'
+const RESUME_WINDOW_MS = 60 * 1000
+
+function openedByOwnerPage() {
+  try { return !!window.opener && window.opener.location.origin === window.location.origin } catch { return false }
+}
+
+// Owner authorization to resume on a shared device: a fresh one time key set by the owner page.
+function consumeResumeKey() {
+  try {
+    const at = Number(localStorage.getItem(RESUME_KEY))
+    localStorage.removeItem(RESUME_KEY)
+    return at > 0 && Date.now() - at < RESUME_WINDOW_MS
+  } catch { return false }
+}
+
+// The stored answers of a draft (never the memory only fields), or null.
+function storedAnswers(maxAgeMs) {
+  const d = readDraft(localStorage, DRAFT_KEY, { maxAgeMs })
+  if (d.status === 'valid') return d.data
+  if (d.status === 'legacy') {
+    try { return withoutMemoryOnly(JSON.parse(localStorage.getItem(DRAFT_KEY))) } catch { return null }
+  }
+  return null
+}
+
+// What the page shows first: the empty form, the choice screen, or (shared device, owner just
+// authorized) the resumed form. Nothing from a previous draft is shown before a choice.
+function initialState(shared, maxAgeMs) {
+  const d = readDraft(localStorage, DRAFT_KEY, { maxAgeMs })
+  if (d.status === 'saved') clearDraft(localStorage, DRAFT_KEY)
+  const exists = d.status === 'valid' || d.status === 'legacy'
+  if (exists && shared && consumeResumeKey()) {
+    const data = storedAnswers(maxAgeMs)
+    if (data) return { gate: 'form', formData: { ...defaultForm, ...data }, restored: true, pending: d, age: null }
+  }
+  return {
+    gate: exists ? 'choose' : 'form',
+    formData: defaultForm,
+    restored: false,
+    pending: exists ? d : { status: 'none' },
+    age: d.status === 'valid' ? ageLabel(d.updatedAt) : null,
+  }
+}
+
+// True when the form differs from a blank form (memory only fields are never kept).
+function hasContent(form) {
+  return Object.entries(withoutMemoryOnly(form)).some(([k, v]) =>
+    JSON.stringify(v ?? null) !== JSON.stringify(defaultForm[k] ?? null))
+}
 
 const roundTo50 = (n) => Math.ceil(n / 50) * 50
 const shopMin   = (n) => Math.max(100, n)
@@ -131,19 +186,30 @@ function Field({ label, children }) {
   )
 }
 
+// Health and comfort answers are kept in memory only (never saved on this device).
+function PrivacyNote({ restored }) {
+  return (
+    <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#a3a097', lineHeight: 1.6, margin: '0 0 18px', padding: '10px 12px', border: '1px solid rgba(201,169,110,0.25)', borderRadius: 8 }}>
+      {restored ? 'Please enter these answers again. ' : ''}For your privacy, health and comfort answers are not saved on this device. If the page reloads, you will be asked again.
+    </p>
+  )
+}
+
 // ─── ConsultationClient ────────────────────────────────────────────────────────
 
 export default function ConsultationClient() {
-  const [formData, setFormData] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(DRAFT_KEY))
-      if (saved?.saved === true) {
-        localStorage.removeItem(DRAFT_KEY)
-        return defaultForm
-      }
-      return saved ? { ...defaultForm, ...saved } : defaultForm
-    } catch { return defaultForm }
-  })
+  // Shared device (Client Mode, or a browser the owner uses): a previous draft resumes only when
+  // the owner authorizes it from the Consultation page. Client's own device: Continue or Start
+  // fresh. Either way the form starts empty and nothing from a previous draft shows before a choice.
+  const [shared]  = useState(() => isSharedDevice(localStorage, openedByOwnerPage()))
+  const maxAgeMs  = shared ? SHARED_DEVICE_MAX_AGE_MS : OWN_DEVICE_MAX_AGE_MS
+  const [init] = useState(() => initialState(shared, maxAgeMs))
+  const [pending, setPending]   = useState(init.pending)
+  const [formData, setFormData] = useState(init.formData)
+  const [gate, setGate]         = useState(init.gate)
+  const [restored, setRestored] = useState(init.restored)
+  const [confirmNew, setConfirmNew] = useState(false)
+  const lastChange = useRef(0)
   const [currentStep, setCurrentStep]       = useState(0)
   const [nameError, setNameError]           = useState(false)
   const [showThankYou, setShowThankYou]     = useState(false)
@@ -156,9 +222,70 @@ export default function ConsultationClient() {
   const imageURLs                           = useRef({})
   const fileInputRef                        = useRef(null)
 
+  // Autosave: only while the form is in use, only when it has content, never the memory only fields.
   useEffect(() => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
-  }, [formData])
+    if (gate !== 'form' || !hasContent(formData)) return
+    lastChange.current = Date.now()
+    writeDraft(localStorage, DRAFT_KEY, formData, lastChange.current)
+  }, [formData, gate])
+
+  function resetToEmpty() {
+    Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
+    imageURLs.current = {}
+    clearDraft(localStorage, DRAFT_KEY)
+    setFormData(defaultForm)
+    setCurrentStep(0)
+    setPending({ status: 'none' })
+    setGate('form')
+    setRestored(false)
+    setConfirmNew(false)
+    setShowThankYou(false)
+    setShowWaiting(false)
+    setEstW('')
+    setEstH('')
+    setEstStyle('')
+  }
+
+  function resumeDraft() {
+    const data = storedAnswers(maxAgeMs)
+    if (!data) { resetToEmpty(); return }
+    lastChange.current = Date.now()
+    setFormData({ ...defaultForm, ...data })
+    setCurrentStep(0)
+    setRestored(true)
+    setGate('form')
+  }
+
+  // Messages from the owner page and changes made in other tabs of this browser.
+  useEffect(() => {
+    let channel = null
+    try { channel = new BroadcastChannel(CHANNEL_NAME) } catch { channel = null }
+    function onChannel(e) {
+      if (e.data?.type === 'RESUME_CLIENT_DRAFT' && shared && consumeResumeKey()) resumeDraft()
+      if (e.data?.type === 'CLEAR_CLIENT_DRAFT') resetToEmpty()
+    }
+    function onStorage(e) {
+      // The draft was removed elsewhere (owner sign out detected, owner cleared it): start empty.
+      if ((e.key === DRAFT_KEY && e.newValue === null) || e.key === null) resetToEmpty()
+      if (e.key === RESUME_KEY && e.newValue && shared && consumeResumeKey()) resumeDraft()
+    }
+    channel?.addEventListener('message', onChannel)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      channel?.removeEventListener('message', onChannel)
+      channel?.close()
+      window.removeEventListener('storage', onStorage)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shared])
+
+  // Inactivity: a form left untouched past the limit is cleared (2 hours own device, 12 shared).
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (gate === 'form' && hasContent(formData) && Date.now() - lastChange.current > maxAgeMs) resetToEmpty()
+    }, 60 * 1000)
+    return () => clearInterval(id)
+  }, [gate, formData, maxAgeMs])
 
   useEffect(() => {
     return () => {
@@ -169,23 +296,13 @@ export default function ConsultationClient() {
   useEffect(() => {
     function handleMessage(e) {
       if (e.origin !== window.location.origin) return
-      if (e.data?.type === 'RESET_WIZARD') {
-        Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
-        imageURLs.current = {}
-        setFormData(defaultForm)
-        setCurrentStep(0)
-        setShowThankYou(false)
-        setShowWaiting(false)
-        setEstW('')
-        setEstH('')
-        setEstStyle('')
-      }
+      if (e.data?.type === 'RESET_WIZARD') resetToEmpty()
       if (e.data?.type === 'CONSULTATION_SAVED') {
         // The owner has the answers now; do not leave the client's details on this device.
         Object.values(imageURLs.current).forEach(url => URL.revokeObjectURL(url))
         imageURLs.current = {}
         setFormData(defaultForm)
-        localStorage.removeItem(DRAFT_KEY)
+        clearDraft(localStorage, DRAFT_KEY)
         setShowThankYou(true)
         setShowWaiting(false)
       }
@@ -522,6 +639,7 @@ export default function ConsultationClient() {
   function renderStep3() {
     return (
       <>
+        <PrivacyNote restored={restored} />
         <Field label="Music Genre">
           <PillToggle
             options={MUSIC_OPTIONS}
@@ -593,6 +711,7 @@ export default function ConsultationClient() {
   function renderStep4() {
     return (
       <>
+        <PrivacyNote restored={restored} />
         <Field label="Allergies">
           <input
             type="text"
@@ -1086,6 +1205,35 @@ export default function ConsultationClient() {
 
   // ── Wizard render ─────────────────────────────────────────────────────────────
 
+  // ── Choice screen: nothing from a previous draft is shown before a choice ──────
+
+  if (gate === 'choose') {
+    const age = init.age
+    return (
+      <div style={{ minHeight: '100vh', background: '#0e0e0d', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', textAlign: 'center' }}>
+        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 26, fontWeight: 700, color: '#e8e6df', margin: '0 0 16px', lineHeight: 1.25 }}>
+          A consultation form was started on this device
+        </h1>
+        {age && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#a3a097', margin: '0 0 20px' }}>Last changed {age}</p>}
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: '#a3a097', lineHeight: 1.7, maxWidth: 380, margin: '0 0 28px' }}>
+          {shared
+            ? 'To protect the previous client, only Saul can resume it, from his Consultation page. You can start a new form now.'
+            : 'Continue where you left off, or start a new form.'}
+        </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {!shared && pending.status === 'valid' && (
+            <button type="button" onClick={resumeDraft} style={{ minHeight: 48, padding: '0 28px', background: '#c9a96e', color: '#0e0e0d', border: 'none', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
+              Continue
+            </button>
+          )}
+          <button type="button" onClick={resetToEmpty} style={{ minHeight: 48, padding: '0 28px', background: 'transparent', color: '#c9a96e', border: '1px solid #c9a96e', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
+            Start fresh
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const step = STEPS[currentStep]
   const progressPct = ((currentStep + 1) / 7) * 100
 
@@ -1102,6 +1250,19 @@ export default function ConsultationClient() {
           paddingBottom: 18,
         }}>
           Saul Gutierrez&#8199;|&#8199;Tattoo Artist
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, paddingBottom: 12, flexWrap: 'wrap' }}>
+          {confirmNew ? (
+            <>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df' }}>Clear this form for the next client?</span>
+              <button type="button" onClick={resetToEmpty} style={{ minHeight: 44, padding: '0 16px', background: '#c9a96e', color: '#0e0e0d', border: 'none', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Yes, clear it</button>
+              <button type="button" onClick={() => setConfirmNew(false)} style={{ minHeight: 44, padding: '0 16px', background: 'transparent', color: '#a3a097', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirmNew(true)} style={{ minHeight: 44, padding: '0 16px', background: 'transparent', color: '#c9a96e', border: '1px solid rgba(201,169,110,0.45)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 13, cursor: 'pointer' }}>
+              Start new client
+            </button>
+          )}
         </div>
         <div style={{ height: 1, background: 'rgba(201,169,110,0.15)' }} />
       </div>

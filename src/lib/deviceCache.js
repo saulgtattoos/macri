@@ -4,8 +4,10 @@
 
 const OWNER_TAG = 'macri_cache_owner'
 const EXTRA_KEYS = ['sessions_v4', 'studio_inventory_v1', 'studio_cart_v1']
-// Public client form draft: written by the client on /consultation/client, not owner data.
-const KEEP = new Set(['macri_consultation_client_draft'])
+// Kept through a wipe: only the marker that this browser is used by the owner (no client data),
+// so the public client form keeps treating it as a shared device. The client form draft is
+// wiped with everything else when the app detects sign out, session end, or another account.
+const KEEP = new Set(['macri_owner_device'])
 
 function store() {
   try { return globalThis.localStorage ?? null } catch { return null }
@@ -34,6 +36,7 @@ export function wipeDeviceCache() {
 export function bindCacheToUser(userId) {
   const ls = store()
   if (!ls || !userId) return 'ok'
+  ls.setItem('macri_owner_device', '1')
   const owner = ls.getItem(OWNER_TAG)
   if (owner === userId) return 'ok'
   if (owner === null && cacheKeys().length > 0) return 'needs-check'
@@ -48,4 +51,5 @@ export function settleUntaggedCache(userId, isOwner) {
   if (!ls || !userId) return
   if (!isOwner) wipeDeviceCache()
   ls.setItem(OWNER_TAG, userId)
+  ls.setItem('macri_owner_device', '1')
 }

@@ -3,6 +3,28 @@ import { useSearchParams } from 'react-router-dom'
 import { mkClient } from './CRM'
 import { loadClients, saveClient } from '../lib/crmService'
 import { ttsFetch } from '../lib/api'
+import { CLIENT_DRAFT_KEY, OWNER_DRAFT_KEY, CHANNEL_NAME, SHARED_DEVICE_MAX_AGE_MS, writeDraft, readDraft, clearDraft, ageLabel } from '../lib/consultationDraft'
+
+// One time owner authorization for a shared device client tab to resume a saved draft.
+const RESUME_KEY = 'macri_consultation_resume'
+
+function postToClientTabs(message) {
+  try { const ch = new BroadcastChannel(CHANNEL_NAME); ch.postMessage(message); ch.close() } catch { /* no channel support */ }
+}
+
+// Lets the Client Mode tab resume its saved draft once (within a minute), then tells it to.
+function authorizeClientResume() {
+  try { localStorage.setItem(RESUME_KEY, String(Date.now())) } catch { /* storage unavailable */ }
+  postToClientTabs({ type: 'RESUME_CLIENT_DRAFT' })
+}
+
+// The client form waiting on this device, if any: { exists, age } (never its contents).
+function waitingClientForm() {
+  const d = readDraft(localStorage, CLIENT_DRAFT_KEY, { maxAgeMs: SHARED_DEVICE_MAX_AGE_MS })
+  if (d.status === 'valid') return { exists: true, age: ageLabel(d.updatedAt) }
+  if (d.status === 'legacy') return { exists: true, age: null }
+  return { exists: false, age: null }
+}
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -61,7 +83,7 @@ const SIZE_OPTIONS      = ['Small (1 to 3 inches)', 'Medium (3.5 to 6 inches)', 
 const EST_STYLE_OPTIONS = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading', 'Per Session', 'Fine Line', 'Simple Design']
 const HOURLY_STYLES     = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading']
 
-const DRAFT_KEY = 'macri_consultation_draft'
+const DRAFT_KEY = OWNER_DRAFT_KEY
 const IOS_WAV   = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAEAAQAArwAAAgAQAAAEABAAZGF0YQQAAAAAAA=='
 
 const roundTo50 = (n) => Math.ceil(n / 50) * 50
@@ -205,15 +227,17 @@ function generateClientPDF(c) {
 
 export default function Consultation() {
   const [formData, setFormData] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(DRAFT_KEY))
-      if (saved?.saved === true) {
-        localStorage.removeItem(DRAFT_KEY)
-        return defaultForm
-      }
-      return saved ? { ...defaultForm, ...saved } : defaultForm
-    } catch { return defaultForm }
+    const d = readDraft(localStorage, DRAFT_KEY)
+    if (d.status === 'saved') { clearDraft(localStorage, DRAFT_KEY); return defaultForm }
+    if (d.status === 'valid') return { ...defaultForm, ...d.data }
+    if (d.status === 'legacy') {
+      // Older format (may still hold health answers): loaded into memory; the next autosave
+      // rewrites it without them.
+      try { return { ...defaultForm, ...JSON.parse(localStorage.getItem(DRAFT_KEY)) } } catch { return defaultForm }
+    }
+    return defaultForm
   })
+  const [clientForm, setClientForm] = useState({ exists: false, age: null })
   const [currentStep, setCurrentStep]       = useState(0)
   const [nameError, setNameError]           = useState(false)
   const [showDupModal, setShowDupModal]     = useState(false)
@@ -238,9 +262,31 @@ export default function Consultation() {
   const [prefillClientId, setPrefillClientId] = useState(null)
   const [upcomingClients, setUpcomingClients] = useState([])
 
+  // Autosave never stores health or comfort answers, including those received from Client Mode.
   useEffect(() => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
+    writeDraft(localStorage, DRAFT_KEY, formData)
   }, [formData])
+
+  // Keep the "client form waiting" notice current (changes made in the client tab).
+  useEffect(() => {
+    function refresh() { setClientForm(waitingClientForm()) }
+    function onStorage(e) { if (e.key === CLIENT_DRAFT_KEY || e.key === null) refresh() }
+    window.addEventListener('storage', onStorage)
+    const first = setTimeout(refresh, 0)
+    const id = setInterval(refresh, 30 * 1000)
+    return () => { window.removeEventListener('storage', onStorage); clearTimeout(first); clearInterval(id) }
+  }, [])
+
+  function resumeClientForm() {
+    if (!clientWin.current || clientWin.current.closed) openClientMode()
+    authorizeClientResume()
+  }
+
+  function clearClientForm() {
+    clearDraft(localStorage, CLIENT_DRAFT_KEY)
+    postToClientTabs({ type: 'CLEAR_CLIENT_DRAFT' })
+    setClientForm(waitingClientForm())
+  }
 
   useEffect(() => {
     if (!clientWinOpen) return
@@ -1569,6 +1615,19 @@ export default function Consultation() {
       )}
 
       {/* Client Mode */}
+      {clientForm.exists && (
+        <div role="status" style={{ marginBottom: 12, padding: '12px 14px', border: '1px solid rgba(201,169,110,0.35)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df', flex: '1 1 220px' }}>
+            A client form is waiting on this device{clientForm.age ? ` (last changed ${clientForm.age})` : ''}.
+          </span>
+          <button type="button" onClick={resumeClientForm} style={{ minHeight: 44, padding: '0 14px', background: '#c9a96e', color: '#0e0e0d', border: 'none', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+            Resume in Client Mode
+          </button>
+          <button type="button" onClick={clearClientForm} style={{ minHeight: 44, padding: '0 14px', background: 'transparent', color: '#a3a097', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer' }}>
+            Clear it
+          </button>
+        </div>
+      )}
       <div style={{ marginBottom: 16 }}>
         <button
           onClick={openClientMode}
@@ -1596,7 +1655,11 @@ export default function Consultation() {
               Client view is open
             </span>
             <button
-              onClick={() => clientWin.current?.postMessage({ type: 'RESET_WIZARD' }, window.location.origin)}
+              onClick={() => {
+                clearDraft(localStorage, CLIENT_DRAFT_KEY)
+                clientWin.current?.postMessage({ type: 'RESET_WIZARD' }, window.location.origin)
+                setClientForm(waitingClientForm())
+              }}
               style={{
                 minHeight: 28,
                 padding: '0 10px',

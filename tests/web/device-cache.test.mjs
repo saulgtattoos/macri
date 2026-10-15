@@ -21,6 +21,12 @@ beforeEach(() => {
   localStorage.setItem('unrelated', 'x')
 })
 
+test('a signed in owner marks the browser as an owner device', () => {
+  localStorage.setItem('macri_cache_owner', 'owner')
+  bindCacheToUser('owner')
+  assert.equal(localStorage.getItem('macri_owner_device'), '1')
+})
+
 test('untagged copy from before login needs a server owner check', () => {
   assert.equal(bindCacheToUser('owner'), 'needs-check')
   assert.equal(localStorage.getItem('macri_crm_clients'), CLIENT_DATA.macri_crm_clients)
@@ -66,13 +72,14 @@ test('a different account never sees the previous account cache', () => {
   assert.equal(localStorage.getItem('macri_cache_owner'), 'someone-else')
 })
 
-test('sign out or expiry wipes studio data, keeps unrelated and public draft keys', () => {
+test('sign out or expiry wipes studio data and the client form draft, keeps the owner device marker', () => {
   settleUntaggedCache('owner', true)
   localStorage.setItem('macri_crm_clients', '[1]')
   wipeDeviceCache()
   for (const k of Object.keys(CLIENT_DATA)) assert.equal(localStorage.getItem(k), null, k)
   assert.equal(localStorage.getItem('macri_cache_owner'), null)
-  assert.equal(localStorage.getItem('macri_consultation_client_draft'), '{"client":"own draft"}')
+  assert.equal(localStorage.getItem('macri_consultation_client_draft'), null)
+  assert.equal(localStorage.getItem('macri_owner_device'), '1')
   assert.equal(localStorage.getItem('sb-test-auth-token'), 'kept for supabase to manage')
   assert.equal(localStorage.getItem('unrelated'), 'x')
 })

@@ -28,7 +28,10 @@ async function db() {
   await d.exec('grant all on all tables in schema public to anon, authenticated, service_role;')
   await d.exec(read('supabase/security/02_owner_access.sql').replace('owner.email@REPLACE.ME', 'owner@example.test'))
   await d.exec(read('supabase/security/07_replies.sql'))
-  await d.exec(`insert into public.crm_clients_v1 (id, name, stage, journey_checklist, activity_log) values
+  await d.exec(read('supabase/security/08_reply_stage_compat.sql'))
+  await d.exec(`insert into public.crm_clients_v1 (id, name, stage, project_stage, journey_checklist, activity_log) values
+    ('c3', 'Crm Created', 'new_inquiry', 'new_inquiry', '[false,false]', '[]');
+    insert into public.crm_clients_v1 (id, name, stage, journey_checklist, activity_log) values
     ('c1', 'Maria Synthetic', 'Inquiry', '[true,false,false,false,false,false]', '[{"id":"old","timestamp":"2026-01-01T00:00:00.000Z","text":"Earlier entry"}]'),
     ('c2', 'Maria Other', 'Inquiry', '[]', '[]')`)
   return d
@@ -46,6 +49,7 @@ const markSent = (d, id, client, via = 'saul_gmail', providerId = null, channel 
   call(d, `select public.reply_mark_sent($1, $2, $3, 'Subject', 'Body', $4, $5) as r`, [id, client, channel, via, providerId])
 const undo = (d, id) => call(d, `select public.reply_undo_sent($1) as r`, [id])
 const client = async (d, id) => (await d.query(`select stage, journey_checklist, activity_log from public.crm_clients_v1 where id = $1`, [id])).rows[0]
+const project = async (d, id) => (await d.query(`select stage, project_stage from public.crm_clients_v1 where id = $1`, [id])).rows[0]
 const reply = async (d, id) => (await d.query(`select * from public.macri_replies where id = $1`, [id])).rows[0]
 const texts = (c) => c.activity_log.map((e) => e.text.replace(/^\w{3} \d{1,2}, \d{4} /, ''))
 
@@ -203,5 +207,49 @@ test('07 runs twice; emergency lockdown pauses the functions; 93 rollback remove
   assert.equal((await undo(d, 'r1-email')).result, 'undone')
   await d.exec(read('supabase/security/93_rollback_replies.sql'))
   assert.equal((await d.query(`select to_regclass('public.macri_replies') as t`)).rows[0].t, null)
-  assert.equal((await d.query(`select count(*)::int as n from public.crm_clients_v1`)).rows[0].n, 2)
+  assert.equal((await d.query(`select count(*)::int as n from public.crm_clients_v1`)).rows[0].n, 3)
+})
+
+// 08_reply_stage_compat.sql: clients created in CRM use "new_inquiry".
+test('08: Mark as sent moves a New Inquiry client to Awaiting Response in CRM and Project Wall', async () => {
+  const d = await db()
+  const res = await markSent(d, 'r3-email', 'c3')
+  assert.equal(res.result, 'sent')
+  assert.deepEqual(await project(d, 'c3'), { stage: 'awaiting_response', project_stage: 'awaiting_response' })
+  assert.equal(texts(await client(d, 'c3'))[0], 'Inquiry reply marked sent by Saul (email). Stage updated to Awaiting Response.')
+  const r = await reply(d, 'r3-email')
+  assert.deepEqual([r.stage_before, r.stage_after, r.project_stage_before, r.project_stage_after], ['new_inquiry', 'awaiting_response', 'new_inquiry', 'awaiting_response'])
+})
+
+test('08: Undo restores both fields when unchanged', async () => {
+  const d = await db()
+  await markSent(d, 'r3-email', 'c3')
+  await undo(d, 'r3-email')
+  assert.deepEqual(await project(d, 'c3'), { stage: 'new_inquiry', project_stage: 'new_inquiry' })
+  assert.equal(texts(await client(d, 'c3'))[0], 'Sent confirmation undone by Saul. Stage returned to New Inquiry.')
+})
+
+test('08: Undo leaves a field alone if it changed after the confirmation', async () => {
+  const d = await db()
+  await markSent(d, 'r3-email', 'c3')
+  await d.query(`update public.crm_clients_v1 set project_stage = 'consultation_scheduled' where id = 'c3'`)
+  await undo(d, 'r3-email')
+  assert.deepEqual(await project(d, 'c3'), { stage: 'new_inquiry', project_stage: 'consultation_scheduled' })
+  assert.match(texts(await client(d, 'c3'))[0], /Project Wall stage left at consultation_scheduled because it changed after the confirmation\./)
+})
+
+test('08: "Inquiry" clients behave exactly as before; other stages are not moved', async () => {
+  const d = await db()
+  await markSent(d, 'r1-email', 'c1')
+  assert.equal((await project(d, 'c1')).stage, 'Inquiry Response')
+  await d.query(`update public.crm_clients_v1 set stage = 'active_dialogue', project_stage = 'active_dialogue' where id = 'c3'`)
+  await markSent(d, 'r3-email', 'c3')
+  assert.deepEqual(await project(d, 'c3'), { stage: 'active_dialogue', project_stage: 'active_dialogue' })
+})
+
+test('08 rollback: rerunning 07 restores the previous behavior (New Inquiry not moved)', async () => {
+  const d = await db()
+  await d.exec(read('supabase/security/07_replies.sql'))
+  await markSent(d, 'r3-email', 'c3')
+  assert.deepEqual(await project(d, 'c3'), { stage: 'new_inquiry', project_stage: 'new_inquiry' })
 })

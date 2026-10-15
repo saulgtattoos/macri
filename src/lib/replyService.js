@@ -68,3 +68,15 @@ export function sentLabel(reply) {
 
 // Undo applies only to Saul's own confirmations; a provider acceptance means it really went out.
 export const canUndo = (reply) => reply?.status === 'sent' && !reply.provider_id
+
+// Clients with at least one reply recorded as sent. Resolves to { ok, ids, message };
+// ok false means the answer is unknown (shown as unavailable, never as zero).
+export async function loadSentReplyClientIds() {
+  try {
+    const { data, error } = await supabase.from('macri_replies').select('client_id').eq('status', 'sent')
+    if (error) return { ok: false, ids: new Set(), message: error.message }
+    return { ok: true, ids: new Set((data || []).map((r) => r.client_id)) }
+  } catch (error) {
+    return { ok: false, ids: new Set(), message: error?.message || 'Could not reach the database' }
+  }
+}

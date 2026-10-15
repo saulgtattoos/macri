@@ -19,25 +19,35 @@ function lsWriteArray(key, arr) {
 export function makeService(tableName, lsKey) {
   const { toDB, fromDB } = MAPS[tableName] || { toDB: (r) => r, fromDB: (r) => r }
 
-  // Falls back to the device copy only when the database fails or has no rows,
-  // and reports it so the app labels what is shown as device only.
-  async function loadAll() {
+  // Resolves to { ok, source, rows, message }; ok is true only for rows from the database.
+  async function loadAllResult() {
     try {
       const { data, error } = await supabase.from(tableName).select('*')
       if (!error) {
         if (data && data.length > 0) {
           resolveLoadIssues(tableName)
-          return data.map(fromDB)
+          return { ok: true, source: 'database', rows: data.map(fromDB) }
         }
         const local = lsParseArray(lsKey)
-        if (local.length) reportSyncIssue({ kind: 'local-only', table: tableName, message: 'Database has no rows; showing records saved on this device only.' })
-        return local
+        if (local.length) {
+          const message = 'Database has no rows; showing records saved on this device only.'
+          reportSyncIssue({ kind: 'local-only', table: tableName, message })
+          return { ok: false, source: 'device', rows: local, message }
+        }
+        return { ok: true, source: 'database', rows: [] }
       }
       reportSyncIssue({ kind: 'load', table: tableName, message: error.message })
+      return { ok: false, source: 'device', rows: lsParseArray(lsKey), message: error.message }
     } catch (err) {
       reportSyncIssue({ kind: 'load', table: tableName, message: err?.message })
+      return { ok: false, source: 'device', rows: lsParseArray(lsKey), message: err?.message || 'Could not reach the database' }
     }
-    return lsParseArray(lsKey)
+  }
+
+  // Falls back to the device copy only when the database fails or has no rows,
+  // and reports it so the app labels what is shown as device only.
+  async function loadAll() {
+    return (await loadAllResult()).rows
   }
 
   // Writes the device copy immediately, then resolves to { ok } from the database.
@@ -86,7 +96,7 @@ export function makeService(tableName, lsKey) {
     return list.length
   }
 
-  return { loadAll, saveRecord, deleteRecord, seedTable }
+  return { loadAll, loadAllResult, saveRecord, deleteRecord, seedTable }
 }
 
 export const sessionsService = makeService('sessions_v4', 'sessions_v4')

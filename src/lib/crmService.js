@@ -15,26 +15,36 @@ function lsWrite(list) {
 
 // Falls back to the device copy only when the database fails or has no rows,
 // and reports it so the app labels what is shown as device only.
-export async function loadClients() {
+// Resolves to { ok, source, rows, message }. ok is true only when the rows came from the
+// database (zero rows included); otherwise rows are this device's copy and source is 'device'.
+export async function loadClientsResult() {
   try {
     const { data, error } = await supabase.from('crm_clients_v1').select('*')
     if (!error) {
       if (data && data.length > 0) {
         resolveLoadIssues('crm_clients_v1')
-        return data.map(fromDB)
+        return { ok: true, source: 'database', rows: data.map(fromDB) }
       }
       const local = lsRead()
-      if (local.length) reportSyncIssue({ kind: 'local-only', table: 'crm_clients_v1', message: 'Database has no rows; showing clients saved on this device only.' })
-      return local
+      if (local.length) {
+        const message = 'Database has no rows; showing clients saved on this device only.'
+        reportSyncIssue({ kind: 'local-only', table: 'crm_clients_v1', message })
+        return { ok: false, source: 'device', rows: local, message }
+      }
+      return { ok: true, source: 'database', rows: [] }
     }
     reportSyncIssue({ kind: 'load', table: 'crm_clients_v1', message: error.message })
+    return { ok: false, source: 'device', rows: lsRead(), message: error.message }
   } catch (err) {
     reportSyncIssue({ kind: 'load', table: 'crm_clients_v1', message: err?.message })
+    return { ok: false, source: 'device', rows: lsRead(), message: err?.message || 'Could not reach the database' }
   }
-  return lsRead()
 }
 
-// Resolves to { ok }. ok: false means the client was saved on this device only.
+export async function loadClients() {
+  return (await loadClientsResult()).rows
+}
+
 export async function saveClient(client) {
   let result
   try {

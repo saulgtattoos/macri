@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { STAGES } from '../constants/stages'
-import { loadClients as loadClientsDB } from '../lib/crmService'
-import { supabase } from '../lib/supabase'
+import { loadClientsResult } from '../lib/crmService'
+import { agentQueueService, inventoryService } from '../lib/dataService'
+import { loadSentReplyClientIds } from '../lib/replyService'
+import { localDateISO, BUSINESS_TIME_ZONE } from '../lib/localDate'
+import { awaitingResponse, scheduledCounts, lowSupplies, recentActivity, earnings, sessionDays } from '../lib/homeGlance'
 import { ttsFetch } from '../lib/api'
 
 // ─── Quotes ───────────────────────────────────────────────────────────────────
@@ -56,63 +58,6 @@ const MONTH_NAMES = [
 ]
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function buildSessionMap(clients) {
-  const map = {}
-  for (const c of clients) {
-    for (const s of (c.sessions || [])) {
-      if (typeof s !== 'object') continue
-      const key = (s.date || '').trim().slice(0, 10)
-      if (key.length < 10) continue
-      if (!map[key]) map[key] = []
-      map[key].push({ ...s, clientName: c.name || 'Unknown' })
-    }
-  }
-  return map
-}
-
-// ─── Earnings helpers ─────────────────────────────────────────────────────────
-
-function parseSessionDate(str) {
-  if (!str) return null
-  const p = str.trim().split('-')
-  if (p.length < 3) return null
-  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]))
-}
-
-function getDateRange(period) {
-  const now = new Date()
-  if (period === 'week') {
-    const day   = now.getDay()
-    const diff  = day === 0 ? 6 : day - 1
-    const start = new Date(now); start.setDate(now.getDate() - diff); start.setHours(0, 0, 0, 0)
-    const end   = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999)
-    return { start, end }
-  }
-  if (period === 'month') {
-    return {
-      start: new Date(now.getFullYear(), now.getMonth(), 1),
-      end:   new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
-    }
-  }
-  return {
-    start: new Date(now.getFullYear(), 0, 1),
-    end:   new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999),
-  }
-}
-
-function filterSessions(clients, period) {
-  const { start, end } = getDateRange(period)
-  const result = []
-  for (const c of clients) {
-    for (const s of (c.sessions || [])) {
-      if (typeof s !== 'object') continue
-      const d = parseSessionDate(s.date)
-      if (d && d >= start && d <= end) result.push(s)
-    }
-  }
-  return result
-}
-
 function fmt(n) {
   return '$' + Math.round(n || 0).toLocaleString('en-US')
 }
@@ -125,31 +70,27 @@ function loadGoals() {
 }
 function saveGoals(list) { localStorage.setItem(LS_GOALS, JSON.stringify(list)) }
 
-// ─── Pipeline ─────────────────────────────────────────────────────────────────
-
-const PIPELINE_STAGES = STAGES.filter(s => s !== 'Archive')
-
-const STAGE_COLORS = {
-  'Inquiry':          '#7a786f',
-  'Inquiry Response': '#c9a96e',
-  'Consultation':     '#c9a96e',
-  'Design Phase':     '#7a786f',
-  'Approval':         '#7aab8f',
-  'Scheduled':        '#7aab8f',
-  'Completed':        '#7aab8f',
-}
-
 // ─── Welcome helpers ──────────────────────────────────────────────────────────
 
 const LS_WELCOME = 'macri_welcome_last_seen'
 
 function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return localDateISO()
+}
+
+const businessHour = () => Number(new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TIME_ZONE, hour: 'numeric', hourCycle: 'h23' }).format(new Date()))
+
+function longDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' })
+}
+
+function shortDate(timestamp) {
+  return new Date(timestamp).toLocaleDateString('en-US', { timeZone: BUSINESS_TIME_ZONE, month: 'short', day: 'numeric' })
 }
 
 function getGreeting() {
-  const h = new Date().getHours()
+  const h = businessHour()
   if (h < 12) return 'Good morning, Saul.'
   if (h < 17) return 'Good afternoon, Saul.'
   return 'Good evening, Saul.'
@@ -220,28 +161,63 @@ const LABEL_MONO = {
   letterSpacing: '0.1em',
 }
 
+// ─── Your studio at a glance ──────────────────────────────────────────────────
+
+const SHORTCUTS = [
+  { label: 'Inquiry Assistant', path: '/inquiry' },
+  { label: 'CRM',               path: '/crm' },
+  { label: 'Project Wall',      path: '/projects' },
+  { label: 'Finances',          path: '/finances' },
+  { label: 'Session Prep',      path: '/session-prep' },
+  { label: 'Agent Queue',       path: '/agents' },
+]
+
+// Loading while any source is still loading; otherwise unavailable.
+function unavailableOr(...sources) {
+  return sources.some(r => r.status === 'loading') ? 'loading' : 'unavailable'
+}
+
+// One overview tile: a number when the data is known, never a 0 standing in for missing data.
+function Tile({ value, status, reason, quiet, label, sub, action, onClick }) {
+  const known = status === 'ok' && typeof value === 'number'
+  return (
+    <button type="button" className="hb-tile" onClick={onClick}>
+      {known
+        ? <span style={{ fontFamily: 'var(--font-heading)', fontSize: 28, fontWeight: 700, minWidth: '2ch', color: quiet ? '#7a786f' : '#e8e6df', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+        : <span style={{ fontSize: 12, color: '#7a786f', minWidth: '2ch' }} title={reason || undefined}>{status === 'loading' ? '...' : 'Unavailable'}</span>}
+      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <span style={{ fontWeight: 500, fontSize: 14 }}>{label}</span>
+        <span style={{ fontSize: 12, color: '#7a786f' }}>{sub}</span>
+      </span>
+      <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e', whiteSpace: 'nowrap' }}>{action}</span>
+    </button>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const navigate = useNavigate()
   const narrow   = useIsNarrow()
 
-  const [clients,    setClients]    = useState([])
-  const [goals,      setGoals]      = useState(loadGoals)
-  const [dailyBrief, setDailyBrief] = useState(null)
+  // Each source loads on its own. 'unavailable' means the database could not supply it,
+  // and the screen says so instead of showing 0 (spec section 2).
+  const [clientsRes,   setClientsRes]   = useState({ status: 'loading', rows: [] })
+  const [queueRes,     setQueueRes]     = useState({ status: 'loading', rows: [] })
+  const [inventoryRes, setInventoryRes] = useState({ status: 'loading', rows: [] })
+  const [sentRes,      setSentRes]      = useState({ status: 'loading', ids: new Set() })
+  const [goals,        setGoals]        = useState(loadGoals)
+  const [showAwaiting, setShowAwaiting] = useState(false)
 
   useEffect(() => {
-    const fetchBrief = async () => {
-      const { data, error } = await supabase.rpc('get_daily_brief')
-      if (error) console.error('Daily brief error:', error)
-      if (data) setDailyBrief(data.get_daily_brief ?? data)
-    }
-    fetchBrief()
+    const settle = (set) => (r) => set({ ...r, status: r.ok ? 'ok' : 'unavailable' })
+    loadClientsResult().then(settle(setClientsRes))
+    agentQueueService.loadAllResult().then(settle(setQueueRes))
+    inventoryService.loadAllResult().then(settle(setInventoryRes))
+    loadSentReplyClientIds().then(settle(setSentRes))
   }, [])
 
-  useEffect(() => {
-    loadClientsDB().then(setClients)
-  }, [])
+  const clients = useMemo(() => clientsRes.rows || [], [clientsRes])
 
   // Welcome modal
   const [welcomeOpen,   setWelcomeOpen]   = useState(false)
@@ -260,10 +236,15 @@ export default function Home() {
   const [quoteIdx,  setQuoteIdx]  = useState(getDailyIdx)
   const [readAloud, setReadAloud] = useState(false)
 
+  // Business date (Los Angeles)
+  const todayStr   = todayISO()
+  const todayYear  = Number(todayStr.slice(0, 4))
+  const todayMonth = Number(todayStr.slice(5, 7)) - 1
+  const todayDay   = Number(todayStr.slice(8, 10))
+
   // Calendar
-  const today    = new Date()
-  const [calYear,     setCalYear]     = useState(today.getFullYear())
-  const [calMonth,    setCalMonth]    = useState(today.getMonth())
+  const [calYear,     setCalYear]     = useState(todayYear)
+  const [calMonth,    setCalMonth]    = useState(todayMonth)
   const [expandedDay, setExpandedDay] = useState(null)
 
   // Earnings
@@ -281,10 +262,19 @@ export default function Home() {
     setTimeout(() => setToast(null), 3000)
   }
 
+  // ── Derived: overview (null means unavailable) ──
+
+  const clientsOk  = clientsRes.status === 'ok'
+  const awaiting   = clientsOk && sentRes.status === 'ok' ? awaitingResponse(clients, sentRes.ids) : null
+  const queueCount = queueRes.status === 'ok' ? queueRes.rows.filter(c => c.status === 'pending').length : null
+  const scheduled  = clientsOk ? scheduledCounts(clients) : null
+  const supplies   = inventoryRes.status === 'ok' ? lowSupplies(inventoryRes.rows) : null
+  const recent     = useMemo(() => recentActivity(clients, 3), [clients])
+
   // ── Derived: calendar ──
 
-  const sessionMap     = useMemo(() => buildSessionMap(clients), [clients])
-  const isCurrentMonth = calYear === today.getFullYear() && calMonth === today.getMonth()
+  const sessionMap     = useMemo(() => sessionDays(clients), [clients])
+  const isCurrentMonth = calYear === todayYear && calMonth === todayMonth
   const daysInMonth    = new Date(calYear, calMonth + 1, 0).getDate()
   const firstDow       = new Date(calYear, calMonth, 1).getDay()
   const yearStr        = String(calYear).padStart(4, '0')
@@ -297,32 +287,10 @@ export default function Home() {
 
   const activeCount = Object.keys(sessionMap).filter(k => k.startsWith(monthPrefix)).length
 
-  // ── Derived: pipeline ──
+  // ── Derived: earnings (client payment records, by session date) ──
 
-  const stageCounts = useMemo(() => {
-    const counts = {}
-    for (const s of PIPELINE_STAGES) counts[s] = 0
-    for (const c of clients) {
-      if (c.stage && counts[c.stage] !== undefined) counts[c.stage]++
-    }
-    return counts
-  }, [clients])
-
-  const bottleneckStage = PIPELINE_STAGES.find(s => stageCounts[s] >= 3) || null
-  const totalActive     = clients.filter(c => c.stage && c.stage !== 'Archive' && c.stage !== 'Completed').length
-
-  // ── Derived: earnings ──
-
-  const periodSessions   = useMemo(() => filterSessions(clients, period), [clients, period])
-  const revenue          = periodSessions.reduce((s, x) => s + (parseFloat(x.amountPaid) || 0), 0)
-  const tips             = periodSessions.reduce((s, x) => s + (parseFloat(x.tip) || 0), 0)
-  const avgPerSession    = periodSessions.length > 0 ? revenue / periodSessions.length : 0
-  const taxAside         = revenue * 0.28
-
-  const thisMonthRevenue = useMemo(() => {
-    return filterSessions(clients, 'month')
-      .reduce((s, x) => s + (parseFloat(x.amountPaid) || 0), 0)
-  }, [clients])
+  const earn             = useMemo(() => clientsOk ? earnings(clients, period, todayStr) : null, [clients, clientsOk, period, todayStr])
+  const thisMonthRevenue = useMemo(() => clientsOk ? earnings(clients, 'month', todayStr).revenue : null, [clients, clientsOk, todayStr])
 
   // ── Handlers: quote ──
 
@@ -426,133 +394,132 @@ export default function Home() {
         .hb-ghost-btn:hover { border-color: #c9a96e; }
         .hb-gold-btn { background: #c9a96e; border: none; border-radius: 9px; padding: 11px 24px; min-height: 44px; font-family: var(--font-body); font-size: 14px; font-weight: 600; color: #0e0e0d; cursor: pointer; transition: opacity 0.15s; }
         .hb-gold-btn:hover { opacity: 0.88; }
+        .hb-shortcut { background: #161614; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 12px 16px; min-height: 48px; font-family: var(--font-body); font-size: 14px; color: #e8e6df; cursor: pointer; transition: border-color 0.15s; }
+        .hb-shortcut:hover, .hb-shortcut:focus-visible { border-color: #c9a96e; outline: none; }
+        .hb-shortcut-primary { color: #c9a96e; border-color: rgba(201,169,110,0.55); }
+        .hb-link { background: none; border: none; padding: 6px 0; min-height: 32px; font-family: var(--font-mono); font-size: 11px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; }
+        .hb-link:hover { opacity: 0.8; }
+        .hb-tile { display: flex; gap: 14px; align-items: center; width: 100%; text-align: left; background: #0e0e0d; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px 16px; min-height: 64px; color: #e8e6df; cursor: pointer; font-family: var(--font-body); transition: border-color 0.15s; }
+        .hb-tile:hover, .hb-tile:focus-visible { border-color: rgba(201,169,110,0.5); outline: none; }
+        .hb-row-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 7px 4px; min-height: 36px; color: #e8e6df; font-family: var(--font-body); font-size: 13px; cursor: pointer; }
+        .hb-row-btn:hover { background: rgba(255,255,255,0.03); }
         .hb-muted-btn { background: transparent; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 11px 16px; min-height: 44px; font-family: var(--font-body); font-size: 14px; color: #7a786f; cursor: pointer; }
       `}</style>
 
-      {/* ══ PAGE HEADER ══ */}
-      <div className="hb-section" style={{ marginBottom: 36 }}>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6 }}>
-          HomeBase
-        </p>
+      {/* ══ GREETING ══ */}
+      <div className="hb-section" style={{ marginBottom: 20 }}>
         <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: narrow ? 28 : 34, color: '#e8e6df', fontWeight: 600, lineHeight: 1.15, margin: 0 }}>
           {getGreeting()}
         </h1>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', letterSpacing: '0.06em', marginTop: 6 }}>
+          {longDate(todayStr)}
+        </p>
       </div>
 
-      {/* ══ TWO ZONE LAYOUT ══ */}
-      <div style={{
-        display: narrow ? 'flex' : 'grid',
-        flexDirection: narrow ? 'column' : undefined,
-        gridTemplateColumns: narrow ? undefined : '1fr 380px',
-        gap: 24,
-        alignItems: 'start',
-      }}>
+      {/* ══ SHORTCUTS ══ */}
+      <nav className="hb-section" aria-label="Shortcuts" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
+        {SHORTCUTS.map(({ label, path }, i) => (
+          <button key={path} type="button" className={`hb-shortcut${i === 0 ? ' hb-shortcut-primary' : ''}`} onClick={() => navigate(path)}>
+            {label}
+          </button>
+        ))}
+      </nav>
 
-        {/* ── LEFT MAIN COLUMN ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-          {/* ══ TODAY AT A GLANCE ══ */}
-          {dailyBrief && (
-            <div className="hb-section" style={CARD}>
-              <p style={{ ...LABEL_MONO, marginBottom: 18 }}>Today at a Glance</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        {/* ══ YOUR STUDIO AT A GLANCE ══ */}
+        <section className="hb-section" style={CARD} aria-label="Your studio at a glance">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+            <p style={LABEL_MONO}>Your studio at a glance</p>
+            <button type="button" className="hb-link" onClick={() => navigate('/projects')}>Full board</button>
+          </div>
 
-                {/* Sessions tile */}
-                <div style={{ background: '#0e0e0d', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <p style={{ ...LABEL_MONO, marginBottom: 8 }}>Sessions</p>
-                  <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color: '#e8e6df', fontWeight: 600, lineHeight: 1, margin: 0 }}>
-                    {dailyBrief.overview.appointments_count}
-                  </p>
-                </div>
+          <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+            <Tile
+              value={awaiting?.length}
+              status={awaiting ? 'ok' : unavailableOr(clientsRes, sentRes)}
+              reason={clientsRes.message || sentRes.message}
+              label="Inquiries awaiting a response"
+              sub="as recorded in MACRI"
+              action={showAwaiting ? 'Hide' : 'Show'}
+              onClick={() => setShowAwaiting(v => !v)}
+            />
+            <Tile
+              value={queueCount}
+              status={queueRes.status}
+              reason={queueRes.message}
+              label="Agent cards to review"
+              sub="drafts waiting for your approval"
+              action="Review"
+              onClick={() => navigate('/agents')}
+            />
+            <Tile
+              value={scheduled?.total}
+              status={clientsRes.status}
+              reason={clientsRes.message}
+              label="Projects marked scheduled"
+              sub={scheduled ? `${scheduled.consults} ${scheduled.consults === 1 ? 'consult' : 'consults'}, ${scheduled.tattoos} ${scheduled.tattoos === 1 ? 'tattoo' : 'tattoos'}` : 'consults and tattoos'}
+              action="Project Wall"
+              onClick={() => navigate('/projects')}
+            />
+            <Tile
+              value={supplies?.low}
+              status={inventoryRes.status}
+              reason={inventoryRes.message}
+              quiet={supplies?.low === 0}
+              label="Supplies running low"
+              sub={supplies?.missing ? `at or below your low stock level; ${supplies.missing} ${supplies.missing === 1 ? 'item is' : 'items are'} missing a count` : 'at or below your low stock level'}
+              action="Supplies"
+              onClick={() => navigate('/supplies')}
+            />
+          </div>
 
-                {/* Revenue tile — gold accent border */}
-                <div style={{ background: '#0e0e0d', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '2px solid rgba(201,169,110,0.5)' }}>
-                  <p style={{ ...LABEL_MONO, marginBottom: 8 }}>Revenue</p>
-                  <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color: '#c9a96e', fontWeight: 600, lineHeight: 1, margin: 0 }}>
-                    ${dailyBrief.overview.projected_revenue}
-                  </p>
-                </div>
-
-                {/* Intake tile */}
-                <div style={{ background: '#0e0e0d', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <p style={{ ...LABEL_MONO, marginBottom: 8 }}>Intake</p>
-                  <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color: '#e8e6df', fontWeight: 600, lineHeight: 1, margin: 0 }}>
-                    {dailyBrief.overview.pending_intake_forms}
-                  </p>
-                </div>
-
-              </div>
+          {showAwaiting && awaiting && (
+            <div style={{ marginTop: 12, background: '#0e0e0d', borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {awaiting.length === 0 && <p style={{ fontSize: 13, color: '#7a786f', margin: '6px 0' }}>None recorded.</p>}
+              {awaiting.slice(0, 8).map(c => (
+                <button key={c.id} type="button" className="hb-row-btn" onClick={() => navigate('/crm', { state: { openClientId: c.id } })}>
+                  <span>{c.name || 'Unnamed client'}</span>
+                  <span style={{ color: '#7a786f', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Open</span>
+                </button>
+              ))}
+              {awaiting.length > 8 && <p style={{ fontSize: 12, color: '#7a786f', margin: '6px 0 0' }}>{awaiting.length - 8} more in CRM.</p>}
+              <button type="button" className="hb-link" style={{ alignSelf: 'flex-start', marginTop: 4 }} onClick={() => navigate('/crm')}>Open CRM</button>
             </div>
           )}
 
-          {/* ══ DAILY QUOTE ══ */}
-          <div className="hb-section" style={{ position: 'relative', padding: narrow ? '44px 20px' : '52px 40px', textAlign: 'center' }}>
-            <button
-              onClick={handleRefresh}
-              aria-label="New quote"
-              style={{
-                position: 'absolute', top: 12, right: 12,
-                background: 'none', border: 'none', cursor: 'pointer',
-                padding: 8, opacity: 0.6, display: 'flex', alignItems: 'center',
-              }}
-            >
-              <IconRefresh />
-            </button>
-
-            <p style={{
-              fontFamily: 'var(--font-heading)',
-              fontSize: narrow ? 20 : 24,
-              color: '#e8e6df',
-              fontStyle: 'italic',
-              lineHeight: 1.6,
-              margin: '0 0 16px',
-              maxWidth: 560,
-              marginLeft: 'auto',
-              marginRight: 'auto',
-            }}>
-              {QUOTES[quoteIdx].text}
-            </p>
-
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
-              {QUOTES[quoteIdx].author}
-            </p>
-
-            {/* Read aloud toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 20 }}>
-              <button
-                onClick={handleToggleReadAloud}
-                aria-label="Toggle read aloud"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0', display: 'flex', alignItems: 'center' }}
-              >
-                <div style={{
-                  width: 32, height: 18, borderRadius: 9,
-                  background: readAloud ? '#c9a96e' : 'rgba(255,255,255,0.08)',
-                  position: 'relative', flexShrink: 0, transition: 'background 0.2s',
-                }}>
-                  <span style={{
-                    position: 'absolute', top: 2, width: 14, height: 14, borderRadius: 7,
-                    background: '#e8e6df', display: 'block',
-                    left: readAloud ? 16 : 2, transition: 'left 0.2s',
-                  }} />
-                </div>
-              </button>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', letterSpacing: '0.06em' }}>
-                Read aloud
-              </span>
-            </div>
+          {/* Today */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 16, paddingTop: 12, fontSize: 13, color: '#7a786f' }}>
+            <span>Collected today: <span style={{ color: '#7a786f' }} title="Session records have one date (the session date) and no date for when a payment was received.">Unavailable, payment dates are not recorded</span></span>
           </div>
 
-          {/* ══ EARNINGS ══ */}
-          <div className="hb-section" style={CARD}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <p style={LABEL_MONO}>Earnings</p>
+          {/* Recent activity */}
+          <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <p style={LABEL_MONO}>Recent activity</p>
+              <button type="button" className="hb-link" onClick={() => navigate('/crm')}>CRM</button>
+            </div>
+            {clientsRes.status === 'loading' && <p style={{ fontSize: 13, color: '#7a786f', margin: 0 }}>Loading...</p>}
+            {clientsRes.status === 'unavailable' && <p style={{ fontSize: 13, color: '#7a786f', margin: 0 }} title={clientsRes.message}>Unavailable</p>}
+            {clientsOk && recent.length === 0 && <p style={{ fontSize: 13, color: '#7a786f', margin: 0 }}>No activity recorded yet.</p>}
+            {clientsOk && recent.map(e => (
+              <button key={e.id} type="button" className="hb-row-btn" onClick={() => navigate('/crm', { state: { openClientId: e.clientId } })}>
+                <span style={{ display: 'flex', gap: 12, minWidth: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', flex: '0 0 48px', paddingTop: 1 }}>{shortDate(e.timestamp)}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{e.clientName} · {e.text}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
 
-              {/* Segmented period selector */}
-              <div style={{
-                display: 'flex', gap: 2,
-                background: 'rgba(255,255,255,0.04)',
-                borderRadius: 8, padding: 3,
-              }}>
+        {/* ══ EARNINGS AND GOALS ══ */}
+        <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 24, alignItems: 'start' }}>
+
+          <section className="hb-section" style={CARD} aria-label="Earnings">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+              <p style={LABEL_MONO}>Earnings</p>
+              <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
                 {[
                   { key: 'week',  label: 'Week' },
                   { key: 'month', label: 'Month' },
@@ -563,17 +530,9 @@ export default function Home() {
                     className="hb-period-btn"
                     onClick={() => setPeriod(key)}
                     style={{
-                      background:   period === key ? '#c9a96e' : 'transparent',
-                      border:       'none',
-                      borderRadius: 6,
-                      padding:      '5px 12px',
-                      minHeight:    32,
-                      fontFamily:   'var(--font-mono)',
-                      fontSize:     11,
-                      color:        period === key ? '#0e0e0d' : '#7a786f',
-                      cursor:       'pointer',
-                      transition:   'background 0.15s, color 0.15s',
-                      letterSpacing: '0.04em',
+                      background: period === key ? '#c9a96e' : 'transparent', border: 'none', borderRadius: 6,
+                      padding: '5px 12px', minHeight: 32, fontFamily: 'var(--font-mono)', fontSize: 11,
+                      color: period === key ? '#0e0e0d' : '#7a786f', cursor: 'pointer', letterSpacing: '0.04em',
                     }}
                   >
                     {label}
@@ -582,33 +541,102 @@ export default function Home() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               {[
-                { label: 'Revenue',         value: fmt(revenue),       color: '#e8e6df', sub: null },
-                { label: 'Tips',            value: fmt(tips),          color: '#c9a96e', sub: null },
-                { label: 'Avg per Session', value: fmt(avgPerSession), color: '#e8e6df', sub: null },
-                { label: 'Tax Aside',       value: fmt(taxAside),      color: '#c9a96e', sub: '28% rule' },
+                { label: 'Revenue',         value: earn && fmt(earn.revenue),       color: '#e8e6df', sub: null },
+                { label: 'Tips',            value: earn && fmt(earn.tips),          color: '#c9a96e', sub: null },
+                { label: 'Avg per Session', value: earn && (earn.avgPerSession === null ? null : fmt(earn.avgPerSession)), color: '#e8e6df', sub: earn && earn.avgPerSession === null ? 'No sessions in this period' : null },
+                { label: 'Tax Aside',       value: earn && fmt(earn.taxAside),      color: '#c9a96e', sub: '28% estimate, not a confirmed tax policy' },
               ].map(({ label, value, color, sub }) => (
-                <div key={label} style={{
-                  background: '#0e0e0d',
-                  border: '1px solid rgba(255,255,255,0.04)',
-                  borderRadius: 10, padding: '16px 18px',
-                }}>
+                <div key={label} style={{ background: '#0e0e0d', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 10, padding: '14px 16px', minWidth: 0 }}>
                   <p style={{ ...LABEL_MONO, marginBottom: 8 }}>{label}</p>
-                  <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color, fontWeight: 600, lineHeight: 1, margin: 0 }}>
-                    {value}
-                  </p>
-                  {sub && (
-                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 5 }}>{sub}</p>
-                  )}
+                  {value
+                    ? <p style={{ fontFamily: 'var(--font-heading)', fontSize: 26, color, fontWeight: 600, lineHeight: 1, margin: 0 }}>{value}</p>
+                    : <p style={{ fontSize: 14, color: '#7a786f', margin: 0 }} title={clientsRes.message}>{clientsRes.status === 'loading' ? 'Loading...' : 'Unavailable'}</p>}
+                  {sub && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 6 }}>{sub}</p>}
                 </div>
               ))}
             </div>
-          </div>
 
-          {/* ══ SESSION CALENDAR ══ */}
-          <div className="hb-section" style={CARD}>
-            <p style={{ ...LABEL_MONO, marginBottom: 18 }}>Session Days</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 14, lineHeight: 1.6 }}>
+              {earn ? `${earn.start} to ${earn.end}. ` : ''}From client payment records: amount paid on each session, by session date. Deposits recorded in the deposit field are not included. Finance may differ.
+            </p>
+            <button type="button" className="hb-link" style={{ marginTop: 8 }} onClick={() => navigate('/finances')}>Open Finances</button>
+          </section>
+
+          <section className="hb-section" style={CARD} aria-label="Goals">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <p style={LABEL_MONO}>Goals</p>
+              <button className="hb-ghost-btn" onClick={() => setAddGoalOpen(true)}>Add Goal</button>
+            </div>
+
+            {goals.length === 0 ? (
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', textAlign: 'center', padding: '20px 0' }}>
+                No goals yet.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {goals.map(goal => {
+                  const target = parseFloat(goal.targetAmount) || 0
+                  const known  = thisMonthRevenue !== null
+                  const pct    = known && target > 0 ? Math.min(thisMonthRevenue / target, 1) : 0
+                  const pctInt = Math.round(pct * 100)
+                  return (
+                    <div key={goal.id}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#e8e6df', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {goal.name}
+                          </span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            {goal.category}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: pct >= 1 ? '#7aab8f' : '#7a786f' }}>
+                            {known ? `${pctInt}%` : 'Unavailable'}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteGoal(goal.id)}
+                            aria-label="Delete goal"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center', opacity: 0.6 }}
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginBottom: 5 }}>
+                        <div style={{ height: '100%', width: `${pct * 100}%`, background: pct >= 1 ? '#7aab8f' : '#c9a96e', borderRadius: 2, transition: 'width 0.4s ease' }} />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e8e6df' }}>
+                          {known ? fmt(thisMonthRevenue) : 'Unavailable'}
+                        </span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f' }}>
+                          {fmt(target)}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 16 }}>
+              Saved on this device. Progress uses this month's revenue above.
+            </p>
+          </section>
+        </div>
+
+        {/* ══ SESSION CALENDAR ══ */}
+        <section className="hb-section" style={CARD} aria-label="Session days">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+            <p style={LABEL_MONO}>Session Days</p>
+            {clientsRes.status === 'unavailable' && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#c9a96e' }} title={clientsRes.message}>Showing this device's copy</span>
+            )}
+          </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <button className="hb-nav-btn" onClick={handlePrevMonth} aria-label="Previous month">
@@ -641,7 +669,7 @@ export default function Home() {
                   if (day === null) return <div key={`ph-${idx}`} style={{ height: 34 }} />
                   const key      = `${yearStr}-${monthStr}-${String(day).padStart(2, '0')}`
                   const active   = !!sessionMap[key]
-                  const isToday  = isCurrentMonth && day === today.getDate()
+                  const isToday  = isCurrentMonth && day === todayDay
                   const expanded = expandedDay === key
                   return (
                     <button
@@ -690,7 +718,7 @@ export default function Home() {
                       </p>
                     )}
                     <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
-                      Paid {fmt(s.amountPaid)}
+                      Amount paid {fmt(s.amountPaid)}
                       {parseFloat(s.tip) > 0 ? ` + ${fmt(s.tip)} tip` : ''}
                     </p>
                   </div>
@@ -699,155 +727,35 @@ export default function Home() {
             )}
 
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 14, letterSpacing: '0.06em' }}>
-              {activeCount} active {activeCount === 1 ? 'day' : 'days'} this month
+              {clientsOk
+                ? `${activeCount} active ${activeCount === 1 ? 'day' : 'days'} this month`
+                : clientsRes.status === 'loading' ? 'Loading...' : 'Active days unavailable'}
             </p>
-          </div>
+        </section>
 
-        </div>
-
-        {/* ── RIGHT SUPPORTING COLUMN ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-          {/* ══ STUDIO PIPELINE ══ */}
-          <div className="hb-section" style={CARD}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-              <p style={LABEL_MONO}>Studio Pipeline</p>
-              <button
-                className="hb-ghost-btn"
-                onClick={() => navigate('/projects')}
-              >
-                Full Board
-              </button>
-            </div>
-
-            {/* Active client count hero number */}
-            <div style={{ marginBottom: 20, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <p style={{ fontFamily: 'var(--font-heading)', fontSize: 42, color: '#e8e6df', fontWeight: 600, lineHeight: 1, margin: 0 }}>
-                {totalActive}
-              </p>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 5, letterSpacing: '0.08em' }}>
-                Active clients
-              </p>
-            </div>
-
-            {/* Stage breakdown */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {PIPELINE_STAGES.map(stage => {
-                const count = stageCounts[stage]
-                const color = STAGE_COLORS[stage] || '#7a786f'
-                return (
-                  <div key={stage} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', flex: 1, letterSpacing: '0.04em' }}>
-                      {stage}
-                    </span>
-                    <span style={{
-                      fontFamily: 'var(--font-heading)', fontSize: 14,
-                      color: count > 0 ? '#e8e6df' : '#3a3a37',
-                      fontWeight: 600, minWidth: 20, textAlign: 'right',
-                    }}>
-                      {count}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-
-            {bottleneckStage && (
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#f09595', marginTop: 16, letterSpacing: '0.06em' }}>
-                {bottleneckStage} is filling up. Check your schedule.
-              </p>
-            )}
-          </div>
-
-          {/* ══ GOALS ══ */}
-          <div className="hb-section" style={CARD}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-              <p style={LABEL_MONO}>Goals</p>
-              <button
-                className="hb-ghost-btn"
-                onClick={() => setAddGoalOpen(true)}
-              >
-                Add Goal
-              </button>
-            </div>
-
-            {goals.length === 0 ? (
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', textAlign: 'center', padding: '20px 0' }}>
-                No goals yet.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {goals.map(goal => {
-                  const target = parseFloat(goal.targetAmount) || 0
-                  const pct    = target > 0 ? Math.min(thisMonthRevenue / target, 1) : 0
-                  const pctInt = Math.round(pct * 100)
-                  return (
-                    <div key={goal.id}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#e8e6df', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {goal.name}
-                          </span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                            {goal.category}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: pct >= 1 ? '#7aab8f' : '#7a786f' }}>
-                            {pctInt}%
-                          </span>
-                          <button
-                            onClick={() => handleDeleteGoal(goal.id)}
-                            aria-label="Delete goal"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center', opacity: 0.6 }}
-                          >
-                            <IconTrash />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginBottom: 5 }}>
-                        <div style={{
-                          height: '100%', width: `${pct * 100}%`,
-                          background: pct >= 1 ? '#7aab8f' : '#c9a96e',
-                          borderRadius: 2, transition: 'width 0.4s ease',
-                        }} />
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e8e6df' }}>
-                          {fmt(thisMonthRevenue)}
-                        </span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f' }}>
-                          {fmt(target)}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* ══ LOG SESSION CTA ══ */}
-          <div className="hb-section" style={{
-            ...CARD,
-            display: 'flex', flexDirection: 'column', gap: 10,
-            alignItems: 'stretch', textAlign: 'center',
-          }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              Ready to log a session?
-            </p>
+        {/* ══ DAILY QUOTE ══ */}
+        <div className="hb-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 18 }}>
+          <p style={{ margin: 0, minWidth: 0, flex: '1 1 320px' }}>
+            <span style={{ fontFamily: 'var(--font-heading)', fontStyle: 'italic', fontSize: 15, color: '#e8e6df', lineHeight: 1.6 }}>{QUOTES[quoteIdx].text}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', letterSpacing: '0.08em', textTransform: 'uppercase', marginLeft: 10 }}>{QUOTES[quoteIdx].author}</span>
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={handleRefresh} aria-label="New quote" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 10, opacity: 0.7, display: 'flex', alignItems: 'center', minHeight: 44 }}>
+              <IconRefresh />
+            </button>
             <button
-              className="hb-gold-btn"
-              onClick={() => navigate('/session-prep')}
+              onClick={handleToggleReadAloud}
+              aria-label="Toggle read aloud"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0', display: 'flex', alignItems: 'center', gap: 8, minHeight: 44 }}
             >
-              Log a Session
+              <div style={{ width: 32, height: 18, borderRadius: 9, background: readAloud ? '#c9a96e' : 'rgba(255,255,255,0.08)', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+                <span style={{ position: 'absolute', top: 2, width: 14, height: 14, borderRadius: 7, background: '#e8e6df', display: 'block', left: readAloud ? 16 : 2, transition: 'left 0.2s' }} />
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', letterSpacing: '0.06em' }}>Read aloud</span>
             </button>
           </div>
-
         </div>
+
       </div>
 
       {/* ══ ADD GOAL MODAL ══ */}

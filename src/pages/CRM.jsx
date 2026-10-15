@@ -3569,12 +3569,17 @@ export default function CRM() {
     setDrawerOpen(true)
   }
 
+  // Opens the client asked for by Home or Project Wall once the client list has loaded
+  // (before, it looked before loading, found nothing, and never tried again).
+  const openedFromState = useRef(null)
   useEffect(() => {
     const id = location.state?.openClientId
-    if (!id) return
+    if (!id || openedFromState.current === location.state) return
     const client = clients.find(c => c.id === id)
-    if (client) openDrawer(client, null)
-  }, [location.state])
+    if (!client) return
+    openedFromState.current = location.state
+    openDrawer(client, null)
+  }, [location.state, clients])
 
   useEffect(() => {
     const id = location.state?.highlightClientId

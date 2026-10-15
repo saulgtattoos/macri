@@ -157,13 +157,13 @@ const CARD = {
   background: 'linear-gradient(160deg, #1a1a17 0%, #161614 100%)',
   border: '1px solid rgba(255,255,255,0.06)',
   borderTop: '1px solid rgba(255,255,255,0.09)',
-  borderRadius: 14,
-  padding: '24px 28px',
+  borderRadius: 16,
+  padding: '30px 32px',
 }
 
 const LABEL_MONO = {
   fontFamily: 'var(--font-mono)',
-  fontSize: 12,
+  fontSize: 13,
   color: '#a3a097',
   textTransform: 'uppercase',
   letterSpacing: '0.1em',
@@ -191,13 +191,13 @@ function Tile({ value, status, reason, quiet, label, sub, action, onClick }) {
   return (
     <button type="button" className="hb-tile" onClick={onClick}>
       {known
-        ? <span style={{ fontFamily: 'var(--font-heading)', fontSize: 28, fontWeight: 700, minWidth: '2ch', color: quiet ? '#a3a097' : '#e8e6df', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-        : <span style={{ fontSize: 12, color: '#a3a097', minWidth: '2ch' }} title={reason || undefined}>{status === 'loading' ? '...' : 'Unavailable'}</span>}
+        ? <span style={{ fontFamily: 'var(--font-heading)', fontSize: 36, fontWeight: 700, minWidth: '2ch', color: quiet ? '#a3a097' : '#e8e6df', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+        : <span style={{ fontSize: 14, color: '#a3a097', minWidth: '2ch' }} title={reason || undefined}>{status === 'loading' ? '...' : 'Unavailable'}</span>}
       <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <span style={{ fontWeight: 500, fontSize: 14 }}>{label}</span>
-        <span style={{ fontSize: 12, color: '#a3a097' }}>{sub}</span>
+        <span style={{ fontWeight: 500, fontSize: 16 }}>{label}</span>
+        <span style={{ fontSize: 14, color: '#a3a097' }}>{sub}</span>
       </span>
-      <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 12, color: '#c9a96e', whiteSpace: 'nowrap' }}>{action}</span>
+      <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 14, color: '#c9a96e', whiteSpace: 'nowrap' }}>{action}</span>
     </button>
   )
 }
@@ -367,12 +367,12 @@ export default function Home() {
   const FIELD = {
     width: '100%', background: '#1e1e1b', border: '1px solid rgba(255,255,255,0.06)',
     borderRadius: 8, padding: '10px 14px', color: '#e8e6df',
-    fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none',
+    fontFamily: 'var(--font-body)', fontSize: 16, outline: 'none',
     boxSizing: 'border-box', minHeight: 44,
   }
 
   const LABEL = {
-    fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097',
+    fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097',
     display: 'block', marginBottom: 6,
   }
 
@@ -399,38 +399,38 @@ export default function Home() {
         .hb-period-btn:hover { opacity: 0.85; }
         .hb-nav-btn { background: none; border: none; cursor: pointer; display: flex; align-items: center; padding: 8px 10px; min-height: 44px; }
         .hb-nav-btn:hover { opacity: 0.7; }
-        .hb-ghost-btn { background: transparent; border: 1px solid rgba(201,169,110,0.35); border-radius: 8px; padding: 7px 14px; min-height: 40px; font-family: var(--font-mono); font-size: 12px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; transition: border-color 0.15s; }
+        .hb-ghost-btn { background: transparent; border: 1px solid rgba(201,169,110,0.35); border-radius: 8px; padding: 9px 16px; min-height: 44px; font-family: var(--font-mono); font-size: 14px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; transition: border-color 0.15s; }
         .hb-ghost-btn:hover { border-color: #c9a96e; }
         .hb-gold-btn { background: #c9a96e; border: none; border-radius: 9px; padding: 11px 24px; min-height: 44px; font-family: var(--font-body); font-size: 14px; font-weight: 600; color: #0e0e0d; cursor: pointer; transition: opacity 0.15s; }
         .hb-gold-btn:hover { opacity: 0.88; }
-        .hb-shortcut { background: #161614; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 12px 16px; min-height: 48px; font-family: var(--font-body); font-size: 14px; color: #e8e6df; cursor: pointer; transition: border-color 0.15s; }
+        .hb-shortcut { background: #161614; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 14px 22px; min-height: 54px; font-family: var(--font-body); font-size: 16px; color: #e8e6df; cursor: pointer; transition: border-color 0.15s; }
         .hb-shortcut:hover, .hb-shortcut:focus-visible { border-color: #c9a96e; outline: none; }
         .hb-shortcut-primary { color: #c9a96e; border-color: rgba(201,169,110,0.55); }
-        .hb-link { background: none; border: none; padding: 6px 0; min-height: 32px; font-family: var(--font-mono); font-size: 12px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; }
+        .hb-link { background: none; border: none; padding: 8px 0; min-height: 40px; font-family: var(--font-mono); font-size: 14px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; }
         .hb-link:hover { opacity: 0.8; }
-        .hb-tile { display: flex; gap: 14px; align-items: center; width: 100%; text-align: left; background: #0e0e0d; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px 16px; min-height: 64px; color: #e8e6df; cursor: pointer; font-family: var(--font-body); transition: border-color 0.15s; }
+        .hb-tile { display: flex; gap: 18px; align-items: center; width: 100%; text-align: left; background: #0e0e0d; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 20px 22px; min-height: 92px; color: #e8e6df; cursor: pointer; font-family: var(--font-body); transition: border-color 0.15s; }
         .hb-tile:hover, .hb-tile:focus-visible { border-color: rgba(201,169,110,0.5); outline: none; }
-        .hb-row-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 7px 4px; min-height: 36px; color: #e8e6df; font-family: var(--font-body); font-size: 13px; cursor: pointer; }
+        .hb-row-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 10px 6px; min-height: 46px; color: #e8e6df; font-family: var(--font-body); font-size: 15px; cursor: pointer; }
         .hb-row-btn:hover { background: rgba(255,255,255,0.03); }
-        .hb-details { margin-top: 10px; font-size: 13px; color: #a3a097; }
-        .hb-details summary { cursor: pointer; color: #c9a96e; font-family: var(--font-mono); font-size: 12px; padding: 8px 0; min-height: 36px; }
-        .hb-details ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.55; }
+        .hb-details { margin-top: 12px; font-size: 15px; color: #a3a097; }
+        .hb-details summary { cursor: pointer; color: #c9a96e; font-family: var(--font-mono); font-size: 14px; padding: 10px 0; min-height: 44px; }
+        .hb-details ul { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.6; }
         .hb-muted-btn { background: transparent; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 11px 16px; min-height: 44px; font-family: var(--font-body); font-size: 14px; color: #a3a097; cursor: pointer; }
       `}</style>
 
       {/* ══ GREETING ══ */}
       <div className="hb-section" style={{ marginBottom: 20 }}>
         <p style={{ ...LABEL_MONO, marginBottom: 6 }}>Dashboard</p>
-        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: narrow ? 28 : 34, color: '#e8e6df', fontWeight: 600, lineHeight: 1.15, margin: 0 }}>
+        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: narrow ? 32 : 40, color: '#e8e6df', fontWeight: 600, lineHeight: 1.15, margin: 0 }}>
           {getGreeting()}
         </h1>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', letterSpacing: '0.06em', marginTop: 6 }}>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', letterSpacing: '0.06em', marginTop: 6 }}>
           {longDate(todayStr)}
         </p>
       </div>
 
       {/* ══ SHORTCUTS ══ */}
-      <nav className="hb-section" aria-label="Shortcuts" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
+      <nav className="hb-section" aria-label="Shortcuts" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 32 }}>
         {SHORTCUTS.map(({ label, path }, i) => (
           <button key={path} type="button" className={`hb-shortcut${i === 0 ? ' hb-shortcut-primary' : ''}`} onClick={() => navigate(path)}>
             {label}
@@ -438,16 +438,16 @@ export default function Home() {
         ))}
       </nav>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
         {/* ══ YOUR STUDIO AT A GLANCE ══ */}
         <section className="hb-section" style={CARD} aria-label="Your studio at a glance">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             <p style={LABEL_MONO}>Your studio at a glance</p>
             <button type="button" className="hb-link" onClick={() => navigate('/projects')}>Full board</button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
             <Tile
               value={awaiting?.length}
               status={awaiting ? 'ok' : unavailableOr(clientsRes, sentRes)}
@@ -489,14 +489,14 @@ export default function Home() {
 
           {showAwaiting && awaiting && (
             <div style={{ marginTop: 12, background: '#0e0e0d', borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {awaiting.length === 0 && <p style={{ fontSize: 13, color: '#a3a097', margin: '6px 0' }}>None recorded.</p>}
+              {awaiting.length === 0 && <p style={{ fontSize: 15, color: '#a3a097', margin: '6px 0' }}>None recorded.</p>}
               {awaiting.slice(0, 8).map(c => (
                 <button key={c.id} type="button" className="hb-row-btn" onClick={() => navigate('/crm', { state: { openClientId: c.id } })}>
                   <span>{c.name || 'Unnamed client'}</span>
-                  <span style={{ color: '#a3a097', fontFamily: 'var(--font-mono)', fontSize: 12 }}>Open</span>
+                  <span style={{ color: '#a3a097', fontFamily: 'var(--font-mono)', fontSize: 14 }}>Open</span>
                 </button>
               ))}
-              {awaiting.length > 8 && <p style={{ fontSize: 12, color: '#a3a097', margin: '6px 0 0' }}>{awaiting.length - 8} more in CRM.</p>}
+              {awaiting.length > 8 && <p style={{ fontSize: 14, color: '#a3a097', margin: '6px 0 0' }}>{awaiting.length - 8} more in CRM.</p>}
               <button type="button" className="hb-link" style={{ alignSelf: 'flex-start', marginTop: 4 }} onClick={() => navigate('/crm')}>Open CRM</button>
             </div>
           )}
@@ -504,18 +504,18 @@ export default function Home() {
           {/* "Collected today" is hidden until session records include payment dates (Saul, 2026-10-15). */}
 
           {/* Recent activity */}
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <p style={LABEL_MONO}>Recent activity</p>
               <button type="button" className="hb-link" onClick={() => navigate('/crm')}>CRM</button>
             </div>
-            {clientsRes.status === 'loading' && <p style={{ fontSize: 13, color: '#a3a097', margin: 0 }}>Loading...</p>}
-            {clientsRes.status === 'unavailable' && <p style={{ fontSize: 13, color: '#a3a097', margin: 0 }} title={clientsRes.message}>Unavailable</p>}
-            {clientsOk && recent.length === 0 && <p style={{ fontSize: 13, color: '#a3a097', margin: 0 }}>No activity recorded yet.</p>}
+            {clientsRes.status === 'loading' && <p style={{ fontSize: 15, color: '#a3a097', margin: 0 }}>Loading...</p>}
+            {clientsRes.status === 'unavailable' && <p style={{ fontSize: 15, color: '#a3a097', margin: 0 }} title={clientsRes.message}>Unavailable</p>}
+            {clientsOk && recent.length === 0 && <p style={{ fontSize: 15, color: '#a3a097', margin: 0 }}>No activity recorded yet.</p>}
             {clientsOk && recent.map(e => (
               <button key={e.id} type="button" className="hb-row-btn" onClick={() => navigate('/crm', { state: { openClientId: e.clientId } })}>
                 <span style={{ display: 'flex', gap: 12, minWidth: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', flex: '0 0 48px', paddingTop: 1 }}>{shortDate(e.timestamp)}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', flex: '0 0 60px', paddingTop: 2 }}>{shortDate(e.timestamp)}</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{e.clientName} · {e.text}</span>
                 </span>
               </button>
@@ -524,7 +524,7 @@ export default function Home() {
         </section>
 
         {/* ══ EARNINGS AND GOALS ══ */}
-        <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 24, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 32, alignItems: 'start' }}>
 
           <section className="hb-section" style={CARD} aria-label="Earnings">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
@@ -541,7 +541,7 @@ export default function Home() {
                     onClick={() => setPeriod(key)}
                     style={{
                       background: period === key ? '#c9a96e' : 'transparent', border: 'none', borderRadius: 6,
-                      padding: '5px 12px', minHeight: 32, fontFamily: 'var(--font-mono)', fontSize: 12,
+                      padding: '8px 16px', minHeight: 40, fontFamily: 'var(--font-mono)', fontSize: 14,
                       color: period === key ? '#0e0e0d' : '#a3a097', cursor: 'pointer', letterSpacing: '0.04em',
                     }}
                   >
@@ -551,24 +551,24 @@ export default function Home() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
               {[
                 { label: 'Session revenue', value: earn && fmt(earn.revenue),       color: '#e8e6df', sub: 'Amount paid on sessions' },
                 { label: 'Tips',            value: earn && fmt(earn.tips),          color: '#c9a96e', sub: null },
                 { label: 'Avg per Session', value: earn && (earn.avgPerSession === null ? null : fmt(earn.avgPerSession)), color: '#e8e6df', sub: earn && earn.avgPerSession === null ? 'No sessions in this period' : null },
                 { label: 'Tax Aside',       value: earn && fmt(earn.taxAside),      color: '#c9a96e', sub: '28% estimate, not a confirmed tax policy' },
               ].map(({ label, value, color, sub }) => (
-                <div key={label} style={{ background: '#0e0e0d', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 10, padding: '14px 16px', minWidth: 0 }}>
+                <div key={label} style={{ background: '#0e0e0d', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: '18px 20px', minWidth: 0 }}>
                   <p style={{ ...LABEL_MONO, marginBottom: 8 }}>{label}</p>
                   {value
-                    ? <p style={{ fontFamily: 'var(--font-heading)', fontSize: 26, color, fontWeight: 600, lineHeight: 1, margin: 0 }}>{value}</p>
-                    : <p style={{ fontSize: 14, color: '#a3a097', margin: 0 }} title={clientsRes.message}>{clientsRes.status === 'loading' ? 'Loading...' : 'Unavailable'}</p>}
-                  {sub && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', marginTop: 6 }}>{sub}</p>}
+                    ? <p style={{ fontFamily: 'var(--font-heading)', fontSize: 32, color, fontWeight: 600, lineHeight: 1, margin: 0 }}>{value}</p>
+                    : <p style={{ fontSize: 16, color: '#a3a097', margin: 0 }} title={clientsRes.message}>{clientsRes.status === 'loading' ? 'Loading...' : 'Unavailable'}</p>}
+                  {sub && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', marginTop: 6 }}>{sub}</p>}
                 </div>
               ))}
             </div>
 
-            <p style={{ fontSize: 13, color: '#a3a097', marginTop: 14, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 15, color: '#a3a097', marginTop: 14, lineHeight: 1.6 }}>
               {earn ? `${longRange(earn.start, earn.end)}. ` : ''}Amount paid on sessions dated in this period, from client payment records.
             </p>
             <details className="hb-details">
@@ -591,7 +591,7 @@ export default function Home() {
             </div>
 
             {goals.length === 0 ? (
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', textAlign: 'center', padding: '20px 0' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', textAlign: 'center', padding: '20px 0' }}>
                 No goals yet.
               </p>
             ) : (
@@ -605,15 +605,15 @@ export default function Home() {
                     <div key={goal.id}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <div style={{ minWidth: 0 }}>
-                          <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#e8e6df', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: '#e8e6df', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {goal.name}
                           </span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                             {goal.category}
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: pct >= 1 ? '#7aab8f' : '#a3a097' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: pct >= 1 ? '#7aab8f' : '#a3a097' }}>
                             {known ? `${pctInt}%` : 'Unavailable'}
                           </span>
                           <button
@@ -631,10 +631,10 @@ export default function Home() {
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#e8e6df' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#e8e6df' }}>
                           {known ? fmt(thisMonthRevenue) : 'Unavailable'}
                         </span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097' }}>
                           {fmt(target)}
                         </span>
                       </div>
@@ -643,7 +643,7 @@ export default function Home() {
                 })}
               </div>
             )}
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', marginTop: 16 }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', marginTop: 16 }}>
               Saved on this device. Progress uses this month's revenue above.
             </p>
           </section>
@@ -654,7 +654,7 @@ export default function Home() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
             <p style={LABEL_MONO}>Session Days</p>
             {clientsRes.status === 'unavailable' && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#c9a96e' }} title={clientsRes.message}>Showing this device's copy</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#c9a96e' }} title={clientsRes.message}>Showing this device's copy</span>
             )}
           </div>
 
@@ -662,7 +662,7 @@ export default function Home() {
               <button className="hb-nav-btn" onClick={handlePrevMonth} aria-label="Previous month">
                 <IconChevronLeft />
               </button>
-              <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: '#e8e6df' }}>
+              <span style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: '#e8e6df' }}>
                 {MONTH_NAMES[calMonth]} {calYear}
               </span>
               <button
@@ -676,17 +676,17 @@ export default function Home() {
               </button>
             </div>
 
-            <div style={{ maxWidth: 300, margin: '0 auto' }}>
+            <div style={{ maxWidth: 460, margin: '0 auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
                 {DAY_LABELS.map(l => (
-                  <div key={l} style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', letterSpacing: '0.06em' }}>
+                  <div key={l} style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', letterSpacing: '0.06em' }}>
                     {l}
                   </div>
                 ))}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
                 {calCells.map((day, idx) => {
-                  if (day === null) return <div key={`ph-${idx}`} style={{ height: 28 }} />
+                  if (day === null) return <div key={`ph-${idx}`} style={{ height: 46 }} />
                   const key      = `${yearStr}-${monthStr}-${String(day).padStart(2, '0')}`
                   const active   = !!sessionMap[key]
                   const isToday  = isCurrentMonth && day === todayDay
@@ -697,12 +697,12 @@ export default function Home() {
                       className="hb-day-btn"
                       onClick={() => handleDayClick(key)}
                       style={{
-                        width: '100%', aspectRatio: '1 / 1', maxWidth: 28, borderRadius: '50%',
+                        width: '100%', aspectRatio: '1 / 1', maxWidth: 46, borderRadius: '50%',
                         background: active ? '#c9a96e' : 'transparent',
                         color:  active ? '#0e0e0d' : '#a3a097',
                         border: isToday && !active ? '1px solid rgba(201,169,110,0.4)' : 'none',
                         cursor: active ? 'pointer' : 'default',
-                        fontFamily: 'var(--font-mono)', fontSize: 12,
+                        fontFamily: 'var(--font-mono)', fontSize: 14,
                         fontWeight: active ? 600 : 400,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         margin: '0 auto',
@@ -729,15 +729,15 @@ export default function Home() {
                       borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                     }}
                   >
-                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#e8e6df', marginBottom: 2 }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#e8e6df', marginBottom: 2 }}>
                       {s.clientName}
                     </p>
                     {s.tattooDescription && (
-                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', marginBottom: 2 }}>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', marginBottom: 2 }}>
                         {s.tattooDescription}
                       </p>
                     )}
-                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097' }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097' }}>
                       Amount paid {fmt(s.amountPaid)}
                       {parseFloat(s.tip) > 0 ? ` + ${fmt(s.tip)} tip` : ''}
                     </p>
@@ -746,7 +746,7 @@ export default function Home() {
               </div>
             )}
 
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', marginTop: 14, letterSpacing: '0.06em' }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', marginTop: 14, letterSpacing: '0.06em' }}>
               {clientsOk
                 ? `${activeCount} active ${activeCount === 1 ? 'day' : 'days'} this month, through today`
                 : clientsRes.status === 'loading' ? 'Loading...' : 'Active days unavailable'}
@@ -756,8 +756,8 @@ export default function Home() {
         {/* ══ DAILY QUOTE ══ */}
         <div className="hb-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 18 }}>
           <p style={{ margin: 0, minWidth: 0, flex: '1 1 320px' }}>
-            <span style={{ fontFamily: 'var(--font-heading)', fontStyle: 'italic', fontSize: 15, color: '#e8e6df', lineHeight: 1.6 }}>{QUOTES[quoteIdx].text}</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', letterSpacing: '0.08em', textTransform: 'uppercase', marginLeft: 10 }}>{QUOTES[quoteIdx].author}</span>
+            <span style={{ fontFamily: 'var(--font-heading)', fontStyle: 'italic', fontSize: 18, color: '#e8e6df', lineHeight: 1.6 }}>{QUOTES[quoteIdx].text}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', letterSpacing: '0.08em', textTransform: 'uppercase', marginLeft: 10 }}>{QUOTES[quoteIdx].author}</span>
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={handleRefresh} aria-label="New quote" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 10, opacity: 0.7, display: 'flex', alignItems: 'center', minHeight: 44 }}>
@@ -771,7 +771,7 @@ export default function Home() {
               <div style={{ width: 32, height: 18, borderRadius: 9, background: readAloud ? '#c9a96e' : 'rgba(255,255,255,0.08)', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
                 <span style={{ position: 'absolute', top: 2, width: 14, height: 14, borderRadius: 7, background: '#e8e6df', display: 'block', left: readAloud ? 16 : 2, transition: 'left 0.2s' }} />
               </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', letterSpacing: '0.06em' }}>Read aloud</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: '#a3a097', letterSpacing: '0.06em' }}>Read aloud</span>
             </button>
           </div>
         </div>

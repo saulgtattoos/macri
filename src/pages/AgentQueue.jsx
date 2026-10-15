@@ -695,32 +695,15 @@ export default function AgentQueue() {
   const [cards, setCards] = useState([])
   const [running, setRunning] = useState(false)
   const [toast, setToast] = useState(null)
-  const hasRun = useRef(false)
-
+  // Opening the queue only loads saved cards. Agents call paid AI, so they run
+  // only from the Run Agents Now button.
   useEffect(() => {
-    agentQueueService.loadAll().then((saved) => {
-      setCards(saved)
-      if (!hasRun.current) {
-        hasRun.current = true
-        silentScan(saved)
-      }
-    })
+    agentQueueService.loadAll().then(setCards)
   }, [])
 
   const showToast = (msg) => {
     setToast(msg)
     setTimeout(() => setToast(null), 3000)
-  }
-
-  const silentScan = async (currentCards) => {
-    try {
-      const newCards = await runAllAgents(currentCards)
-      if (newCards.length === 0) return
-      const updated = [...newCards, ...currentCards]
-      setCards(updated)
-      saveQueue(updated)
-      newCards.forEach((c) => agentQueueService.saveRecord(c))
-    } catch {}
   }
 
   const handleRunAgents = async () => {

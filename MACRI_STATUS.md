@@ -91,11 +91,27 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 7. DONE 2026-10-14: cutover approved and run. Retired intake webhook disabled; device copies of local data saved from both browsers; main fast forwarded and deployed to Production; owner only database access applied. Outside checks 23 of 23 pass; Saul confirmed clients, inventory, session prep and Daily Brief load with no device only warning.
 8. DONE 2026-10-14: old provider keys revoked (checked: each returns 401). AI verified in Production (Inquiry Assistant draft, nothing sent).
 9. DONE 2026-10-14: set new password screen deployed (reset link flow tested on the test project). Saul set a new owner password through a reset link in Safari (saved in Apple Passwords) and signed in with it in a fresh session.
-10. Later: cleanup (unused Production variables, stale preview branch, email sender, account 2FA).
+10. See Open Items and Cleanup below.
 11. DEADLINE: the Production Anthropic key expires 2026-11-12. Create a replacement and update the Vercel server setting before then, or AI stops working.
 12. DONE 2026-10-14: voice. ElevenLabs retired eleven_monolingual_v1 and the plan no longer allows the cloned voice; switched to eleven_multilingual_v2 and the stock Rachel voice, with separate assistant and aftercare voice settings. Read aloud verified. Later: try eleven_v3 for a more natural English voice.
 13. DONE 2026-10-14: saves the database had been refusing or dropping (pre existing, hidden by the old app): Finance expenses and goals, Content Studio drafts (06_missing_columns.sql applied to test and live), blank numbers now null, CRM instagram, notes and communications now saved, local dates in Finance and CRM. Live expense save, refresh and delete verified.
-14. Open: CRM CSV import sends a source field with no column (dropped); Agent Queue runs paid AI calls when opened; a sync warning about an empty table stays until dismissed.
+14. IN PROGRESS 2026-10-14: Agent Queue no longer runs agents (paid AI) when opened; only Run Agents Now does. Built and tested locally, awaiting deploy approval.
+15. NEXT: review the Home screen direction with Saul before any new feature (Home redesign, Stencil Studio, /log, Finance ledger stay on hold).
+
+## Open Items and Cleanup (recorded 2026-10-14, priority order)
+1. Agent Queue paid calls on open: fix built (see Next Up 14), deploy pending.
+2. Anthropic Production key expires 2026-11-12: create a replacement and update the Vercel server setting before then.
+3. ElevenLabs key "MACRI": switched off 2026-10-14, not deleted. Delete after a few quiet weeks.
+4. Vercel Production: delete the unused VITE_ANTHROPIC_KEY and VITE_ELEVENLABS_KEY variables (the keys are already revoked; new code does not read them).
+5. GitHub: delete the stale branch claude/start-macri-dev-server-n7Cgv. Decide whether security-phase-1 stays as the working branch or work returns to main.
+6. Account security: turn on 2FA for the Google and GitHub accounts used to sign in to Vercel.
+7. Email: set up a verified Resend sender (email sending not yet verified in Production).
+8. CRM CSV import sends a "source" field that has no column, so it is dropped. Decide: add a column or stop importing it.
+9. Color Lab camera ink scanner calls paid AI repeatedly while the camera is on. Consider a slower interval or a capture button.
+10. Device only warning for an empty table stays until dismissed; consider clearing it when the database load succeeds with zero rows and nothing is saved on the device.
+11. English voice sounds robotic with eleven_multilingual_v2; try eleven_v3 with Rachel later.
+12. Lint: 67 pre existing problems (largest CRM.jsx, Finance.jsx, InquiryAssistant.jsx). No broad cleanup planned.
+13. .env.test.local no longer holds Production keys (removed 2026-10-14); local test AI routes answer "not configured".
 
 ## Open Questions for Saul
 - Deposits: when does a deposit count as earned revenue (on receipt, at the session, or when forfeited)?

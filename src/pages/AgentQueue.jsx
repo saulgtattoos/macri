@@ -604,36 +604,44 @@ function AgentCard({ card, onUpdate, showToast, compact = false }) {
 
 // ─── QueueTab ─────────────────────────────────────────────────────────────────
 
-function QueueTab({ cards, onUpdate, showToast, onRunAgents, running }) {
+function QueueTab({ cards, loaded, onUpdate, showToast, onRunAgents, running }) {
   const queueCards = cards
     .filter((c) => c.status === 'pending' || c.status === 'approved')
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
-  if (queueCards.length === 0) {
-    return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, color: '#7a786f', margin: '0 0 10px' }}>
-          All clear.
-        </p>
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#7a786f', margin: '0 0 28px' }}>
-          Your agents are watching. Check back after your next session.
-        </p>
+  // Agents skip cards that already exist, so they can only run once saved cards are loaded.
+  const canRun = loaded && !running
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
         <button
-          style={{ ...S.btn, opacity: running ? 0.5 : 1, cursor: running ? 'not-allowed' : 'pointer' }}
+          style={{ ...S.btn, opacity: canRun ? 1 : 0.5, cursor: canRun ? 'pointer' : 'not-allowed' }}
           onClick={onRunAgents}
-          disabled={running}
+          disabled={!canRun}
         >
           {running ? 'Agents scanning...' : 'Run Agents Now'}
         </button>
       </div>
-    )
-  }
 
-  return (
-    <div>
-      {queueCards.map((card) => (
-        <AgentCard key={card.id} card={card} onUpdate={onUpdate} showToast={showToast} />
-      ))}
+      {!loaded ? (
+        <p role="status" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7a786f', padding: '40px 0', textAlign: 'center' }}>
+          Loading queue...
+        </p>
+      ) : queueCards.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, color: '#7a786f', margin: '0 0 10px' }}>
+            All clear.
+          </p>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#7a786f', margin: 0 }}>
+            Your agents are watching. Check back after your next session.
+          </p>
+        </div>
+      ) : (
+        queueCards.map((card) => (
+          <AgentCard key={card.id} card={card} onUpdate={onUpdate} showToast={showToast} />
+        ))
+      )}
     </div>
   )
 }
@@ -693,12 +701,13 @@ function LogTab({ cards, showToast }) {
 export default function AgentQueue() {
   const [activeTab, setActiveTab] = useState('queue')
   const [cards, setCards] = useState([])
+  const [loaded, setLoaded] = useState(false)
   const [running, setRunning] = useState(false)
   const [toast, setToast] = useState(null)
   // Opening the queue only loads saved cards. Agents call paid AI, so they run
   // only from the Run Agents Now button.
   useEffect(() => {
-    agentQueueService.loadAll().then(setCards)
+    agentQueueService.loadAll().then(setCards).finally(() => setLoaded(true))
   }, [])
 
   const showToast = (msg) => {
@@ -750,7 +759,9 @@ export default function AgentQueue() {
       <p style={S.panelLabel}>panel / agents</p>
       <h1 style={S.h1}>Agent Queue</h1>
       <p style={S.subtitle}>
-        {pendingCount === 0
+        {!loaded
+          ? 'Loading...'
+          : pendingCount === 0
           ? 'No cards pending review'
           : `${pendingCount} ${pendingCount === 1 ? 'card' : 'cards'} awaiting review`}
       </p>
@@ -766,6 +777,7 @@ export default function AgentQueue() {
       {activeTab === 'queue' && (
         <QueueTab
           cards={cards}
+          loaded={loaded}
           onUpdate={updateCard}
           showToast={showToast}
           onRunAgents={handleRunAgents}

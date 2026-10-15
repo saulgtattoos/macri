@@ -96,7 +96,18 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 12. DONE 2026-10-14: voice. ElevenLabs retired eleven_monolingual_v1 and the plan no longer allows the cloned voice; switched to eleven_multilingual_v2 and the stock Rachel voice, with separate assistant and aftercare voice settings. Read aloud verified. Later: try eleven_v3 for a more natural English voice.
 13. DONE 2026-10-14: saves the database had been refusing or dropping (pre existing, hidden by the old app): Finance expenses and goals, Content Studio drafts (06_missing_columns.sql applied to test and live), blank numbers now null, CRM instagram, notes and communications now saved, local dates in Finance and CRM. Live expense save, refresh and delete verified.
 14. DONE 2026-10-14: Agent Queue no longer runs agents (paid AI) when opened; only Run Agents Now does. Deployed 7377747; Saul opened the page and Production logs showed no AI call.
-15. NEXT: review the Home screen direction with Saul before any new feature (Home redesign, Stencil Studio, /log, Finance ledger stay on hold).
+15. NEXT: finish remaining cleanup, then review existing Home and client reply workflow against the Proposed Product Direction and recommend the smallest first step. No implementation until Saul approves. Stencil Studio is a later exploration.
+16. PENDING APPROVAL: Agent Queue Run Agents Now always visible with a loading state (f9747fc), tested locally, not deployed.
+
+## Proposed Product Direction (from Saul, 2026-10-14; FOR REVIEW, not approved to build or deploy)
+- Home: a calm, simple overview of the bigger picture with a short "where we left off" recap. Long conversation histories stay in the background, reachable when needed.
+- Familiar workspaces: Business Manager, Finance, Portfolio & Content, Clients & Replies. Each keeps its own conversations so Saul can return and continue.
+- Conversation plus direct access: ask MACRI a question and it opens the relevant dashboard or filtered records. Clear buttons stay, so tools are reachable without chatting.
+- Client replies first: keep what works (Saul gives details, MACRI writes in his tone, Gmail or Messages opens with recipient and body filled in, Saul reviews and sends). Later: explore inbox retrieval and draft preparation. Rule: opening a draft must not mark it as sent.
+- Personality and voice: calm, warm, attentive, practical, quietly confident; inspired by his mother Macrina without impersonating her. Guides written conversation too. Voice stays optional.
+- Later exploration, Stencil Studio: large preview with clear steps; presets by tattoo style (not named artists); adjustable line weight, detail, tonal and highlight guides; saved personal presets; before/after compare and opacity sliders; transparent PNG export and copy to Procreate keeping reference dimensions and alignment. Prove stencil quality and iPad alignment before expanding.
+- Plan: after the remaining cleanup, review what exists and recommend the smallest first step. Review the Home screen and the client reply workflow with Saul before any implementation.
+- Finding for the client reply review (2026-10-14): Inquiry Assistant's Open in Gmail and Open in Messages currently tick "response sent", move the client to Inquiry Response and log "Text message sent" (Messages) when the draft is only opened. Conflicts with the rule above. Not changed yet.
 
 ## Open Items and Cleanup (recorded 2026-10-14, priority order)
 1. DONE: Agent Queue paid calls on open (Next Up 14).

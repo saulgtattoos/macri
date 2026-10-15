@@ -67,6 +67,17 @@ test('clear removes the draft; data stored by an older version is stripped on re
   assert.deepEqual(Object.keys(withoutMemoryOnly(FORM)).sort(), ['name', 'phone', 'style'])
 })
 
+test('both device types expire after 2 hours of inactivity', () => {
+  assert.equal(OWN_DEVICE_MAX_AGE_MS, 2 * 60 * 60 * 1000)
+  assert.equal(SHARED_DEVICE_MAX_AGE_MS, 2 * 60 * 60 * 1000)
+  for (const maxAgeMs of [OWN_DEVICE_MAX_AGE_MS, SHARED_DEVICE_MAX_AGE_MS]) {
+    const s = new Mem()
+    writeDraft(s, CLIENT_DRAFT_KEY, FORM, 0)
+    assert.equal(readDraft(s, CLIENT_DRAFT_KEY, { now: 2 * 60 * 60 * 1000 - 60 * 1000, maxAgeMs }).status, 'valid')
+    assert.equal(readDraft(s, CLIENT_DRAFT_KEY, { now: 2 * 60 * 60 * 1000 + 60 * 1000, maxAgeMs }).status, 'expired')
+  }
+})
+
 test('shared device: opened by Client Mode or a browser the owner uses', () => {
   const s = new Mem()
   assert.equal(isSharedDevice(s, false), false)

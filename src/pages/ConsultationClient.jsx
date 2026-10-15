@@ -279,7 +279,7 @@ export default function ConsultationClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shared])
 
-  // Inactivity: a form left untouched past the limit is cleared (2 hours own device, 12 shared).
+  // Inactivity: a form left untouched for 2 hours is cleared (own and shared devices).
   useEffect(() => {
     const id = setInterval(() => {
       if (gate === 'form' && hasContent(formData) && Date.now() - lastChange.current > maxAgeMs) resetToEmpty()

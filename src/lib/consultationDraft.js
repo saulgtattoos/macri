@@ -14,7 +14,7 @@ export const MEMORY_ONLY_FIELDS = [
   'allergies', 'skinConditions', 'medications', 'previousReactions', 'medicalClearance', 'comfortNotes',
 ]
 
-export const SHARED_DEVICE_MAX_AGE_MS = 12 * 60 * 60 * 1000
+export const SHARED_DEVICE_MAX_AGE_MS = 2 * 60 * 60 * 1000
 export const OWN_DEVICE_MAX_AGE_MS = 2 * 60 * 60 * 1000
 
 // A copy of the form without the memory only fields.

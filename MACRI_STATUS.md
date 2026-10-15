@@ -1,13 +1,13 @@
 # MACRI Status
 
-Last updated: 2026-10-14 (Security Phase 1 live: new app in Production, owner only database access; old key revocation pending)
-GitHub main: 646b4a5 (2026-10-14, fast forwarded from security-phase-1). Local Mac repo: branch security-phase-1, clean, in sync with GitHub.
+Last updated: 2026-10-14 (Security Phase 1 live and verified; old keys revoked; save fixes live; owner password reset done)
+GitHub main: 7ff253d (2026-10-14, fast forwarded from security-phase-1). Local Mac repo: branch security-phase-1.
 Stale branch on GitHub: claude/start-macri-dev-server-n7Cgv (April v1 only, safe to delete later).
 
 Public repo rule: this file is safe to commit. Unresolved security findings, the rollout plan and dashboard steps live in .private/SECURITY.md (gitignored, local only). Never copy them here.
 
 ## Current Focus
-Security Phase 1 is live (cutover 2026-10-14). Remaining: revoke the old provider keys (C4), a password reset screen for the owner login, then cleanup. Session logging (/log) and Finance remain planning only.
+Security Phase 1 is live (cutover 2026-10-14) and verified. Remaining: cleanup and the open items in Next Up. Session logging (/log) and Finance remain planning only.
 
 ## Security Phase 1 (public summary)
 Decisions: single owner account with email and password; signed aftercare links for new links, with old links keeping basic care instructions; a separate Supabase test project with synthetic data only.
@@ -65,7 +65,7 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 3. Large uncommitted work exists only on this Mac until committed.
 4. Session logging and voice logging removed from Home; Log a Session button points to the wrong page.
 5. Lint fails across the codebase (69 problems, pre existing). Kept documented, no broad cleanup now.
-6. No in app password reset screen yet.
+6. Password reset: set new password screen added 2026-10-14 (opens from a Supabase reset link; no "forgot password" button on the sign in page yet).
 
 ## Decisions Log
 - 2026-10-11: Security lockdown comes before the Finance expansion.
@@ -89,10 +89,13 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 5. Live preparation DONE 2026-10-13 (owner account, rate limit table, Production server settings, cutover package, full data export with restore drill).
 6. Shared session data approach and Finance one ledger spec, then /log, then voice logging.
 7. DONE 2026-10-14: cutover approved and run. Retired intake webhook disabled; device copies of local data saved from both browsers; main fast forwarded and deployed to Production; owner only database access applied. Outside checks 23 of 23 pass; Saul confirmed clients, inventory, session prep and Daily Brief load with no device only warning.
-8. NEXT: revoke old provider keys (C4), then one approved paid call to confirm AI and voice use the new keys.
-9. NEXT: owner login password did not match on 2026-10-14 (signed in with a one time link instead). Build a set new password screen (spec agreed in chat, test project first).
+8. DONE 2026-10-14: old provider keys revoked (checked: each returns 401). AI verified in Production (Inquiry Assistant draft, nothing sent).
+9. DONE 2026-10-14: set new password screen deployed (reset link flow tested on the test project). Saul set a new owner password through a reset link in Safari (saved in Apple Passwords) and signed in with it in a fresh session.
 10. Later: cleanup (unused Production variables, stale preview branch, email sender, account 2FA).
 11. DEADLINE: the Production Anthropic key expires 2026-11-12. Create a replacement and update the Vercel server setting before then, or AI stops working.
+12. DONE 2026-10-14: voice. ElevenLabs retired eleven_monolingual_v1 and the plan no longer allows the cloned voice; switched to eleven_multilingual_v2 and the stock Rachel voice, with separate assistant and aftercare voice settings. Read aloud verified. Later: try eleven_v3 for a more natural English voice.
+13. DONE 2026-10-14: saves the database had been refusing or dropping (pre existing, hidden by the old app): Finance expenses and goals, Content Studio drafts (06_missing_columns.sql applied to test and live), blank numbers now null, CRM instagram, notes and communications now saved, local dates in Finance and CRM. Live expense save, refresh and delete verified.
+14. Open: CRM CSV import sends a source field with no column (dropped); Agent Queue runs paid AI calls when opened; a sync warning about an empty table stays until dismissed.
 
 ## Open Questions for Saul
 - Deposits: when does a deposit count as earned revenue (on receipt, at the session, or when forfeited)?

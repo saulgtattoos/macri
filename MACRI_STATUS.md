@@ -95,11 +95,11 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 11. DEADLINE: the Production Anthropic key expires 2026-11-12. Create a replacement and update the Vercel server setting before then, or AI stops working.
 12. DONE 2026-10-14: voice. ElevenLabs retired eleven_monolingual_v1 and the plan no longer allows the cloned voice; switched to eleven_multilingual_v2 and the stock Rachel voice, with separate assistant and aftercare voice settings. Read aloud verified. Later: try eleven_v3 for a more natural English voice.
 13. DONE 2026-10-14: saves the database had been refusing or dropping (pre existing, hidden by the old app): Finance expenses and goals, Content Studio drafts (06_missing_columns.sql applied to test and live), blank numbers now null, CRM instagram, notes and communications now saved, local dates in Finance and CRM. Live expense save, refresh and delete verified.
-14. IN PROGRESS 2026-10-14: Agent Queue no longer runs agents (paid AI) when opened; only Run Agents Now does. Built and tested locally, awaiting deploy approval.
+14. DONE 2026-10-14: Agent Queue no longer runs agents (paid AI) when opened; only Run Agents Now does. Deployed 7377747; Saul opened the page and Production logs showed no AI call.
 15. NEXT: review the Home screen direction with Saul before any new feature (Home redesign, Stencil Studio, /log, Finance ledger stay on hold).
 
 ## Open Items and Cleanup (recorded 2026-10-14, priority order)
-1. Agent Queue paid calls on open: fix built (see Next Up 14), deploy pending.
+1. DONE: Agent Queue paid calls on open (Next Up 14).
 2. Anthropic Production key expires 2026-11-12: create a replacement and update the Vercel server setting before then.
 3. ElevenLabs key "MACRI": switched off 2026-10-14, not deleted. Delete after a few quiet weeks.
 4. Vercel Production: delete the unused VITE_ANTHROPIC_KEY and VITE_ELEVENLABS_KEY variables (the keys are already revoked; new code does not read them).

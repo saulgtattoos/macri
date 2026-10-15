@@ -9,6 +9,7 @@ Twilio status: Blocked, carrier registration incomplete; end to end testing pend
 - **MACRI** is the app and assistant. Its future business name is undecided. When the assistant is speaking, the text introduces MACRI as Saul's assistant; texts Saul personally reviews and sends as himself identify him as Saul.
 - Elk Grove appears in Saul's artist bio where relevant, not in every sign off.
 - Initial campaign covers only: **inquiry replies, appointment details, aftercare**. No promotional texts, no review requests (Review Recruiter and Ghost Hunter stay off SMS).
+- Exception approved by Saul (2026-10-15): the fixed client disclosure keeps the hyphen in "rolling 7-day period", despite the no hyphen rule for generated client text. This wording exists only in this spec; the consent checkbox, HELP reply and limit are not built or live.
 - **3 texts in the last 7 days** per client, enforced on the server, with a clear notice when reached. Never worded "this week". Client disclosures (consent checkbox, HELP reply, campaign) say "Up to 3 texts per rolling 7-day period"; MACRI's own notices to Saul say "3 texts in the last 7 days".
 - Texting window: **9 AM to 7 PM in the client's confirmed time zone**. Pacific may be suggested, never assumed; no area code inference; unknown time zone means MACRI asks Saul to confirm it before sending (5.5).
 - "Private Studio" wording is replaced with **Saul G Tattoos** or **Saul Gutierrez | Tattoo Artist** depending on context (section 10). Business descriptions never claim an approved studio or a registered business name unless Saul confirms it; if his status changes, accurate wording is allowed.
@@ -105,4 +106,3 @@ Section 10 (wording) can ship on its own, before the SMS work, with its own appr
 2. Saul's earlier Twilio support email (ticket content still unknown).
 3. When to build the SMS safeguards (on hold, as is Gmail integration).
 4. Section 10 wording change: deployed 2026-10-15 after Saul's review.
-5. Client disclosure wording "Up to 3 texts per rolling 7-day period" contains a hyphen, while CLAUDE.md's rule for generated client text says no hyphens. Saul to confirm this fixed disclosure is an exception, or use "per rolling 7 day period".

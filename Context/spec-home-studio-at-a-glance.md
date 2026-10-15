@@ -1,4 +1,7 @@
-# Build spec for review: Home "Your studio at a glance" (Part 2)
+# Build spec: Dashboard "Your studio at a glance" (Part 2)
+
+Renamed 2026-10-15: this screen is the Dashboard. A separate, extremely simple Home (four workspaces, genuine conversation continuity, a clear Dashboard button) comes afterward.
+Refinements 2026-10-15: larger, higher contrast small text; "Collected today" hidden until payment dates exist; agent tile says "cards waiting for your review"; "Session revenue" with a short explanation and an expandable "How this is calculated"; compact calendar counting active days through today.
 
 Status: DRAFT for Saul's review (2026-10-14). Not approved to build. Visual reference: the revision 2 proposal page (private artifact).
 Approved direction (Saul, 2026-10-14): count both "Inquiry" and "New Inquiry" excluding archived; replace Studio Pipeline with the overview and a Full board link; remove the Log a Session button until session logging exists; shortcuts in a fixed order; accurate labels; unavailable instead of zero when data is missing or failed.

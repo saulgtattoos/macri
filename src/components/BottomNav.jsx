@@ -41,7 +41,7 @@ const MoreIcon = () => (
 )
 
 const NAV_ITEMS = [
-  { label: 'Home',     path: '/',         icon: <HomeIcon />,     end: true },
+  { label: 'Dashboard', path: '/',         icon: <HomeIcon />,     end: true },
   { label: 'Inquiry',  path: '/inquiry',  icon: <InquiryIcon /> },
   { label: 'CRM',      path: '/crm',      icon: <CRMIcon /> },
   { label: 'Projects', path: '/projects', icon: <ProjectsIcon /> },

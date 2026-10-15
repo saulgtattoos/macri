@@ -111,6 +111,10 @@ Regressions: Log a Session button goes to /session-prep (does not log sessions; 
 - Plan: after the remaining cleanup, review what exists and recommend the smallest first step. Review the Home screen and the client reply workflow with Saul before any implementation.
 - Finding for the client reply review (2026-10-14): Inquiry Assistant's Open in Gmail and Open in Messages currently tick "response sent", move the client to Inquiry Response and log "Text message sent" (Messages) when the draft is only opened. Conflicts with the rule above. Not changed yet.
 
+## Dashboard and future Home (Saul, 2026-10-15)
+- The screen built as "Your studio at a glance" is the Dashboard (sidebar "Dashboard", at / and /dashboard for now).
+- A separate, extremely simple Home comes afterward. It will contain the four workspaces (Business Manager, Finance, Portfolio & Content, Clients & Replies) and genuine conversation continuity ("where we left off"), with a clear Dashboard button. Not designed or built yet; when it exists, / moves to Home and the Dashboard stays at /dashboard.
+
 ## Open Items and Cleanup (recorded 2026-10-14, priority order)
 1. DONE: Agent Queue paid calls on open (Next Up 14).
 2. Anthropic Production key expires 2026-11-12: create a replacement and update the Vercel server setting before then.

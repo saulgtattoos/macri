@@ -85,6 +85,14 @@ function longDate(iso) {
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' })
 }
 
+function longRange(startISO, endISO) {
+  const f = (iso) => {
+    const [y, m, d] = iso.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })
+  }
+  return `${f(startISO)} to ${f(endISO)}`
+}
+
 function shortDate(timestamp) {
   return new Date(timestamp).toLocaleDateString('en-US', { timeZone: BUSINESS_TIME_ZONE, month: 'short', day: 'numeric' })
 }
@@ -113,13 +121,13 @@ function useIsNarrow() {
 function IconRefresh() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-      <path d="M13 4A6 6 0 1 0 14 8" stroke="#7a786f" strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M14 1.5V5h-3.5" stroke="#7a786f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M13 4A6 6 0 1 0 14 8" stroke="#a3a097" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M14 1.5V5h-3.5" stroke="#a3a097" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
 
-function IconChevronLeft({ color = '#7a786f' }) {
+function IconChevronLeft({ color = '#a3a097' }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M10 3L5 8l5 5" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -127,7 +135,7 @@ function IconChevronLeft({ color = '#7a786f' }) {
   )
 }
 
-function IconChevronRight({ color = '#7a786f' }) {
+function IconChevronRight({ color = '#a3a097' }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M6 3l5 5-5 5" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -138,7 +146,7 @@ function IconChevronRight({ color = '#7a786f' }) {
 function IconTrash() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.75 7.25A.5.5 0 0 0 4.24 11h5.52a.5.5 0 0 0 .49-.25L11 3.5M6 6v3M8 6v3" stroke="#7a786f" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.75 7.25A.5.5 0 0 0 4.24 11h5.52a.5.5 0 0 0 .49-.25L11 3.5M6 6v3M8 6v3" stroke="#a3a097" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
@@ -155,8 +163,8 @@ const CARD = {
 
 const LABEL_MONO = {
   fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  color: '#7a786f',
+  fontSize: 12,
+  color: '#a3a097',
   textTransform: 'uppercase',
   letterSpacing: '0.1em',
 }
@@ -183,13 +191,13 @@ function Tile({ value, status, reason, quiet, label, sub, action, onClick }) {
   return (
     <button type="button" className="hb-tile" onClick={onClick}>
       {known
-        ? <span style={{ fontFamily: 'var(--font-heading)', fontSize: 28, fontWeight: 700, minWidth: '2ch', color: quiet ? '#7a786f' : '#e8e6df', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-        : <span style={{ fontSize: 12, color: '#7a786f', minWidth: '2ch' }} title={reason || undefined}>{status === 'loading' ? '...' : 'Unavailable'}</span>}
+        ? <span style={{ fontFamily: 'var(--font-heading)', fontSize: 28, fontWeight: 700, minWidth: '2ch', color: quiet ? '#a3a097' : '#e8e6df', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+        : <span style={{ fontSize: 12, color: '#a3a097', minWidth: '2ch' }} title={reason || undefined}>{status === 'loading' ? '...' : 'Unavailable'}</span>}
       <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <span style={{ fontWeight: 500, fontSize: 14 }}>{label}</span>
-        <span style={{ fontSize: 12, color: '#7a786f' }}>{sub}</span>
+        <span style={{ fontSize: 12, color: '#a3a097' }}>{sub}</span>
       </span>
-      <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 11, color: '#c9a96e', whiteSpace: 'nowrap' }}>{action}</span>
+      <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 12, color: '#c9a96e', whiteSpace: 'nowrap' }}>{action}</span>
     </button>
   )
 }
@@ -285,7 +293,8 @@ export default function Home() {
   for (let i = 0; i < firstDow; i++) calCells.push(null)
   for (let d = 1; d <= daysInMonth; d++) calCells.push(d)
 
-  const activeCount = Object.keys(sessionMap).filter(k => k.startsWith(monthPrefix)).length
+  // Active days count only through today; later dated records still show on the calendar.
+  const activeCount = Object.keys(sessionMap).filter(k => k.startsWith(monthPrefix) && k <= todayStr).length
 
   // ── Derived: earnings (client payment records, by session date) ──
 
@@ -363,7 +372,7 @@ export default function Home() {
   }
 
   const LABEL = {
-    fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
+    fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097',
     display: 'block', marginBottom: 6,
   }
 
@@ -390,28 +399,32 @@ export default function Home() {
         .hb-period-btn:hover { opacity: 0.85; }
         .hb-nav-btn { background: none; border: none; cursor: pointer; display: flex; align-items: center; padding: 8px 10px; min-height: 44px; }
         .hb-nav-btn:hover { opacity: 0.7; }
-        .hb-ghost-btn { background: transparent; border: 1px solid rgba(201,169,110,0.35); border-radius: 8px; padding: 7px 14px; min-height: 40px; font-family: var(--font-mono); font-size: 11px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; transition: border-color 0.15s; }
+        .hb-ghost-btn { background: transparent; border: 1px solid rgba(201,169,110,0.35); border-radius: 8px; padding: 7px 14px; min-height: 40px; font-family: var(--font-mono); font-size: 12px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; transition: border-color 0.15s; }
         .hb-ghost-btn:hover { border-color: #c9a96e; }
         .hb-gold-btn { background: #c9a96e; border: none; border-radius: 9px; padding: 11px 24px; min-height: 44px; font-family: var(--font-body); font-size: 14px; font-weight: 600; color: #0e0e0d; cursor: pointer; transition: opacity 0.15s; }
         .hb-gold-btn:hover { opacity: 0.88; }
         .hb-shortcut { background: #161614; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 12px 16px; min-height: 48px; font-family: var(--font-body); font-size: 14px; color: #e8e6df; cursor: pointer; transition: border-color 0.15s; }
         .hb-shortcut:hover, .hb-shortcut:focus-visible { border-color: #c9a96e; outline: none; }
         .hb-shortcut-primary { color: #c9a96e; border-color: rgba(201,169,110,0.55); }
-        .hb-link { background: none; border: none; padding: 6px 0; min-height: 32px; font-family: var(--font-mono); font-size: 11px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; }
+        .hb-link { background: none; border: none; padding: 6px 0; min-height: 32px; font-family: var(--font-mono); font-size: 12px; color: #c9a96e; cursor: pointer; letter-spacing: 0.04em; }
         .hb-link:hover { opacity: 0.8; }
         .hb-tile { display: flex; gap: 14px; align-items: center; width: 100%; text-align: left; background: #0e0e0d; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px 16px; min-height: 64px; color: #e8e6df; cursor: pointer; font-family: var(--font-body); transition: border-color 0.15s; }
         .hb-tile:hover, .hb-tile:focus-visible { border-color: rgba(201,169,110,0.5); outline: none; }
         .hb-row-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 7px 4px; min-height: 36px; color: #e8e6df; font-family: var(--font-body); font-size: 13px; cursor: pointer; }
         .hb-row-btn:hover { background: rgba(255,255,255,0.03); }
-        .hb-muted-btn { background: transparent; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 11px 16px; min-height: 44px; font-family: var(--font-body); font-size: 14px; color: #7a786f; cursor: pointer; }
+        .hb-details { margin-top: 10px; font-size: 13px; color: #a3a097; }
+        .hb-details summary { cursor: pointer; color: #c9a96e; font-family: var(--font-mono); font-size: 12px; padding: 8px 0; min-height: 36px; }
+        .hb-details ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.55; }
+        .hb-muted-btn { background: transparent; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 11px 16px; min-height: 44px; font-family: var(--font-body); font-size: 14px; color: #a3a097; cursor: pointer; }
       `}</style>
 
       {/* ══ GREETING ══ */}
       <div className="hb-section" style={{ marginBottom: 20 }}>
+        <p style={{ ...LABEL_MONO, marginBottom: 6 }}>Dashboard</p>
         <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: narrow ? 28 : 34, color: '#e8e6df', fontWeight: 600, lineHeight: 1.15, margin: 0 }}>
           {getGreeting()}
         </h1>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', letterSpacing: '0.06em', marginTop: 6 }}>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', letterSpacing: '0.06em', marginTop: 6 }}>
           {longDate(todayStr)}
         </p>
       </div>
@@ -449,7 +462,7 @@ export default function Home() {
               status={queueRes.status}
               reason={queueRes.message}
               label="Agent cards to review"
-              sub="drafts waiting for your approval"
+              sub="cards waiting for your review"
               action="Review"
               onClick={() => navigate('/agents')}
             />
@@ -476,36 +489,33 @@ export default function Home() {
 
           {showAwaiting && awaiting && (
             <div style={{ marginTop: 12, background: '#0e0e0d', borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {awaiting.length === 0 && <p style={{ fontSize: 13, color: '#7a786f', margin: '6px 0' }}>None recorded.</p>}
+              {awaiting.length === 0 && <p style={{ fontSize: 13, color: '#a3a097', margin: '6px 0' }}>None recorded.</p>}
               {awaiting.slice(0, 8).map(c => (
                 <button key={c.id} type="button" className="hb-row-btn" onClick={() => navigate('/crm', { state: { openClientId: c.id } })}>
                   <span>{c.name || 'Unnamed client'}</span>
-                  <span style={{ color: '#7a786f', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Open</span>
+                  <span style={{ color: '#a3a097', fontFamily: 'var(--font-mono)', fontSize: 12 }}>Open</span>
                 </button>
               ))}
-              {awaiting.length > 8 && <p style={{ fontSize: 12, color: '#7a786f', margin: '6px 0 0' }}>{awaiting.length - 8} more in CRM.</p>}
+              {awaiting.length > 8 && <p style={{ fontSize: 12, color: '#a3a097', margin: '6px 0 0' }}>{awaiting.length - 8} more in CRM.</p>}
               <button type="button" className="hb-link" style={{ alignSelf: 'flex-start', marginTop: 4 }} onClick={() => navigate('/crm')}>Open CRM</button>
             </div>
           )}
 
-          {/* Today */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 16, paddingTop: 12, fontSize: 13, color: '#7a786f' }}>
-            <span>Collected today: <span style={{ color: '#7a786f' }} title="Session records have one date (the session date) and no date for when a payment was received.">Unavailable, payment dates are not recorded</span></span>
-          </div>
+          {/* "Collected today" is hidden until session records include payment dates (Saul, 2026-10-15). */}
 
           {/* Recent activity */}
-          <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <p style={LABEL_MONO}>Recent activity</p>
               <button type="button" className="hb-link" onClick={() => navigate('/crm')}>CRM</button>
             </div>
-            {clientsRes.status === 'loading' && <p style={{ fontSize: 13, color: '#7a786f', margin: 0 }}>Loading...</p>}
-            {clientsRes.status === 'unavailable' && <p style={{ fontSize: 13, color: '#7a786f', margin: 0 }} title={clientsRes.message}>Unavailable</p>}
-            {clientsOk && recent.length === 0 && <p style={{ fontSize: 13, color: '#7a786f', margin: 0 }}>No activity recorded yet.</p>}
+            {clientsRes.status === 'loading' && <p style={{ fontSize: 13, color: '#a3a097', margin: 0 }}>Loading...</p>}
+            {clientsRes.status === 'unavailable' && <p style={{ fontSize: 13, color: '#a3a097', margin: 0 }} title={clientsRes.message}>Unavailable</p>}
+            {clientsOk && recent.length === 0 && <p style={{ fontSize: 13, color: '#a3a097', margin: 0 }}>No activity recorded yet.</p>}
             {clientsOk && recent.map(e => (
               <button key={e.id} type="button" className="hb-row-btn" onClick={() => navigate('/crm', { state: { openClientId: e.clientId } })}>
                 <span style={{ display: 'flex', gap: 12, minWidth: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', flex: '0 0 48px', paddingTop: 1 }}>{shortDate(e.timestamp)}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', flex: '0 0 48px', paddingTop: 1 }}>{shortDate(e.timestamp)}</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{e.clientName} · {e.text}</span>
                 </span>
               </button>
@@ -531,8 +541,8 @@ export default function Home() {
                     onClick={() => setPeriod(key)}
                     style={{
                       background: period === key ? '#c9a96e' : 'transparent', border: 'none', borderRadius: 6,
-                      padding: '5px 12px', minHeight: 32, fontFamily: 'var(--font-mono)', fontSize: 11,
-                      color: period === key ? '#0e0e0d' : '#7a786f', cursor: 'pointer', letterSpacing: '0.04em',
+                      padding: '5px 12px', minHeight: 32, fontFamily: 'var(--font-mono)', fontSize: 12,
+                      color: period === key ? '#0e0e0d' : '#a3a097', cursor: 'pointer', letterSpacing: '0.04em',
                     }}
                   >
                     {label}
@@ -543,7 +553,7 @@ export default function Home() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               {[
-                { label: 'Revenue',         value: earn && fmt(earn.revenue),       color: '#e8e6df', sub: null },
+                { label: 'Session revenue', value: earn && fmt(earn.revenue),       color: '#e8e6df', sub: 'Amount paid on sessions' },
                 { label: 'Tips',            value: earn && fmt(earn.tips),          color: '#c9a96e', sub: null },
                 { label: 'Avg per Session', value: earn && (earn.avgPerSession === null ? null : fmt(earn.avgPerSession)), color: '#e8e6df', sub: earn && earn.avgPerSession === null ? 'No sessions in this period' : null },
                 { label: 'Tax Aside',       value: earn && fmt(earn.taxAside),      color: '#c9a96e', sub: '28% estimate, not a confirmed tax policy' },
@@ -552,15 +562,25 @@ export default function Home() {
                   <p style={{ ...LABEL_MONO, marginBottom: 8 }}>{label}</p>
                   {value
                     ? <p style={{ fontFamily: 'var(--font-heading)', fontSize: 26, color, fontWeight: 600, lineHeight: 1, margin: 0 }}>{value}</p>
-                    : <p style={{ fontSize: 14, color: '#7a786f', margin: 0 }} title={clientsRes.message}>{clientsRes.status === 'loading' ? 'Loading...' : 'Unavailable'}</p>}
-                  {sub && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 6 }}>{sub}</p>}
+                    : <p style={{ fontSize: 14, color: '#a3a097', margin: 0 }} title={clientsRes.message}>{clientsRes.status === 'loading' ? 'Loading...' : 'Unavailable'}</p>}
+                  {sub && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', marginTop: 6 }}>{sub}</p>}
                 </div>
               ))}
             </div>
 
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 14, lineHeight: 1.6 }}>
-              {earn ? `${earn.start} to ${earn.end}. ` : ''}From client payment records: amount paid on each session, by session date. Deposits recorded in the deposit field are not included. Finance may differ.
+            <p style={{ fontSize: 13, color: '#a3a097', marginTop: 14, lineHeight: 1.6 }}>
+              {earn ? `${longRange(earn.start, earn.end)}. ` : ''}Amount paid on sessions dated in this period, from client payment records.
             </p>
+            <details className="hb-details">
+              <summary>How this is calculated</summary>
+              <ul>
+                <li>Session revenue adds the "amount paid" on each session dated {earn ? longRange(earn.start, earn.end) : 'from the start of the period through today'}, in California time. Sessions dated after today are not counted.</li>
+                <li>Deposits recorded in the separate deposit field are not included. Tips are shown separately.</li>
+                <li>Avg per session divides session revenue by the number of sessions in the period.</li>
+                <li>Tax aside is 28% of session revenue: an estimate, not a confirmed tax policy.</li>
+                <li>Finance uses its own ledger, so its totals may differ until the one ledger decision.</li>
+              </ul>
+            </details>
             <button type="button" className="hb-link" style={{ marginTop: 8 }} onClick={() => navigate('/finances')}>Open Finances</button>
           </section>
 
@@ -571,7 +591,7 @@ export default function Home() {
             </div>
 
             {goals.length === 0 ? (
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#7a786f', textAlign: 'center', padding: '20px 0' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', textAlign: 'center', padding: '20px 0' }}>
                 No goals yet.
               </p>
             ) : (
@@ -588,12 +608,12 @@ export default function Home() {
                           <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#e8e6df', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {goal.name}
                           </span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: '#7a786f', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                             {goal.category}
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: pct >= 1 ? '#7aab8f' : '#7a786f' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: pct >= 1 ? '#7aab8f' : '#a3a097' }}>
                             {known ? `${pctInt}%` : 'Unavailable'}
                           </span>
                           <button
@@ -611,10 +631,10 @@ export default function Home() {
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e8e6df' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#e8e6df' }}>
                           {known ? fmt(thisMonthRevenue) : 'Unavailable'}
                         </span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097' }}>
                           {fmt(target)}
                         </span>
                       </div>
@@ -623,7 +643,7 @@ export default function Home() {
                 })}
               </div>
             )}
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 16 }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', marginTop: 16 }}>
               Saved on this device. Progress uses this month's revenue above.
             </p>
           </section>
@@ -634,7 +654,7 @@ export default function Home() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
             <p style={LABEL_MONO}>Session Days</p>
             {clientsRes.status === 'unavailable' && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#c9a96e' }} title={clientsRes.message}>Showing this device's copy</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#c9a96e' }} title={clientsRes.message}>Showing this device's copy</span>
             )}
           </div>
 
@@ -656,17 +676,17 @@ export default function Home() {
               </button>
             </div>
 
-            <div style={{ maxWidth: 400, margin: '0 auto' }}>
+            <div style={{ maxWidth: 300, margin: '0 auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
                 {DAY_LABELS.map(l => (
-                  <div key={l} style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: '#7a786f', letterSpacing: '0.06em' }}>
+                  <div key={l} style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', letterSpacing: '0.06em' }}>
                     {l}
                   </div>
                 ))}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
                 {calCells.map((day, idx) => {
-                  if (day === null) return <div key={`ph-${idx}`} style={{ height: 34 }} />
+                  if (day === null) return <div key={`ph-${idx}`} style={{ height: 28 }} />
                   const key      = `${yearStr}-${monthStr}-${String(day).padStart(2, '0')}`
                   const active   = !!sessionMap[key]
                   const isToday  = isCurrentMonth && day === todayDay
@@ -677,12 +697,12 @@ export default function Home() {
                       className="hb-day-btn"
                       onClick={() => handleDayClick(key)}
                       style={{
-                        width: '100%', aspectRatio: '1 / 1', maxWidth: 34, borderRadius: '50%',
+                        width: '100%', aspectRatio: '1 / 1', maxWidth: 28, borderRadius: '50%',
                         background: active ? '#c9a96e' : 'transparent',
-                        color:  active ? '#0e0e0d' : '#7a786f',
+                        color:  active ? '#0e0e0d' : '#a3a097',
                         border: isToday && !active ? '1px solid rgba(201,169,110,0.4)' : 'none',
                         cursor: active ? 'pointer' : 'default',
-                        fontFamily: 'var(--font-mono)', fontSize: 11,
+                        fontFamily: 'var(--font-mono)', fontSize: 12,
                         fontWeight: active ? 600 : 400,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         margin: '0 auto',
@@ -713,11 +733,11 @@ export default function Home() {
                       {s.clientName}
                     </p>
                     {s.tattooDescription && (
-                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', marginBottom: 2 }}>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', marginBottom: 2 }}>
                         {s.tattooDescription}
                       </p>
                     )}
-                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097' }}>
                       Amount paid {fmt(s.amountPaid)}
                       {parseFloat(s.tip) > 0 ? ` + ${fmt(s.tip)} tip` : ''}
                     </p>
@@ -726,9 +746,9 @@ export default function Home() {
               </div>
             )}
 
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', marginTop: 14, letterSpacing: '0.06em' }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', marginTop: 14, letterSpacing: '0.06em' }}>
               {clientsOk
-                ? `${activeCount} active ${activeCount === 1 ? 'day' : 'days'} this month`
+                ? `${activeCount} active ${activeCount === 1 ? 'day' : 'days'} this month, through today`
                 : clientsRes.status === 'loading' ? 'Loading...' : 'Active days unavailable'}
             </p>
         </section>
@@ -737,7 +757,7 @@ export default function Home() {
         <div className="hb-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 18 }}>
           <p style={{ margin: 0, minWidth: 0, flex: '1 1 320px' }}>
             <span style={{ fontFamily: 'var(--font-heading)', fontStyle: 'italic', fontSize: 15, color: '#e8e6df', lineHeight: 1.6 }}>{QUOTES[quoteIdx].text}</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', letterSpacing: '0.08em', textTransform: 'uppercase', marginLeft: 10 }}>{QUOTES[quoteIdx].author}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', letterSpacing: '0.08em', textTransform: 'uppercase', marginLeft: 10 }}>{QUOTES[quoteIdx].author}</span>
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={handleRefresh} aria-label="New quote" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 10, opacity: 0.7, display: 'flex', alignItems: 'center', minHeight: 44 }}>
@@ -751,7 +771,7 @@ export default function Home() {
               <div style={{ width: 32, height: 18, borderRadius: 9, background: readAloud ? '#c9a96e' : 'rgba(255,255,255,0.08)', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
                 <span style={{ position: 'absolute', top: 2, width: 14, height: 14, borderRadius: 7, background: '#e8e6df', display: 'block', left: readAloud ? 16 : 2, transition: 'left 0.2s' }} />
               </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', letterSpacing: '0.06em' }}>Read aloud</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', letterSpacing: '0.06em' }}>Read aloud</span>
             </button>
           </div>
         </div>
@@ -842,13 +862,13 @@ export default function Home() {
             borderRadius: 18, padding: 32,
             width: '100%', maxWidth: 460,
           }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#7a786f', textTransform: 'uppercase', textAlign: 'center', letterSpacing: '0.12em' }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', textTransform: 'uppercase', textAlign: 'center', letterSpacing: '0.12em' }}>
               MACRI
             </p>
             <p style={{ fontFamily: 'var(--font-heading)', fontSize: 24, color: '#e8e6df', textAlign: 'center', marginTop: 12 }}>
               {getGreeting()}
             </p>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', textAlign: 'center', marginTop: 8 }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#a3a097', textAlign: 'center', marginTop: 8 }}>
               Your studio is ready. What would you like to do?
             </p>
 
@@ -887,7 +907,7 @@ export default function Home() {
             </div>
 
             {briefingShown && (
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f', textAlign: 'center', marginTop: 16 }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097', textAlign: 'center', marginTop: 16 }}>
                 Briefing agent arrives June 1.
               </p>
             )}
@@ -897,7 +917,7 @@ export default function Home() {
               style={{
                 display: 'block', width: '100%', marginTop: 14,
                 background: 'none', border: 'none', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f',
+                fontFamily: 'var(--font-mono)', fontSize: 12, color: '#a3a097',
                 textAlign: 'center', minHeight: 44,
               }}
             >

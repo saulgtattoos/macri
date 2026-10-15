@@ -85,6 +85,7 @@ export default function App() {
         <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
           <Route path="/"             element={<Home />} />
+          <Route path="/dashboard"    element={<Home />} />
           <Route path="/inquiry"      element={<InquiryAssistant />} />
           <Route path="/crm"          element={<CRM />} />
           <Route path="/projects"     element={<ProjectWall />} />

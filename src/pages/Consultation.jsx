@@ -164,7 +164,7 @@ function generateClientPDF(c) {
     .footer{font-size:11px;color:#aaa;text-align:center;margin-top:40px;padding-top:16px;border-top:1px solid #eee}
     @media print{body{margin:20px}}
   </style></head><body>
-    <h1>Saul Gutierrez | Private Studio, Elk Grove</h1>
+    <h1>Saul Gutierrez | Tattoo Artist</h1>
     <div class="sub">Consultation Summary | ${dateStr}</div>
     <div class="sec">
       <div class="sectitle">PROJECT OVERVIEW</div>

@@ -365,7 +365,7 @@ To book an appointment, the booking link is at the top of my Instagram bio.
 
 Thank you for your trust [clientTag].
 
-Studio: Private Studio
+Saul G Tattoos
 Client: [clientTag]
 
 [5 hashtags]

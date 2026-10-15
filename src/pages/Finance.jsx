@@ -1136,7 +1136,7 @@ function PLTab({ sessions, expenses }) {
       <div id="pl-report" style={{ background: '#1e1e1b', border: '1px solid #2a2a26', borderRadius: 12, padding: '24px 28px' }}>
         <div style={{ marginBottom: 20 }}>
           <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, fontWeight: 700, color: '#e8e6df', margin: '0 0 4px' }}>PROFIT AND LOSS</p>
-          <p style={{ ...mono, fontSize: 11, color: '#7a786f', margin: '0 0 2px' }}>Saul Gutierrez | Private Studio | Elk Grove CA</p>
+          <p style={{ ...mono, fontSize: 11, color: '#7a786f', margin: '0 0 2px' }}>Saul G Tattoos | Saul Gutierrez</p>
           <p style={{ ...mono, fontSize: 11, color: '#7a786f', margin: 0 }}>
             Period: {fmtDateLong(start)} to {fmtDateLong(end)}
           </p>

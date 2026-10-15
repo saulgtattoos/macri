@@ -1041,7 +1041,7 @@ export default function ConsultationClient() {
           He will be in touch soon to confirm next steps.
         </p>
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: '#7a786f', lineHeight: 1.8, maxWidth: 360, margin: 0 }}>
-          Thank you for choosing Saul Gutierrez Private Studio.
+          Thank you for choosing Saul G Tattoos.
         </p>
       </div>
     )
@@ -1078,7 +1078,7 @@ export default function ConsultationClient() {
           Waiting for Saul to finalize your project...
         </p>
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#7a786f', lineHeight: 1.8, maxWidth: 360, margin: 0 }}>
-          Thank you for choosing Saul Gutierrez Private Studio.
+          Thank you for choosing Saul G Tattoos.
         </p>
       </div>
     )
@@ -1101,7 +1101,7 @@ export default function ConsultationClient() {
           color: '#e8e6df',
           paddingBottom: 18,
         }}>
-          Saul Gutierrez&#8199;|&#8199;Private Studio, Elk Grove
+          Saul Gutierrez&#8199;|&#8199;Tattoo Artist
         </div>
         <div style={{ height: 1, background: 'rgba(201,169,110,0.15)' }} />
       </div>

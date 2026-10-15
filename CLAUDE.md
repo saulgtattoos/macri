@@ -1,6 +1,6 @@
 # MACRI | Standing Instructions for Claude
 
-Private studio management app for tattoo artist Saul Gutierrez, named after his mother Macrina.
+Studio management app for tattoo artist Saul Gutierrez (client facing name: Saul G Tattoos), named after his mother Macrina.
 Built for one artist today, designed to scale to many artists.
 Tagline: Tattoo Studio Pro manages your studio. MACRI thinks with you.
 Current progress, decisions and open questions live in MACRI_STATUS.md. Read it at the start of every session and update it at the end.
@@ -61,10 +61,11 @@ Fonts: Syne (headings), Inter (body), JetBrains Mono (labels, timestamps).
 Radius: 12px cards, 8px inputs and buttons. Tap targets minimum 44px, prefer 48px on mobile.
 
 ## Artist Profile (public business info)
-Saul Gutierrez | Private studio, Elk Grove CA | $250/hr
+Saul Gutierrez | Tattoo artist based in Elk Grove, CA | $250/hr
+Client facing business name: Saul G Tattoos. MACRI is the app and assistant; its future business name is undecided. Do not describe Saul as running a permitted or registered studio, or imply a registered DBA.
 Specialties: Watercolor, Black and Gray Realism, Sketch Art, Abstract, Pointillism
 Consultation: SaulsAppointments.as.me/TattooConsultation | Business email: saulgtattoos@gmail.com
-Signature: Saul | Private Studio, Elk Grove
+Signature: Saul Gutierrez | Tattoo Artist (Elk Grove belongs in the artist bio where relevant, not in every sign off)
 ElevenLabs voices (api/_lib/upstream.js): assistant and aftercare are separate settings, both Rachel 21m00Tcm4TlvDq8ikWAM (stock). Saul's cloned voice Q2Qd4P9qaDNuBFUcFCQr needs a paid ElevenLabs plan.
 
 ## Hard Rules for All Generated Client Text

@@ -65,7 +65,7 @@ const TEXT_TEMPLATES = {
     'Looking forward to hearing from you and hopefully getting the chance to work together soon!',
     '',
     'Thank You,',
-    'Saul | Private Studio, Elk Grove',
+    'Saul Gutierrez | Tattoo Artist',
   ].join('\n'),
 
   delayed: [
@@ -78,7 +78,7 @@ const TEXT_TEMPLATES = {
     'Looking forward to hearing from you and hopefully getting the chance to work together soon!',
     '',
     'Thank You,',
-    'Saul | Private Studio, Elk Grove',
+    'Saul Gutierrez | Tattoo Artist',
   ].join('\n'),
 
   late: [
@@ -91,7 +91,7 @@ const TEXT_TEMPLATES = {
     'Looking forward to hearing from you and hopefully getting the chance to work together soon!',
     '',
     'Thank You,',
-    'Saul | Private Studio, Elk Grove',
+    'Saul Gutierrez | Tattoo Artist',
   ].join('\n'),
 }
 
@@ -127,7 +127,7 @@ function buildPrompt({ source, timing, contentType, pricingModel, customPrice, i
   const textTemplate = TEXT_TEMPLATES[timing] ?? TEXT_TEMPLATES.recent
 
   const lines = [
-    'You are composing a client response on behalf of Saul Gutierrez, a tattoo artist based in Elk Grove, CA with a private studio. Saul specializes in Watercolor, Black and Gray Realism, Sketch Art, Abstract, and Stippled/Pointillism tattoos. His standard rate is $250/hr. STRICT RULES: Never use hyphens, dashes, or em dashes anywhere in your output. Use commas, periods, or line breaks instead. The pipe character | is only allowed in the signature line.',
+    'You are composing a client response on behalf of Saul Gutierrez, a tattoo artist based in Elk Grove, CA. Saul specializes in Watercolor, Black and Gray Realism, Sketch Art, Abstract, and Stippled/Pointillism tattoos. His standard rate is $250/hr. STRICT RULES: Never use hyphens, dashes, or em dashes anywhere in your output. Use commas, periods, or line breaks instead. The pipe character | is only allowed in the signature line.',
     '',
     'Context for this response:',
     `- CHANNEL: Client reached out via ${sourceLabel}`,
@@ -156,7 +156,7 @@ function buildPrompt({ source, timing, contentType, pricingModel, customPrice, i
     'Return ONLY a valid JSON object with exactly these four fields:',
     '{',
     '  "subject": "<email subject line, 6–10 words>",',
-    '  "email": "<full email or DM response, signed: Saul | Private Studio, Elk Grove>",',
+    '  "email": "<full email or DM response, signed: Saul Gutierrez | Tattoo Artist>",',
     '  "text": "<the completed text message using the template above, with [FirstName] replaced>",',
     '  "client": {',
     '    "name": "<client full name if found in the inquiry, else empty string>",',

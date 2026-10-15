@@ -9,9 +9,9 @@ Twilio status: Blocked, carrier registration incomplete; end to end testing pend
 - **MACRI** is the app and assistant. Its future business name is undecided. When the assistant is speaking, the text introduces MACRI as Saul's assistant; texts Saul personally reviews and sends as himself identify him as Saul.
 - Elk Grove appears in Saul's artist bio where relevant, not in every sign off.
 - Initial campaign covers only: **inquiry replies, appointment details, aftercare**. No promotional texts, no review requests (Review Recruiter and Ghost Hunter stay off SMS).
-- **3 texts in the last 7 days** per client, enforced on the server, with a clear notice when reached. Always worded "3 texts in the last 7 days", never "this week".
+- **3 texts in the last 7 days** per client, enforced on the server, with a clear notice when reached. Never worded "this week". Client disclosures (consent checkbox, HELP reply, campaign) say "Up to 3 texts per rolling 7-day period"; MACRI's own notices to Saul say "3 texts in the last 7 days".
 - Texting window: **9 AM to 7 PM in the client's confirmed time zone**. Pacific may be suggested, never assumed; no area code inference; unknown time zone means MACRI asks Saul to confirm it before sending (5.5).
-- "Private Studio" wording is replaced with **Saul G Tattoos** or **Saul Gutierrez | Tattoo Artist** depending on context (section 10).
+- "Private Studio" wording is replaced with **Saul G Tattoos** or **Saul Gutierrez | Tattoo Artist** depending on context (section 10). Business descriptions never claim an approved studio or a registered business name unless Saul confirms it; if his status changes, accurate wording is allowed.
 - A **START** reply removes the opt out block without widening the client's original consent.
 
 ## 2. Names
@@ -26,18 +26,18 @@ Every text names Saul G Tattoos so the sender stays recognizable. Who is speakin
 ## 3. Campaign description and samples (draft)
 > Saul Gutierrez, a tattoo artist based in Elk Grove, CA, who uses the name Saul G Tattoos with clients, sends one to one text messages to people who contacted him about a tattoo or booked an appointment with him: replies to their inquiry, appointment details, and aftercare check ins after a session. Messages are drafted with the help of his assistant app, MACRI, and each one is reviewed by Saul before it is sent. No promotional, marketing, or bulk messages. At most 3 texts to a person in the last 7 days.
 
-Frequency disclosure (backed by the enforced limit in 5.4): "Up to 3 texts in the last 7 days."
+Frequency disclosure (backed by the enforced limit in 5.4): "Up to 3 texts per rolling 7-day period."
 
 Sample messages (no links, no prices, no dashes; each names Saul G Tattoos; samples 1 and 3 are Saul speaking, sample 2 is the assistant speaking):
 1. "Hi [first name], this is Saul from Saul G Tattoos. Thanks for reaching out about your [tattoo idea]. I would love to set up a quick consultation. What days work best for you? Reply STOP to opt out."
 2. "Hi [first name], this is MACRI, Saul's assistant at Saul G Tattoos. Your appointment with Saul is on [date] at [time]. Reply here if you need to reschedule."
 3. "Hi [first name], it's Saul from Saul G Tattoos. Checking in on day [number] of healing. Keep it clean and moisturized, and text me if anything looks off."
 
-HELP reply: "Saul G Tattoos: for help, email saulgtattoos@gmail.com. Up to 3 texts in the last 7 days. Msg & data rates may apply. Reply STOP to opt out."
+HELP reply: "Saul G Tattoos: for help, email saulgtattoos@gmail.com. Up to 3 texts per rolling 7-day period. Msg & data rates may apply. Reply STOP to opt out."
 
 ## 4. Where consent comes from
 1. **Consultation request form (public page /consultation/client).** An unchecked checkbox, not required to submit the form, with this text directly beside it:
-   > "Yes, Saul G Tattoos may text me about my inquiry, appointments, and aftercare. Up to 3 texts in the last 7 days. Msg & data rates may apply. Reply STOP to opt out, HELP for help. See our Privacy Policy and SMS Terms."
+   > "Yes, Saul G Tattoos may text me about my inquiry, appointments, and aftercare. Up to 3 texts per rolling 7-day period. Msg & data rates may apply. Reply STOP to opt out, HELP for help. See our Privacy Policy and SMS Terms."
    MACRI stores: consent yes or no, the exact wording version, the phone number entered, the client's time zone if given (5.5), date and time, source "consultation form", and the scope (inquiry, appointments, aftercare).
 2. **Client texts first.** Scope: inquiry replies only. Recorded with source "client texted first" by Saul in CRM, with the date. Widening to appointments and aftercare needs the form checkbox or a written "YES" by text to a consent question that states the scope and the disclosures.
 3. **Nothing else counts.** No verbal consent, no assumed consent from a phone number found elsewhere, no consent for imported clients.
@@ -104,4 +104,5 @@ Section 10 (wording) can ship on its own, before the SMS work, with its own appr
 1. Privacy Policy and SMS Terms wording (Saul reviews; not legal advice), and whether to confirm the DBA question with Sacramento County.
 2. Saul's earlier Twilio support email (ticket content still unknown).
 3. When to build the SMS safeguards (on hold, as is Gmail integration).
-4. Section 10 wording change: prepared and tested locally 2026-10-15, awaiting Saul's review before deployment.
+4. Section 10 wording change: deployed 2026-10-15 after Saul's review.
+5. Client disclosure wording "Up to 3 texts per rolling 7-day period" contains a hyphen, while CLAUDE.md's rule for generated client text says no hyphens. Saul to confirm this fixed disclosure is an exception, or use "per rolling 7 day period".

@@ -62,7 +62,7 @@ Radius: 12px cards, 8px inputs and buttons. Tap targets minimum 44px, prefer 48p
 
 ## Artist Profile (public business info)
 Saul Gutierrez | Tattoo artist based in Elk Grove, CA | $250/hr
-Client facing business name: Saul G Tattoos. MACRI is the app and assistant; its future business name is undecided. Do not describe Saul as running a permitted or registered studio, or imply a registered DBA.
+Client facing business name: Saul G Tattoos. MACRI is the app and assistant; its future business name is undecided. Do not claim an approved or permitted studio, or a registered business name (DBA), unless Saul has confirmed it; if his status changes, describe it accurately.
 Specialties: Watercolor, Black and Gray Realism, Sketch Art, Abstract, Pointillism
 Consultation: SaulsAppointments.as.me/TattooConsultation | Business email: saulgtattoos@gmail.com
 Signature: Saul Gutierrez | Tattoo Artist (Elk Grove belongs in the artist bio where relevant, not in every sign off)

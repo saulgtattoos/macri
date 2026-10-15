@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { mkClient, mkComm, loadClients } from './CRM'
-import { saveClient } from '../lib/crmService'
+import { mkClient, mkComm } from './CRM'
+import { saveClient, loadClients } from '../lib/crmService'
+import { matchClient } from '../lib/clientMatch'
 import { apiPost, claudeFetch } from '../lib/api'
-
+import { recordReplyOpened, markReplySent, loadReplies, replyId } from '../lib/replyService'
+import ReplyStatusControl from '../components/ReplyStatusControl'
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const SOURCES = [
@@ -214,73 +216,6 @@ function normalizePhone(raw) {
 
 function isValidEmail(raw) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim())
-}
-
-// ─── CRM activity helpers ─────────────────────────────────────────────────────
-
-function extractFirstName(emailText) {
-  const m = emailText?.match(/(?:Hi|Hey)[,!]?\s+([A-Za-z]+)/m)
-  return m ? m[1] : null
-}
-
-function findCRMClient(firstName) {
-  if (!firstName) return null
-  try {
-    const clients = loadClients()
-    const lower = firstName.toLowerCase()
-    return clients.find(c => c.name?.split(' ')[0]?.toLowerCase() === lower) ?? null
-  } catch { return null }
-}
-
-function logClientActivity(clientId, text) {
-  try {
-    const clients = loadClients()
-    const updated = clients.map(c => {
-      if (c.id !== clientId) return c
-      const entry = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), text }
-      return { ...c, activityLog: [entry, ...(c.activityLog || [])], updatedAt: new Date().toISOString() }
-    })
-    saveClient(updated.find(c => c.id === clientId))
-  } catch { /* silent */ }
-}
-
-function tickJourneyResponseSent(clientId) {
-  try {
-    const clients = loadClients()
-    const updated = clients.map(c => {
-      if (c.id !== clientId) return c
-      const checklist = [...(c.journeyChecklist || [false, false, false, false, false, false])]
-      if (checklist[1]) return c
-      checklist[1] = true
-      const logText = `${logDate()} Inquiry response sent.`
-      const entry   = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), text: logText }
-      return {
-        ...c,
-        journeyChecklist: checklist,
-        activityLog: [entry, ...(c.activityLog || [])],
-        updatedAt: new Date().toISOString(),
-      }
-    })
-    saveClient(updated.find(c => c.id === clientId))
-  } catch { /* silent */ }
-}
-
-function advanceToInquiryResponse(clientId) {
-  try {
-    const clients = loadClients()
-    const updated = clients.map(c => {
-      if (c.id !== clientId || c.stage !== 'Inquiry') return c
-      const logText = `${logDate()} Response sent. Stage updated to Inquiry Response.`
-      const entry   = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), text: logText }
-      return {
-        ...c,
-        stage: 'Inquiry Response',
-        activityLog: [entry, ...(c.activityLog || [])],
-        updatedAt: new Date().toISOString(),
-      }
-    })
-    saveClient(updated.find(c => c.id === clientId))
-  } catch { /* silent */ }
 }
 
 function logDate() {
@@ -507,7 +442,15 @@ export default function InquiryAssistant() {
   const [editedEmail,        setEditedEmail]        = useState(() => loadSession().editedEmail        ?? '')
   const [editedText,         setEditedText]         = useState(() => loadSession().editedText         ?? '')
   const [sentAction,         setSentAction]         = useState(null)
-
+  // Reply sent status: each generated draft has an id; Save to CRM ties it to one client.
+  const [draftId,            setDraftId]            = useState(() => loadSession().draftId ?? (loadSession().output ? crypto.randomUUID() : null))
+  const [tiedClient,         setTiedClient]         = useState(() => loadSession().tiedClient         ?? null)
+  const [replies,            setReplies]            = useState({})
+  const [clientChoice,       setClientChoice]       = useState(null)  // candidates when the client is not certain
+  // Server sends accepted for this draft (by channel), kept so a reload cannot send twice.
+  const [providerSent,       setProviderSent]       = useState(() => loadSession().providerSent       ?? {})
+  const [sendNotice,         setSendNotice]         = useState({})    // by channel: { kind, text }
+  const [sendConfirm,        setSendConfirm]        = useState(null)  // channel waiting for "send without tracking"
   const [recipientPhone, setRecipientPhone] = useState(() => loadSession().recipientPhone ?? '')
   const [smsSending,     setSmsSending]     = useState(false)
   const [logSmsToCRM,    setLogSmsToCRM]    = useState(true)
@@ -521,17 +464,16 @@ export default function InquiryAssistant() {
 
   const showCustomPrice = CUSTOM_PRICE_MODELS.has(pricingModel)
   const canGenerate     = !!source && !!timing && !!contentType && !!pricingModel && inquiry.trim().length > 10
-  const canSendSms      = isValidPhone(recipientPhone) && editedText.trim().length > 0 && !smsSending
-  const canSendEmail    = isValidEmail(recipientEmail) && editedEmail.trim().length > 0 && !emailSending
+  // A reply already accepted by Resend or Twilio for this draft cannot be sent again from here.
+  const acceptedBy = (channel) => providerSent[channel] || (replies[channel]?.provider_id ? { via: replies[channel].provider } : null)
+  const canSendSms      = isValidPhone(recipientPhone) && editedText.trim().length > 0 && !smsSending && !acceptedBy('text')
+  const canSendEmail    = isValidEmail(recipientEmail) && editedEmail.trim().length > 0 && !emailSending && !acceptedBy('email')
 
   useEffect(() => {
     if (!output) return
-    const firstName     = extractFirstName(editedEmail)
-    const crmClient     = findCRMClient(firstName)
-    const resolvedPhone = crmClient?.phone || output?.client?.phone || ''
-    const resolvedEmail = crmClient?.email || output?.client?.email || ''
-    setRecipientPhone(resolvedPhone)
-    setRecipientEmail(resolvedEmail)
+    // Prefilled from the inquiry itself, never from a CRM client guessed by first name.
+    setRecipientPhone(output?.client?.phone || '')
+    setRecipientEmail(output?.client?.email || '')
   }, [output])
 
   useEffect(() => {
@@ -543,12 +485,35 @@ export default function InquiryAssistant() {
       showOutput, source, timing, contentType, pricingModel, customPrice,
       includeConsultLink, isCoverup, inquiry, output,
       activeTab, savedToCRM, editedEmail, editedText,
-      recipientPhone, recipientEmail,
+      recipientPhone, recipientEmail, draftId, tiedClient, providerSent,
     })
   }, [showOutput, source, timing, contentType, pricingModel, customPrice,
       includeConsultLink, isCoverup, inquiry, output,
       activeTab, savedToCRM, editedEmail, editedText,
-      recipientPhone, recipientEmail])
+      recipientPhone, recipientEmail, draftId, tiedClient, providerSent])
+
+  // Recorded status of this draft's replies (after Save to CRM ties it to a client).
+  useEffect(() => {
+    if (!tiedClient?.id || !draftId) return
+    let active = true
+    loadReplies(tiedClient.id).then(({ replies: rows }) => {
+      if (!active) return
+      const mine = {}
+      for (const row of rows) if (row.id === replyId(draftId, row.channel)) mine[row.channel] = row
+      setReplies(mine)
+    })
+    return () => { active = false }
+  }, [tiedClient, draftId])
+
+  function replyFields(channel) {
+    return channel === 'email'
+      ? { id: replyId(draftId, 'email'), clientId: tiedClient?.id, channel: 'email', subject: output?.subject ?? '', body: editedEmail }
+      : { id: replyId(draftId, 'text'), clientId: tiedClient?.id, channel: 'text', subject: null, body: editedText }
+  }
+
+  function applyReplyResult(res) {
+    if (res?.ok && res.reply) setReplies(prev => ({ ...prev, [res.reply.channel]: res.reply }))
+  }
 
   useEffect(() => {
     if (output) {
@@ -561,6 +526,14 @@ export default function InquiryAssistant() {
     setError(null)
     setOutput(null)
     setSavedToCRM(false)
+    crmSaveRef.current = false
+    setDraftId(crypto.randomUUID())
+    setTiedClient(null)
+    setReplies({})
+    setClientChoice(null)
+    setProviderSent({})
+    setSendNotice({})
+    setSendConfirm(null)
     setLoading(true)
     try {
       const prompt = buildPrompt({ source, timing, contentType, pricingModel, customPrice, includeConsultLink, isCoverup, inquiry })
@@ -590,6 +563,13 @@ export default function InquiryAssistant() {
     setOutput(null)
     setError(null)
     setSavedToCRM(false)
+    setDraftId(null)
+    setTiedClient(null)
+    setReplies({})
+    setClientChoice(null)
+    setProviderSent({})
+    setSendNotice({})
+    setSendConfirm(null)
     setEditedEmail('')
     setEditedText('')
     setSentAction(null)
@@ -604,15 +584,7 @@ export default function InquiryAssistant() {
       ? `Subject: ${output.subject}\n\n${editedEmail}`
       : editedText
     await copyToClipboard(text)
-
-    const firstName = extractFirstName(editedEmail)
-    const crmClient = findCRMClient(firstName)
-    if (crmClient) {
-      const channel = type === 'email' ? 'Email' : 'Text'
-      logClientActivity(crmClient.id, `${logDate()} ${channel} copied via Inquiry Assistant.`)
-      advanceToInquiryResponse(crmClient.id)
-      tickJourneyResponseSent(crmClient.id)
-    }
+    // Copying is not sending: the client's reply status does not change.
     const action = type === 'email' ? 'copyEmail' : 'copyText'
     setSentAction(action)
     setTimeout(() => setSentAction(null), 2500)
@@ -620,28 +592,21 @@ export default function InquiryAssistant() {
 
   // ─── UPDATED: Open in Gmail uses direct Gmail compose URL ─────────────────
   function handleOpenInGmail() {
-    const firstName = extractFirstName(editedEmail)
-    const crmClient = findCRMClient(firstName)
-    const toEmail   = recipientEmail || crmClient?.email || output?.client?.email || ''
+    const toEmail   = recipientEmail || output?.client?.email || ''
     const subject   = encodeURIComponent(`Tattoo Inquiry: ${output?.client?.name || 'New Client'} | Saul Gutierrez`)
     const body      = encodeURIComponent(editedEmail)
 
     const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(toEmail)}&su=${subject}&body=${body}`
     window.open(gmailUrl, '_blank')
 
-    if (crmClient) {
-      logClientActivity(crmClient.id, `${logDate()} Email opened in Gmail via Inquiry Assistant.`)
-      advanceToInquiryResponse(crmClient.id)
-      tickJourneyResponseSent(crmClient.id)
-    }
+    // Opening is not sending: only the open is recorded; Mark as sent confirms it.
+    if (tiedClient?.id) recordReplyOpened({ ...replyFields('email'), app: 'gmail' }).then(applyReplyResult)
     setSentAction('gmail')
     setTimeout(() => setSentAction(null), 2500)
   }
 
   function handleOpenInMessages() {
-    const firstName = extractFirstName(editedEmail)
-    const crmClient = findCRMClient(firstName)
-    const phone     = recipientPhone || crmClient?.phone || output?.client?.phone || ''
+    const phone     = recipientPhone || output?.client?.phone || ''
     const body      = encodeURIComponent(editedText)
 
     const a = document.createElement('a')
@@ -651,18 +616,50 @@ export default function InquiryAssistant() {
     a.click()
     setTimeout(() => document.body.removeChild(a), 200)
 
-    if (crmClient) {
-      logClientActivity(crmClient.id, `${logDate()} Text message sent via Inquiry Assistant.`)
-      advanceToInquiryResponse(crmClient.id)
-      tickJourneyResponseSent(crmClient.id)
-    }
+    if (tiedClient?.id) recordReplyOpened({ ...replyFields('text'), app: 'messages' }).then(applyReplyResult)
     setSentAction('messages')
     setTimeout(() => setSentAction(null), 2500)
   }
 
   // ─── Twilio SMS send ────────────────────────────────────────────────────────
 
+  // Runs only after the service accepted the message (accepted, not proof of delivery).
+  // The notice always says the message went out, then whether CRM recorded it.
+  async function recordProviderAcceptance(channel, via, providerId, track) {
+    const service = via === 'resend' ? 'Resend' : 'Twilio'
+    const what = channel === 'email' ? 'Email' : 'Text'
+    const at = new Date().toISOString()
+    setProviderSent(prev => ({ ...prev, [channel]: { via, id: providerId || null, at, track } }))
+    const sent = `${what} sent: accepted by ${service}. Do not send it again.`
+    if (!track) {
+      setSendNotice(prev => ({ ...prev, [channel]: { kind: 'warn', text: `${sent} Not recorded in CRM (tracking was turned off).` } }))
+      return
+    }
+    if (!tiedClient?.id) {
+      setSendNotice(prev => ({ ...prev, [channel]: { kind: 'warn', text: `${sent} Not recorded in CRM because this draft is not saved to a client. Save to CRM to record it.` } }))
+      return
+    }
+    if (!providerId) {
+      setSendNotice(prev => ({ ...prev, [channel]: { kind: 'warn', text: `${sent} No message id came back, so CRM did not record it. Use Mark as sent.` } }))
+      return
+    }
+    const res = await markReplySent({ ...replyFields(channel), via, providerId })
+    applyReplyResult(res)
+    setSendNotice(prev => ({ ...prev, [channel]: res.ok
+      ? { kind: 'ok', text: `${sent} Recorded for ${tiedClient.name || 'this client'}.` }
+      : { kind: 'warn', text: `${sent} The CRM record did not save. Use Mark as sent.` } }))
+  }
+
+  // Before a server send: an untied draft would go out untracked, so ask first.
+  function requestServerSend(channel) {
+    if (acceptedBy(channel)) return
+    const track = channel === 'email' ? logEmailToCRM : logSmsToCRM
+    if (track && !tiedClient?.id) { setSendConfirm(channel); return }
+    return channel === 'email' ? handleSendViaGmail() : handleSendViaTwilio()
+  }
+
   async function handleSendViaTwilio() {
+    setSendConfirm(null)
     if (!canSendSms) return
     setSmsSending(true)
 
@@ -675,26 +672,12 @@ export default function InquiryAssistant() {
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error ?? `Send failed (${res.status})`)
 
-      toast.success('Message sent')
-
-      if (logSmsToCRM) {
-        const firstName = extractFirstName(editedEmail)
-        const crmClient = findCRMClient(firstName)
-        if (crmClient) {
-          const templateName = TIMINGS.find(t => t.id === timing)?.label ?? 'Inquiry'
-          logClientActivity(
-            crmClient.id,
-            `${logDate()} Text sent via MACRI (${templateName} template). SID: ${data.sid ?? 'unknown'}`
-          )
-          advanceToInquiryResponse(crmClient.id)
-          tickJourneyResponseSent(crmClient.id)
-        }
-      }
+      await recordProviderAcceptance('text', 'twilio', data.sid, logSmsToCRM)
 
       setSentAction('twilio')
       setTimeout(() => setSentAction(null), 2500)
     } catch (err) {
-      toast.error(err.message ?? 'Send failed')
+      setSendNotice(prev => ({ ...prev, text: { kind: 'error', text: `Text not sent: ${err.message ?? 'send failed'}. Nothing was recorded.` } }))
     } finally {
       setSmsSending(false)
     }
@@ -703,11 +686,11 @@ export default function InquiryAssistant() {
   // ─── Gmail (Nodemailer) send ────────────────────────────────────────────────
 
   async function handleSendViaGmail() {
+    setSendConfirm(null)
     if (!canSendEmail) return
     setEmailSending(true)
 
     const clientName = output?.client?.name || ''
-    const firstName  = clientName.split(' ')[0] || extractFirstName(editedEmail) || 'Client'
     const subject    = `Tattoo Inquiry: ${clientName || 'New Client'} | Saul Gutierrez`
 
     try {
@@ -720,24 +703,12 @@ export default function InquiryAssistant() {
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error ?? `Send failed (${res.status})`)
 
-      toast.success('Email sent')
-
-      if (logEmailToCRM) {
-        const crmClient = findCRMClient(firstName)
-        if (crmClient) {
-          logClientActivity(
-            crmClient.id,
-            `${logDate()} Email sent via MACRI. Subject: ${subject}`
-          )
-          advanceToInquiryResponse(crmClient.id)
-          tickJourneyResponseSent(crmClient.id)
-        }
-      }
+      await recordProviderAcceptance('email', 'resend', data.id, logEmailToCRM)
 
       setSentAction('emailSent')
       setTimeout(() => setSentAction(null), 2500)
     } catch (err) {
-      toast.error(err.message ?? 'Email send failed')
+      setSendNotice(prev => ({ ...prev, email: { kind: 'error', text: `Email not sent: ${err.message ?? 'send failed'}. Nothing was recorded.` } }))
     } finally {
       setEmailSending(false)
     }
@@ -745,34 +716,39 @@ export default function InquiryAssistant() {
 
   // ─── Save to CRM ────────────────────────────────────────────────────────────
 
+  // Save to CRM: an existing client is chosen only by one unambiguous email match; anything
+  // less certain stops and asks Saul (never a first name guess).
   async function handleSaveToCRM() {
     if (savedToCRM || !output || crmSaveRef.current) return
+    const c = output.client ?? {}
+    const clients = await loadClients()
+    const match = matchClient(clients, {
+      name:  c.name,
+      email: c.email || recipientEmail,
+      phone: c.phone || recipientPhone,
+    })
+    if (match.decision === 'existing') return saveToClient(match.client)
+    if (match.decision === 'new') return saveToClient(null)
+    setClientChoice(match.candidates)
+  }
+
+  async function saveToClient(existing) {
+    if (savedToCRM || !output || crmSaveRef.current) return
     crmSaveRef.current = true
+    setClientChoice(null)
 
     const c   = output.client ?? {}
     const now = new Date().toISOString()
 
     const newComms = []
-    if (editedEmail) newComms.push(mkComm({ channel: 'Email',        subject: output.subject ?? '', body: editedEmail, timestamp: now }))
-    if (editedText)  newComms.push(mkComm({ channel: 'Text Message', body: editedText, timestamp: now }))
+    if (editedEmail) newComms.push(mkComm({ channel: 'Email',        subject: output.subject ?? '', body: editedEmail, timestamp: now, replyId: replyId(draftId, 'email') }))
+    if (editedText)  newComms.push(mkComm({ channel: 'Text Message', body: editedText, timestamp: now, replyId: replyId(draftId, 'text') }))
 
     try {
-      const clients     = await loadClients()
-      const clientName  = c.name  || ''
-      const clientEmail = c.email || ''
-
-      let existingIdx = -1
-      let saveResult = { ok: false }
-      if (clientName) {
-        const first = clientName.split(' ')[0].toLowerCase()
-        existingIdx = clients.findIndex(cl => cl.name?.split(' ')[0]?.toLowerCase() === first)
-      }
-      if (existingIdx < 0 && clientEmail) {
-        existingIdx = clients.findIndex(cl => cl.email?.toLowerCase() === clientEmail.toLowerCase())
-      }
-
-      if (existingIdx >= 0) {
-        const existing = clients[existingIdx]
+      let saveResult
+      let savedClient
+      if (existing) {
+        // The reply goes into Communications; the client's own notes are left as they are.
         const updated = {
           ...existing,
           communications: [...newComms, ...(existing.communications || [])],
@@ -780,15 +756,15 @@ export default function InquiryAssistant() {
             { id: crypto.randomUUID(), timestamp: now, text: `${logDate()} Response logged from Inquiry Assistant.` },
             ...(existing.activityLog || []),
           ],
-          notes: editedEmail || editedText || existing.notes || '',
           updatedAt: now,
         }
         saveResult = await saveClient(updated)
+        savedClient = { id: existing.id, name: existing.name || c.name || '' }
       } else {
         const client = mkClient({
-          name:        clientName,
-          email:       clientEmail,
-          phone:       c.phone      || '',
+          name:        c.name       || '',
+          email:       c.email      || recipientEmail || '',
+          phone:       c.phone      || recipientPhone || '',
           instagram:   c.instagram  || '',
           tattooIdea:  c.tattooIdea || '',
           style:       c.style      || '',
@@ -804,13 +780,28 @@ export default function InquiryAssistant() {
           ],
         })
         saveResult = await saveClient(client)
+        savedClient = { id: client.id, name: client.name }
       }
 
-      if (!saveResult.ok) toast.error('Saved on this device only. Not saved to the database.')
       setSavedToCRM(true)
-      clearSession()
-      const savedClientId = existingIdx >= 0 ? clients[existingIdx].id : clientName
-      setTimeout(() => navigate('/crm', { state: { highlightClientId: savedClientId } }), 1200)
+      if (!saveResult.ok) {
+        toast.error('Saved on this device only. Not saved to the database, so reply status cannot be tracked yet.')
+        return
+      }
+      setTiedClient(savedClient)
+      // A reply the service already accepted before saving is recorded now (no second send).
+      for (const channel of ['email', 'text']) {
+        const sent = providerSent[channel]
+        if (!sent?.id || sent.track === false) continue
+        const fields = channel === 'email'
+          ? { id: replyId(draftId, 'email'), clientId: savedClient.id, channel, subject: output.subject ?? '', body: editedEmail }
+          : { id: replyId(draftId, 'text'), clientId: savedClient.id, channel, subject: null, body: editedText }
+        const res = await markReplySent({ ...fields, via: sent.via, providerId: sent.id })
+        applyReplyResult(res)
+        setSendNotice(prev => ({ ...prev, [channel]: res.ok
+          ? { kind: 'ok', text: `Earlier send (accepted by ${sent.via === 'resend' ? 'Resend' : 'Twilio'}) is now recorded for ${savedClient.name || 'this client'}.` }
+          : { kind: 'warn', text: 'The earlier send could not be recorded. Use Mark as sent.' } }))
+      }
     } catch (err) {
       console.error('[MACRI] CRM save failed:', err)
       crmSaveRef.current = false
@@ -859,6 +850,88 @@ export default function InquiryAssistant() {
     boxSizing: 'border-box',
     letterSpacing: '0.04em',
   })
+
+  const noticeColor = { ok: '#7aab8f', warn: 'var(--gold)', error: '#f09595' }
+  const panelStyle = { marginTop: '14px', padding: '12px 14px', background: 'var(--surface2)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }
+  const smallBtn = (primary) => ({
+    minHeight: '40px', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', textAlign: 'left',
+    fontFamily: 'var(--font-mono)', fontSize: '11px',
+    background: primary ? 'rgba(201,169,110,0.12)' : 'var(--bg)',
+    border: `1px solid ${primary ? 'var(--gold)' : 'rgba(255,255,255,0.08)'}`,
+    color: primary ? 'var(--gold)' : 'var(--text)',
+  })
+
+  // Shown after a server send attempt: always says whether it went out and whether CRM recorded it.
+  const sendNoticeLine = (channel) => {
+    const sent = providerSent[channel]
+    // After a reload the notice is gone but the send happened: say so again.
+    const notice = sendNotice[channel] || (sent && !replies[channel]?.provider_id && {
+      kind: 'warn',
+      text: `${channel === 'email' ? 'Email' : 'Text'} already sent: accepted by ${sent.via === 'resend' ? 'Resend' : 'Twilio'}. Do not send it again. ${sent.track === false ? 'Not recorded in CRM (tracking was turned off).' : 'Not recorded in CRM yet.'}`,
+    })
+    return notice && (
+      <p role="status" style={{ marginTop: '12px', fontFamily: 'var(--font-body)', fontSize: '13px', lineHeight: 1.5, color: noticeColor[notice.kind] }}>
+        {notice.text}
+      </p>
+    )
+  }
+
+  // Before a server send of a draft not saved to a client.
+  const sendConfirmPanel = (channel) => sendConfirm === channel && (
+    <div style={panelStyle}>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text)', lineHeight: 1.5 }}>
+        This draft is not saved to a client. If you send now, the {channel === 'email' ? 'email' : 'text'} will go out but will not be tracked in CRM.
+      </span>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <button type="button" style={smallBtn(true)} onClick={() => { setSendConfirm(null); handleSaveToCRM() }}>Save to CRM first</button>
+        <button type="button" style={smallBtn(false)} onClick={() => (channel === 'email' ? handleSendViaGmail() : handleSendViaTwilio())}>Send without tracking</button>
+        <button type="button" style={smallBtn(false)} onClick={() => setSendConfirm(null)}>Cancel</button>
+      </div>
+    </div>
+  )
+
+  // When the client is not certain: Saul picks the existing client or a new one.
+  const clientChoicePanel = () => clientChoice && (
+    <div style={panelStyle}>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text)', lineHeight: 1.5 }}>
+        Which client is this reply for? MACRI found possible matches but is not certain.
+      </span>
+      {clientChoice.map(({ client: cl, reasons }) => (
+        <button key={cl.id} type="button" style={smallBtn(false)} onClick={() => saveToClient(cl)}>
+          {cl.name || 'Unnamed'}{cl.email ? ` | ${cl.email}` : ''}{cl.stage ? ` | ${cl.stage}` : ''}
+          <span style={{ display: 'block', color: 'var(--muted)', marginTop: '2px' }}>Matches on {reasons.join(', ')}</span>
+        </button>
+      ))}
+      <button type="button" style={smallBtn(true)} onClick={() => saveToClient(null)}>
+        New client{output?.client?.name ? `: ${output.client.name}` : ''}
+      </button>
+      <button type="button" style={smallBtn(false)} onClick={() => setClientChoice(null)}>Cancel</button>
+    </div>
+  )
+
+  const replyStatusBlock = (channel) => (
+    <div style={{ marginTop: '14px', padding: '12px 14px', background: 'var(--surface2)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {tiedClient ? (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--muted)' }}>
+            <span>Saved to CRM: <span style={{ color: 'var(--text)' }}>{tiedClient.name || 'Client'}</span></span>
+            <button
+              type="button"
+              onClick={() => navigate('/crm', { state: { highlightClientId: tiedClient.id } })}
+              style={{ background: 'none', border: 'none', padding: '6px 0', color: 'var(--gold)', fontFamily: 'var(--font-mono)', fontSize: '11px', cursor: 'pointer' }}
+            >
+              Open in CRM
+            </button>
+          </div>
+          <ReplyStatusControl {...replyFields(channel)} reply={replies[channel]} onChange={applyReplyResult} />
+        </>
+      ) : (
+        <span style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted)' }}>
+          Save to CRM to track whether this reply was sent.
+        </span>
+      )}
+    </div>
+  )
 
   const logCRMCheckbox = (checked, onToggle) => (
     <div
@@ -1141,7 +1214,7 @@ export default function InquiryAssistant() {
 
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
-                        onClick={handleSendViaGmail}
+                        onClick={() => requestServerSend('email')}
                         disabled={!canSendEmail}
                         style={{
                           ...actionBtnBase,
@@ -1162,7 +1235,7 @@ export default function InquiryAssistant() {
                           minWidth: '120px',
                         }}
                       >
-                        {emailSending ? 'Sending…' : sentAction === 'emailSent' ? '✓ Sent' : 'Send Email'}
+                        {emailSending ? 'Sending…' : acceptedBy('email') ? 'Accepted by Resend' : 'Send Email'}
                       </button>
                       {sentAction === 'emailSent' && <CountdownRing />}
                     </div>
@@ -1215,6 +1288,11 @@ export default function InquiryAssistant() {
                     </button>
                   </div>
 
+                  {sendConfirmPanel('email')}
+                  {sendNoticeLine('email')}
+                  {clientChoicePanel()}
+                  {replyStatusBlock('email')}
+
                   {isValidEmail(recipientEmail) && logCRMCheckbox(logEmailToCRM, () => setLogEmailToCRM(v => !v))}
                 </>
               )}
@@ -1253,7 +1331,7 @@ export default function InquiryAssistant() {
 
                     <div style={{ position: 'relative', display: 'inline-flex' }}>
                       <button
-                        onClick={handleSendViaTwilio}
+                        onClick={() => requestServerSend('text')}
                         disabled={!canSendSms}
                         style={{
                           ...actionBtnBase,
@@ -1274,7 +1352,7 @@ export default function InquiryAssistant() {
                           minWidth: '120px',
                         }}
                       >
-                        {smsSending ? 'Sending…' : sentAction === 'twilio' ? '✓ Sent' : 'Send Text'}
+                        {smsSending ? 'Sending…' : acceptedBy('text') ? 'Accepted by Twilio' : 'Send Text'}
                       </button>
                       {sentAction === 'twilio' && <CountdownRing />}
                     </div>
@@ -1326,6 +1404,11 @@ export default function InquiryAssistant() {
                         : 'Save to CRM'}
                     </button>
                   </div>
+
+                  {sendConfirmPanel('text')}
+                  {sendNoticeLine('text')}
+                  {clientChoicePanel()}
+                  {replyStatusBlock('text')}
 
                   {isValidPhone(recipientPhone) && logCRMCheckbox(logSmsToCRM, () => setLogSmsToCRM(v => !v))}
                 </>

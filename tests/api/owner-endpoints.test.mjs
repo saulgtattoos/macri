@@ -169,6 +169,21 @@ test('send-email: owner with bad recipient is 400', async () => {
   assert.equal(paidCalls(calls).length, 0)
 })
 
+test('send-email: success returns the Resend id (accepted, not delivered); failure returns no success', async () => {
+  const ok = stubFetch([[u => u.includes('resend.com'), () => json({ id: 're_test_123' })]])
+  const res = mockRes()
+  await sendEmail(mockReq({ headers: ownerHeaders(), body: { to: 'synthetic@example.test', subject: 'Hi', body: 'Body' } }), res)
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(res.body, { success: true, id: 're_test_123' })
+  assert.equal(paidCalls(ok).length, 1)
+
+  stubFetch([[u => u.includes('resend.com'), () => json({ name: 'validation_error', message: 'Invalid from address' }, 422)]])
+  const bad = mockRes()
+  await sendEmail(mockReq({ headers: ownerHeaders(), body: { to: 'synthetic@example.test', subject: 'Hi', body: 'Body' } }), bad)
+  assert.equal(bad.statusCode, 500)
+  assert.equal(bad.body.success, undefined)
+})
+
 test('concierge: forwards allowed fields with the shared secret header', async () => {
   const calls = stubFetch([[u => u.includes('n8n.test'), () => json({ message: 'queued' })]])
   const res = mockRes()

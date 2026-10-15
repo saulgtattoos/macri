@@ -11,6 +11,8 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { apiPost } from '../lib/api'
 import { localDateISO } from '../lib/localDate'
+import { loadReplies } from '../lib/replyService'
+import ReplyStatusControl from '../components/ReplyStatusControl'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -726,7 +728,7 @@ function SpeakerButton({ active = false, onClick }) {
 
 // ─── ClientDrawer ─────────────────────────────────────────────────────────────
 
-function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection }) {
+function ClientDrawer({ isOpen, client, onUpdate, onSync, onDelete, onClose, jumpSection }) {
   const navigate = useNavigate()
   const isMobile = useIsMobile()
 
@@ -737,6 +739,7 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
   const [commLogOpen,          setCommLogOpen]          = useState(false)
   const [commForm,             setCommForm]             = useState({ channel: 'Text Message', subject: '', body: '' })
   const [expandedComms,        setExpandedComms]        = useState({})
+  const [replyRows,            setReplyRows]            = useState({})
   const [noteInput,            setNoteInput]            = useState('')
   const [isListening,          setIsListening]          = useState(false)
   const [logSessionOpen,       setLogSessionOpen]       = useState(false)
@@ -811,6 +814,16 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
     }, 350)
     return () => clearTimeout(timer)
   }, [isOpen, jumpSection])
+
+  // Recorded sent status for replies saved from Inquiry Assistant (keyed by reply id).
+  useEffect(() => {
+    if (!isOpen || !client?.id) return
+    let active = true
+    loadReplies(client.id).then(({ replies }) => {
+      if (active) setReplyRows(Object.fromEntries(replies.map(r => [r.id, r])))
+    })
+    return () => { active = false }
+  }, [isOpen, client?.id])
 
   if (!client) return null
 
@@ -949,6 +962,13 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
     rec.onerror = () => setIsListening(false)
     rec.onend   = () => setIsListening(false)
     rec.start()
+  }
+
+  function applyReplyResult(res) {
+    if (!res?.ok) return
+    if (res.reply) setReplyRows(p => ({ ...p, [res.reply.id]: res.reply }))
+    // The database already saved the client; only refresh this device's copy.
+    if (res.client) onSync?.({ ...client, ...res.client })
   }
 
   function addCommEntry() {
@@ -1504,8 +1524,9 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                 {commEntries.map(entry => {
                   const isEmail   = entry.channel === 'Email'
                   const expanded  = expandedComms[entry.id]
-                  const isDraft   = isEmail && entry.editable === true
-                  const isSent    = isEmail && entry.editable === false
+                  // Replies with a replyId use the recorded sent status; older entries keep their badge.
+                  const isDraft   = !entry.replyId && isEmail && entry.editable === true
+                  const isSent    = !entry.replyId && isEmail && entry.editable === false
                   const isEditing = editingCommId === entry.id
                   const isPendingDelete = deleteCommTarget === entry.id
 
@@ -1605,6 +1626,19 @@ function ClientDrawer({ isOpen, client, onUpdate, onDelete, onClose, jumpSection
                           {expanded ? '▲' : '▼'}
                         </span>
                       </div>
+                      {entry.replyId && (
+                        <div style={{ padding: '0 14px 12px' }}>
+                          <ReplyStatusControl
+                            id={entry.replyId}
+                            clientId={client.id}
+                            channel={isEmail ? 'email' : 'text'}
+                            subject={isEmail ? (entry.subject || '') : null}
+                            body={entry.body}
+                            reply={replyRows[entry.replyId]}
+                            onChange={applyReplyResult}
+                          />
+                        </div>
+                      )}
                       {isPendingDelete && (
                         <div style={{
                           background: 'rgba(240,149,149,0.08)',
@@ -3346,6 +3380,11 @@ export default function CRM() {
     saveClient(updatedClient)
   }
 
+  // For changes the database already made (reply status): update this device only.
+  function handleClientSync(updatedClient) {
+    persist(clients.map(c => c.id === updatedClient.id ? updatedClient : c))
+  }
+
   function handleDeleteClient(id) {
     persist(clients.filter(c => c.id !== id))
     deleteClient(id)
@@ -3763,6 +3802,7 @@ export default function CRM() {
         isOpen={drawerOpen}
         client={liveEditTarget}
         onUpdate={handleClientUpdate}
+        onSync={handleClientSync}
         onDelete={handleDeleteClient}
         onClose={() => { setDrawerOpen(false); setEditTarget(null); setJumpSection(null) }}
         jumpSection={jumpSection}

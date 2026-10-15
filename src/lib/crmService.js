@@ -95,3 +95,15 @@ export async function seedFromLocalStorage() {
   }
   return list.length
 }
+// Puts a client row returned by a database function into the device copy, so a later
+// whole client save from this device does not overwrite what the function changed.
+export function cacheClientRow(row) {
+  if (!row?.id) return null
+  const client = fromDB(row)
+  const list = lsRead()
+  const idx = list.findIndex((c) => c.id === client.id)
+  if (idx >= 0) list[idx] = { ...list[idx], ...client }
+  else list.push(client)
+  lsWrite(list)
+  return idx >= 0 ? list[idx] : client
+}

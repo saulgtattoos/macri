@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   const resend = new Resend(process.env.RESEND_API_KEY)
 
   try {
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: 'Saul Gutierrez <onboarding@resend.dev>',
       to,
       subject,
@@ -34,7 +34,8 @@ export default async function handler(req, res) {
 
     if (error) throw new Error(error.message)
 
-    return res.status(200).json({ success: true })
+    // Resend accepted the email (not proof of delivery); its id is kept on the reply record.
+    return res.status(200).json({ success: true, id: data?.id ?? null })
   } catch (err) {
     console.error('Resend error:', err)
     return res.status(500).json({ error: err.message })

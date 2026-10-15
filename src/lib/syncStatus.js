@@ -17,6 +17,7 @@ const TABLE_LABELS = {
   macri_agent_queue: 'Agent queue',
   studio_inventory_v1: 'Studio inventory',
   studio_cart_v1: 'Studio cart',
+  macri_replies: 'Reply status',
 }
 
 export function tableLabel(table) {

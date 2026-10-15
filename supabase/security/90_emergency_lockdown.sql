@@ -16,7 +16,8 @@ declare
     'macri_agent_queue', 'macri_cart', 'macri_colorlab_brands', 'macri_colorlab_inks',
     'macri_colorlab_palettes', 'macri_content_drafts', 'macri_content_hashtags',
     'macri_expenses', 'macri_finance_goals', 'macri_inventory', 'macri_session_prep',
-    'studio_cart_v1', 'studio_inventory_v1'
+    'studio_cart_v1', 'studio_inventory_v1',
+    'macri_replies'  -- from 07_replies.sql (skipped if absent); restore with 02 then 07
   ];
 begin
   foreach t in array tables loop
@@ -26,6 +27,20 @@ begin
     end loop;
     execute format('alter table public.%I enable row level security', t);
     execute format('revoke all on table public.%I from anon', t);
+  end loop;
+end $$;
+
+-- The reply functions from 07 run with elevated rights, so pause them too (07 grants them again).
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'public.reply_record_opened(text, text, text, text, text, text)',
+    'public.reply_mark_sent(text, text, text, text, text, text, text)',
+    'public.reply_undo_sent(text)'
+  ] loop
+    continue when to_regprocedure(f) is null;
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
   end loop;
 end $$;
 

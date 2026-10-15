@@ -1,6 +1,6 @@
 # Spec for review: reply sent status, and "Your studio at a glance"
 
-Status: DRAFT for Saul's review (2026-10-14). Not approved to build. No live database change expected.
+Status: Part 1 approved to build on the test project (2026-10-14); not deployed. Part 2 awaits review. No live database change expected.
 
 ## Part 1. Opened is not sent
 
@@ -65,6 +65,19 @@ Each generated draft gets an id when it is generated (editing keeps the same id)
 - No migration. Existing journey ticks, stages, and log entries are left as they are.
 - Replies saved before this change show "status not recorded".
 - Anywhere MACRI counts pending replies, the label says it reflects what is recorded in MACRI.
+
+### Choosing the client (added 2026-10-14, Saul's decision)
+- Never select an existing client by first name alone.
+- Auto select only when exactly one client has the inquiry's email and no other client matches the same phone or full name.
+- Otherwise, when any client matches (email, phone, full name, or first name), stop and let Saul pick a listed client or "New client". No match at all creates a new client.
+- Recipient email and phone are prefilled only from the inquiry, never from a CRM client guessed by name.
+- Save to CRM adds the reply to Communications and leaves an existing client's notes unchanged.
+
+### Server send safeguards (added 2026-10-14)
+- A draft not saved to a client asks first: "Save to CRM first", "Send without tracking", or "Cancel".
+- After a send attempt, the notice says plainly: not sent (nothing recorded); or sent and accepted by Resend/Twilio, then whether CRM recorded it.
+- Once accepted, the send button for that draft shows "Accepted by Resend/Twilio" and stays disabled (also after a reload). A new draft is needed to send again.
+- A send accepted before Save to CRM is recorded on that client when the draft is saved (unless tracking was turned off).
 
 ### Tests
 - Unit tests for the reply status rules (pure module): open, mark sent, duplicate confirmation, undo with unchanged stage, undo after the client moved on, undo leaving later activity intact, server send success and failure.

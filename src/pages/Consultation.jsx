@@ -4,18 +4,14 @@ import { mkClient } from './CRM'
 import { loadClients, saveClient } from '../lib/crmService'
 import { ttsFetch } from '../lib/api'
 import { CLIENT_DRAFT_KEY, OWNER_DRAFT_KEY, CHANNEL_NAME, SHARED_DEVICE_MAX_AGE_MS, writeDraft, readDraft, clearDraft, ageLabel } from '../lib/consultationDraft'
-
-// One time owner authorization for a shared device client tab to resume a saved draft.
-const RESUME_KEY = 'macri_consultation_resume'
+import {
+  createResumeHandoff, isFromOwnClientWindow, mergeClientAnswers, sameConsultation,
+  MSG_CLIENT_READY, MSG_RESUME, MSG_OWNER_PAGE_READY, MSG_ANSWERS_RESENT,
+} from '../lib/clientResume'
+import { OWNER_ONLY_FIELDS, OWNER_MANAGED_FIELDS } from '../constants/consultationFields'
 
 function postToClientTabs(message) {
   try { const ch = new BroadcastChannel(CHANNEL_NAME); ch.postMessage(message); ch.close() } catch { /* no channel support */ }
-}
-
-// Lets the Client Mode tab resume its saved draft once (within a minute), then tells it to.
-function authorizeClientResume() {
-  try { localStorage.setItem(RESUME_KEY, String(Date.now())) } catch { /* storage unavailable */ }
-  postToClientTabs({ type: 'RESUME_CLIENT_DRAFT' })
 }
 
 // The client form waiting on this device, if any: { exists, age } (never its contents).
@@ -57,12 +53,15 @@ const defaultForm = {
   executionPlan: '',
 }
 
+// Fields Client Mode may send (owner only fields excluded; see src/constants/consultationFields.js).
+const CLIENT_ANSWER_KEYS = Object.keys(defaultForm).filter(k => !OWNER_ONLY_FIELDS.includes(k))
+
 const STEPS = [
   { emoji: '👤', label: 'Client Info' },
   { emoji: '🎨', label: 'The Vision' },
   { emoji: '📐', label: 'Design Details' },
-  { emoji: '🎵', label: 'The Experience' },
   { emoji: '🏥', label: 'Health and Skin' },
+  { emoji: '🎵', label: 'The Experience' },
   { emoji: '💰', label: 'Pricing and Deposit' },
   { emoji: '📋', label: 'Client Summary' },
   { emoji: '🔐', label: 'Artist Vault' },
@@ -226,6 +225,12 @@ function generateClientPDF(c) {
 // ─── Consultation ──────────────────────────────────────────────────────────────
 
 export default function Consultation() {
+  // A consultation in progress was reloaded from the saved draft: health and comfort answers are
+  // never stored, so they are missing unless the waiting Client Mode window sends them again.
+  const [reloadedConsultation] = useState(() => {
+    const d = readDraft(localStorage, DRAFT_KEY)
+    return d.status === 'valid' && !!d.data?.name?.trim()
+  })
   const [formData, setFormData] = useState(() => {
     const d = readDraft(localStorage, DRAFT_KEY)
     if (d.status === 'saved') { clearDraft(localStorage, DRAFT_KEY); return defaultForm }
@@ -252,10 +257,15 @@ export default function Consultation() {
   const [savedConsult, setSavedConsult]     = useState(null)
   const [savedConsultOk, setSavedConsultOk] = useState(true)
   const clientWin                           = useRef(null)
+  // The Client Mode window whose answers this page received, so the "saved" notice still reaches
+  // it after this page was reloaded (when clientWin is lost). Not used for resuming.
+  const answeredClientWin                   = useRef(null)
   // One save at a time: a second click while saving would pass the duplicate check
   // before the first save lands and create a duplicate client.
   const savingRef                           = useRef(false)
   const [clientWinOpen, setClientWinOpen]   = useState(false)
+  const [clientWinBlocked, setClientWinBlocked] = useState(false)
+  const [resumeHandoff]                     = useState(createResumeHandoff)
   const imageURLs                           = useRef({})
   const fileInputRef                        = useRef(null)
   const [searchParams]                      = useSearchParams()
@@ -277,9 +287,13 @@ export default function Consultation() {
     return () => { window.removeEventListener('storage', onStorage); clearTimeout(first); clearInterval(id) }
   }, [])
 
+  // Only the Client Mode window this page opened may resume the saved draft (see clientResume.js).
   function resumeClientForm() {
-    if (!clientWin.current || clientWin.current.closed) openClientMode()
-    authorizeClientResume()
+    const alreadyOpen = !!clientWin.current && !clientWin.current.closed
+    const win = alreadyOpen ? clientWin.current : openClientMode()
+    if (resumeHandoff.request(win, { alreadyOpen }) === 'send') {
+      win.postMessage({ type: MSG_RESUME }, window.location.origin)
+    }
   }
 
   function clearClientForm() {
@@ -305,13 +319,32 @@ export default function Consultation() {
   useEffect(() => {
     function handleMessage(e) {
       if (e.origin !== window.location.origin) return
-      if (e.data?.type === 'CLIENT_FORM_DATA') {
-        setFormData(prev => ({ ...prev, ...e.data.payload }))
+      // Answers only from a Client Mode window this page opened, and only client form fields.
+      if (e.data?.type === 'CLIENT_FORM_DATA' && isFromOwnClientWindow(e, window, clientWin.current)) {
+        answeredClientWin.current = e.source
+        setFormData(prev => mergeClientAnswers(prev, e.data.payload, {
+          allowedKeys: CLIENT_ANSWER_KEYS, defaults: defaultForm, ownerManagedKeys: OWNER_MANAGED_FIELDS,
+        }))
+      }
+      // Sent again by a waiting Client Mode window after this page reloaded: fill gaps only, so
+      // edits made here are never overwritten, and only for the same consultation.
+      if (e.data?.type === MSG_ANSWERS_RESENT && isFromOwnClientWindow(e, window, clientWin.current)) {
+        setFormData(prev => {
+          if (!sameConsultation(prev, e.data.payload)) return prev
+          answeredClientWin.current = e.source
+          return mergeClientAnswers(prev, e.data.payload, {
+            allowedKeys: CLIENT_ANSWER_KEYS, defaults: defaultForm, ownerManagedKeys: CLIENT_ANSWER_KEYS,
+          })
+        })
+      }
+      if (e.data?.type === MSG_CLIENT_READY && resumeHandoff.onReady(e, window.location.origin)) {
+        e.source.postMessage({ type: MSG_RESUME }, window.location.origin)
       }
     }
     window.addEventListener('message', handleMessage)
+    postToClientTabs({ type: MSG_OWNER_PAGE_READY })
     return () => window.removeEventListener('message', handleMessage)
-  }, [])
+  }, [resumeHandoff])
 
   // Prefill from CRM when clientId param is present
   useEffect(() => {
@@ -387,10 +420,15 @@ export default function Consultation() {
 
   function openClientMode() {
     const win = window.open('/consultation/client', '_blank')
-    if (!win) return
+    if (!win) {
+      setClientWinBlocked(true)
+      return null
+    }
+    setClientWinBlocked(false)
     clientWin.current = win
     setClientWinOpen(true)
     try { win.document.documentElement.requestFullscreen() } catch {}
+    return win
   }
 
   function set(field, value) {
@@ -493,10 +531,11 @@ export default function Consultation() {
     localStorage.removeItem(DRAFT_KEY)
     // Also clear the client form draft (client's name, phone, email) in case the client tab is closed.
     localStorage.removeItem('macri_consultation_client_draft')
+    setClientForm(waitingClientForm())
 
-    if (clientWin.current && !clientWin.current.closed) {
-      clientWin.current.postMessage({ type: 'CONSULTATION_SAVED' }, window.location.origin)
-    }
+    const savedNoticeTarget = [clientWin.current, answeredClientWin.current].find(w => w && !w.closed)
+    savedNoticeTarget?.postMessage({ type: 'CONSULTATION_SAVED' }, window.location.origin)
+    answeredClientWin.current = null
 
     const snapshot = { ...formData }
 
@@ -876,23 +915,6 @@ export default function Consultation() {
   function renderStep3() {
     return (
       <>
-        <Field label="Music Genre">
-          <PillToggle
-            options={MUSIC_OPTIONS}
-            value={formData.musicGenre}
-            onChange={v => set('musicGenre', v)}
-            multi
-          />
-        </Field>
-        <Field label="Specific Artists or Playlists">
-          <input
-            type="text"
-            value={formData.playlist}
-            onChange={e => set('playlist', e.target.value)}
-            placeholder="Artists, album, playlist name"
-            style={INPUT_STYLE}
-          />
-        </Field>
         <Field label="Shows or Movies for Studio TV">
           <input
             type="text"
@@ -940,13 +962,41 @@ export default function Consultation() {
             onChange={v => set('sittingEndurance', v)}
           />
         </div>
+        {/* Music closes the personal questions on a lighter note. */}
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.5, color: '#e8e6df', margin: '8px 0 16px' }}>
+          One last thing before we wrap up! What kind of music do you enjoy listening to? Any favorite artists, genres, or playlists? I want you to feel comfortable during your session, and music is part of that experience.
+        </p>
+        <Field label="Music Genre">
+          <PillToggle
+            options={MUSIC_OPTIONS}
+            value={formData.musicGenre}
+            onChange={v => set('musicGenre', v)}
+            multi
+          />
+        </Field>
+        <Field label="Specific Artists or Playlists">
+          <input
+            type="text"
+            value={formData.playlist}
+            onChange={e => set('playlist', e.target.value)}
+            placeholder="Artists, album, playlist name"
+            style={INPUT_STYLE}
+          />
+        </Field>
       </>
     )
   }
 
   function renderStep4() {
+    const healthMissing = reloadedConsultation &&
+      !['allergies', 'skinConditions', 'medications', 'previousReactions'].some(k => formData[k]?.trim())
     return (
       <>
+        {healthMissing && (
+          <p role="status" style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#c9a96e', lineHeight: 1.6, margin: '0 0 16px', padding: '10px 12px', border: '1px solid rgba(201,169,110,0.3)', borderRadius: 8 }}>
+            Health answers are not kept when this page reloads. If the client's Client Mode window is still waiting, they come back on their own; otherwise please ask the client again before saving.
+          </p>
+        )}
         <Field label="Allergies">
           <input
             type="text"
@@ -1321,6 +1371,19 @@ export default function Consultation() {
           </div>
         )}
 
+        {/* Who the client is in the chair: music first, then comfort and pace. */}
+        {(f.musicGenre?.length > 0 || f.playlist || f.tvShows || f.tattooCount || f.sittingEndurance || f.comfortNotes) && (
+          <div style={SECTION_CARD}>
+            <span style={SECTION_LABEL}>SESSION EXPERIENCE</span>
+            {row('Music', f.musicGenre?.length ? f.musicGenre.join(', ') : '')}
+            {row('Artists or Playlists', f.playlist)}
+            {row('Studio TV', f.tvShows)}
+            {row('Tattoo Experience', f.tattooCount)}
+            {row('Sitting Endurance', f.sittingEndurance)}
+            {row('Comfort Notes', f.comfortNotes)}
+          </div>
+        )}
+
         <div style={SECTION_CARD}>
           <span style={SECTION_LABEL}>PRICING AND DEPOSIT TERMS</span>
           {row('Pricing Type', f.pricingType)}
@@ -1559,8 +1622,8 @@ export default function Consultation() {
       case 0: return renderStep0()
       case 1: return renderStep1()
       case 2: return renderStep2()
-      case 3: return renderStep3()
-      case 4: return renderStep4()
+      case 3: return renderStep4()   // Health and Skin
+      case 4: return renderStep3()   // The Experience (ends with music)
       case 5: return renderStep5()
       case 6: return renderStep6()
       case 7: return renderStep7()
@@ -1626,6 +1689,11 @@ export default function Consultation() {
           <button type="button" onClick={clearClientForm} style={{ minHeight: 44, padding: '0 14px', background: 'transparent', color: '#a3a097', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer' }}>
             Clear it
           </button>
+        </div>
+      )}
+      {clientWinBlocked && (
+        <div role="alert" style={{ marginBottom: 12, padding: '12px 14px', border: '1px solid rgba(240,149,149,0.45)', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 14, color: '#f09595' }}>
+          The browser blocked the Client Mode window, so nothing was opened or resumed. Allow pop ups for this site (the blocked window icon at the right of the address bar), then press the button again.
         </div>
       )}
       <div style={{ marginBottom: 16 }}>

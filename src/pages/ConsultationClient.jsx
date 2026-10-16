@@ -3,6 +3,7 @@ import {
   CLIENT_DRAFT_KEY, CHANNEL_NAME, SHARED_DEVICE_MAX_AGE_MS, OWN_DEVICE_MAX_AGE_MS,
   writeDraft, readDraft, clearDraft, isSharedDevice, withoutMemoryOnly, ageLabel,
 } from '../lib/consultationDraft'
+import { MSG_CLIENT_READY, MSG_RESUME, MSG_ANSWERS_RESENT, isFromOpener, answersResendTarget } from '../lib/clientResume'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -34,8 +35,8 @@ const STEPS = [
   { emoji: '👤', label: 'Client Info' },
   { emoji: '🎨', label: 'The Vision' },
   { emoji: '📐', label: 'Design Details' },
-  { emoji: '🎵', label: 'The Experience' },
   { emoji: '🏥', label: 'Health and Skin' },
+  { emoji: '🎵', label: 'The Experience' },
   { emoji: '💰', label: 'Pricing and Deposit' },
   { emoji: '📋', label: 'Client Summary' },
 ]
@@ -46,30 +47,14 @@ const STYLE_OPTIONS     = ['Watercolor', 'Black and Gray Realism', 'Sketch Art',
 const COLOR_OPTIONS     = ['Full Color', 'Limited Color', 'Black and Gray']
 const ORIENT_OPTIONS    = ['Vertical', 'Horizontal', 'Wrapping', 'Flexible']
 const MUSIC_OPTIONS     = ['Hip Hop', 'Lo-Fi', 'Rock', 'R&B', 'Latin', 'Country', 'Silence', 'Other']
-const CLEARANCE_OPTIONS = ['No Issues', 'Note on File', 'Needs Clearance']
-const PRICING_OPTIONS   = ['Hourly', 'Per Session', 'Full Day', 'Shop Minimum']
-const DEPOSIT_AMT       = ['$100', '$150', '$200', '$250', 'No Deposit Required']
-const DEPOSIT_STATUS    = ['Pending', 'Paid', 'No Deposit Required']
 const SIZE_OPTIONS      = ['Small (1 to 3 inches)', 'Medium (3.5 to 6 inches)', 'Large (6.6 inches and above)']
 const EST_STYLE_OPTIONS = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading', 'Per Session', 'Fine Line', 'Simple Design']
 const HOURLY_STYLES     = ['Watercolor', 'Black and Gray Realism', 'Color Realism', 'Black and Gray Portrait', 'Stippled Shading']
 
 const DRAFT_KEY = CLIENT_DRAFT_KEY
-// Set by the owner page (signed in) to let a shared device tab resume a saved draft once.
-const RESUME_KEY = 'macri_consultation_resume'
-const RESUME_WINDOW_MS = 60 * 1000
 
 function openedByOwnerPage() {
   try { return !!window.opener && window.opener.location.origin === window.location.origin } catch { return false }
-}
-
-// Owner authorization to resume on a shared device: a fresh one time key set by the owner page.
-function consumeResumeKey() {
-  try {
-    const at = Number(localStorage.getItem(RESUME_KEY))
-    localStorage.removeItem(RESUME_KEY)
-    return at > 0 && Date.now() - at < RESUME_WINDOW_MS
-  } catch { return false }
 }
 
 // The stored answers of a draft (never the memory only fields), or null.
@@ -82,16 +67,13 @@ function storedAnswers(maxAgeMs) {
   return null
 }
 
-// What the page shows first: the empty form, the choice screen, or (shared device, owner just
-// authorized) the resumed form. Nothing from a previous draft is shown before a choice.
+// What the page shows first: the empty form or the choice screen. Nothing from a previous draft
+// is shown before a choice. A shared device resumes only when the owner page that opened this
+// window tells it to (see clientResume.js).
 function initialState(shared, maxAgeMs) {
   const d = readDraft(localStorage, DRAFT_KEY, { maxAgeMs })
   if (d.status === 'saved') clearDraft(localStorage, DRAFT_KEY)
   const exists = d.status === 'valid' || d.status === 'legacy'
-  if (exists && shared && consumeResumeKey()) {
-    const data = storedAnswers(maxAgeMs)
-    if (data) return { gate: 'form', formData: { ...defaultForm, ...data }, restored: true, pending: d, age: null }
-  }
   return {
     gate: exists ? 'choose' : 'form',
     formData: defaultForm,
@@ -216,7 +198,6 @@ export default function ConsultationClient() {
   const [showWaiting, setShowWaiting]       = useState(false)
   const [estW, setEstW]                     = useState('')
   const [estH, setEstH]                     = useState('')
-  const [estApplied, setEstApplied]         = useState(false)
   const [estStyle, setEstStyle]             = useState('')
   const [isDragging, setIsDragging]         = useState(false)
   const imageURLs                           = useRef({})
@@ -256,18 +237,25 @@ export default function ConsultationClient() {
     setGate('form')
   }
 
+  // Latest screen state and answers, for the listeners below.
+  const latest = useRef({ showWaiting: false, showThankYou: false, formData: defaultForm })
+  useEffect(() => { latest.current = { showWaiting, showThankYou, formData } }, [showWaiting, showThankYou, formData])
+
   // Messages from the owner page and changes made in other tabs of this browser.
   useEffect(() => {
     let channel = null
     try { channel = new BroadcastChannel(CHANNEL_NAME) } catch { channel = null }
     function onChannel(e) {
-      if (e.data?.type === 'RESUME_CLIENT_DRAFT' && shared && consumeResumeKey()) resumeDraft()
       if (e.data?.type === 'CLEAR_CLIENT_DRAFT') resetToEmpty()
+      // The owner page reloaded while this window waits: send the answers to it (only to the owner
+      // page that opened this window), including those kept in memory only.
+      const target = answersResendTarget(e.data, { waiting: latest.current.showWaiting, win: window })
+      target?.postMessage({ type: MSG_ANSWERS_RESENT, payload: latest.current.formData }, window.location.origin)
     }
     function onStorage(e) {
       // The draft was removed elsewhere (owner sign out detected, owner cleared it): start empty.
-      if ((e.key === DRAFT_KEY && e.newValue === null) || e.key === null) resetToEmpty()
-      if (e.key === RESUME_KEY && e.newValue && shared && consumeResumeKey()) resumeDraft()
+      // Not on the thank you screen: saving also removes the draft, and that screen holds no answers.
+      if (((e.key === DRAFT_KEY && e.newValue === null) || e.key === null) && !latest.current.showThankYou) resetToEmpty()
     }
     channel?.addEventListener('message', onChannel)
     window.addEventListener('storage', onStorage)
@@ -276,7 +264,6 @@ export default function ConsultationClient() {
       channel?.close()
       window.removeEventListener('storage', onStorage)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shared])
 
   // Inactivity: a form left untouched for 2 hours is cleared (own and shared devices).
@@ -296,6 +283,9 @@ export default function ConsultationClient() {
   useEffect(() => {
     function handleMessage(e) {
       if (e.origin !== window.location.origin) return
+      // Every owner instruction must come from the owner page that opened this window.
+      if (!isFromOpener(e, window)) return
+      if (e.data?.type === MSG_RESUME && shared) resumeDraft()
       if (e.data?.type === 'RESET_WIZARD') resetToEmpty()
       if (e.data?.type === 'CONSULTATION_SAVED') {
         // The owner has the answers now; do not leave the client's details on this device.
@@ -303,12 +293,16 @@ export default function ConsultationClient() {
         imageURLs.current = {}
         setFormData(defaultForm)
         clearDraft(localStorage, DRAFT_KEY)
+        latest.current.showThankYou = true   // before the draft removal event can arrive
         setShowThankYou(true)
         setShowWaiting(false)
       }
     }
     window.addEventListener('message', handleMessage)
+    // Tell the owner page this window is listening; it replies only if it asked this window to resume.
+    if (openedByOwnerPage()) window.opener.postMessage({ type: MSG_CLIENT_READY }, window.location.origin)
     return () => window.removeEventListener('message', handleMessage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function set(field, value) {
@@ -640,23 +634,6 @@ export default function ConsultationClient() {
     return (
       <>
         <PrivacyNote restored={restored} />
-        <Field label="Music Genre">
-          <PillToggle
-            options={MUSIC_OPTIONS}
-            value={formData.musicGenre}
-            onChange={v => set('musicGenre', v)}
-            multi
-          />
-        </Field>
-        <Field label="Specific Artists or Playlists">
-          <input
-            type="text"
-            value={formData.playlist}
-            onChange={e => set('playlist', e.target.value)}
-            placeholder="Artists, album, playlist name"
-            style={INPUT_STYLE}
-          />
-        </Field>
         <Field label="Shows or Movies for Studio TV">
           <input
             type="text"
@@ -704,6 +681,27 @@ export default function ConsultationClient() {
             onChange={v => set('sittingEndurance', v)}
           />
         </div>
+        {/* Music closes the personal questions on a lighter note. */}
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.5, color: '#e8e6df', margin: '8px 0 16px' }}>
+          One last thing before we wrap up! What kind of music do you enjoy listening to? Any favorite artists, genres, or playlists? I want you to feel comfortable during your session, and music is part of that experience.
+        </p>
+        <Field label="Music Genre">
+          <PillToggle
+            options={MUSIC_OPTIONS}
+            value={formData.musicGenre}
+            onChange={v => set('musicGenre', v)}
+            multi
+          />
+        </Field>
+        <Field label="Specific Artists or Playlists">
+          <input
+            type="text"
+            value={formData.playlist}
+            onChange={e => set('playlist', e.target.value)}
+            placeholder="Artists, album, playlist name"
+            style={INPUT_STYLE}
+          />
+        </Field>
       </>
     )
   }
@@ -747,13 +745,7 @@ export default function ConsultationClient() {
             style={{ ...INPUT_STYLE, minHeight: 60, resize: 'vertical' }}
           />
         </Field>
-        <Field label="Medical Clearance">
-          <PillToggle
-            options={CLEARANCE_OPTIONS}
-            value={formData.medicalClearance}
-            onChange={v => set('medicalClearance', v)}
-          />
-        </Field>
+        {/* Medical clearance is Saul's assessment of these answers: set on the owner page only. */}
       </>
     )
   }
@@ -776,23 +768,6 @@ export default function ConsultationClient() {
       (isHourly && minus * 250 < 100) ||
       (isPerSess && average * 250 < 100)
     )
-
-    function applyEstimate() {
-      if (isFlat && showCalc) {
-        set('estimatedTotal', String(roundTo50(shopMin(average * 250))))
-        set('estimatedHours', '')
-      } else if (isHourly && showCalc) {
-        set('estimatedHours', fmtHours(average))
-        set('estimatedTotal', String(roundTo50(shopMin(average * 250))))
-      } else if (isPerSess && showCalc) {
-        set('estimatedTotal', String(roundTo50(shopMin(average * 250))))
-        set('estimatedHours', '')
-      } else {
-        return
-      }
-      setEstApplied(true)
-      setTimeout(() => setEstApplied(false), 2000)
-    }
 
     const CARD_STYLE = {
       background: '#1e1e1b',
@@ -889,96 +864,19 @@ export default function ConsultationClient() {
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button
-              onClick={applyEstimate}
-              style={{
-                minHeight: 36,
-                padding: '0 16px',
-                background: 'transparent',
-                color: '#c9a96e',
-                border: '1px solid #c9a96e',
-                borderRadius: 8,
-                fontFamily: 'var(--font-body)',
-                fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              Apply to Estimate
-            </button>
-            {estApplied && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#7a786f' }}>
-                Applied
-              </span>
-            )}
-          </div>
         </div>
 
         <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: '#7a786f', lineHeight: 1.9, marginBottom: 20 }}>
           This estimate is a ballpark figure based on size and your specific style choice. Simpler designs may be more efficient, while complex and intricate pieces may require more time. This serves as a flexible guide to provide a clear idea of the investment involved.
         </div>
 
-        <Field label="Session Estimate Notes">
-          <textarea
-            value={formData.sessionEstimateNotes}
-            onChange={e => set('sessionEstimateNotes', e.target.value)}
-            style={{ ...INPUT_STYLE, minHeight: 90, resize: 'vertical' }}
-          />
-        </Field>
-
-        <Field label="Pricing Type">
-          <PillToggle
-            options={PRICING_OPTIONS}
-            value={formData.pricingType}
-            onChange={v => set('pricingType', v)}
-          />
-        </Field>
-        <Field label="Estimated Total">
-          <input
-            type="text"
-            value={formData.estimatedTotal}
-            onChange={e => set('estimatedTotal', e.target.value)}
-            placeholder="Dollar amount"
-            style={INPUT_STYLE}
-          />
-        </Field>
-        <Field label="Deposit Amount">
-          <PillToggle
-            options={DEPOSIT_AMT}
-            value={formData.depositAmount}
-            onChange={v => set('depositAmount', v)}
-          />
-        </Field>
-        <Field label="Deposit Status">
-          <PillToggle
-            options={DEPOSIT_STATUS}
-            value={formData.depositStatus}
-            onChange={v => set('depositStatus', v)}
-          />
-        </Field>
-        <Field label="Consultation Date">
-          <input
-            type="date"
-            value={formData.consultationDate}
-            onChange={e => set('consultationDate', e.target.value)}
-            style={INPUT_STYLE}
-          />
-        </Field>
-        <Field label="Appointment Date">
-          <input
-            type="date"
-            value={formData.appointmentDate}
-            onChange={e => set('appointmentDate', e.target.value)}
-            style={INPUT_STYLE}
-          />
-        </Field>
-        <Field label="Deposit Requirement">
-          <PillToggle
-            options={['Deposit Required', 'No Deposit Required']}
-            value={formData.clientTier}
-            onChange={v => set('clientTier', v)}
-          />
-        </Field>
+        {/* Pricing type, totals, deposit and dates are Saul's decisions: set on the owner page only. */}
+        <div style={{
+          fontFamily: 'var(--font-body)', fontSize: 14, color: '#e8e6df', lineHeight: 1.7,
+          padding: '14px 16px', borderRadius: 8, border: '1px solid rgba(201,169,110,0.25)', marginBottom: 20,
+        }}>
+          Saul will go over your estimate, deposit, and appointment details with you. Nothing here is final until he confirms it with you.
+        </div>
       </>
     )
   }
@@ -1060,6 +958,18 @@ export default function ConsultationClient() {
           </div>
         )}
 
+        {/* Who the client is in the chair: music first, then comfort and pace. */}
+        {(f.musicGenre?.length > 0 || f.playlist || f.tvShows || f.tattooCount || f.sittingEndurance) && (
+          <div style={SECTION_CARD}>
+            <span style={SECTION_LABEL}>SESSION EXPERIENCE</span>
+            {row('Music', f.musicGenre?.length ? f.musicGenre.join(', ') : '')}
+            {row('Artists or Playlists', f.playlist)}
+            {row('Studio TV', f.tvShows)}
+            {row('Tattoo Experience', f.tattooCount)}
+            {row('Sitting Endurance', f.sittingEndurance)}
+          </div>
+        )}
+
         <div style={SECTION_CARD}>
           <span style={SECTION_LABEL}>PRICING AND DEPOSIT TERMS</span>
           {row('Pricing Type', f.pricingType)}
@@ -1118,8 +1028,8 @@ export default function ConsultationClient() {
       case 0: return renderStep0()
       case 1: return renderStep1()
       case 2: return renderStep2()
-      case 3: return renderStep3()
-      case 4: return renderStep4()
+      case 3: return renderStep4()   // Health and Skin
+      case 4: return renderStep3()   // The Experience (ends with music)
       case 5: return renderStep5()
       case 6: return renderStep6()
       default: return null

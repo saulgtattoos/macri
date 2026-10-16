@@ -16,6 +16,17 @@ Current progress, decisions and open questions live in MACRI_STATUS.md. Read it 
 8. Report outcomes: what changed, what was verified, remaining limits, next practical step. Written code is not a finished task.
 9. One feature at a time. Write a short spec and confirm business rules before building anything new.
 
+## Guiding Principles (Saul, 2026-10-15)
+**MEASURE TWICE. CUT ONCE.** | **ENTER IT ONCE. USE IT EVERYWHERE.** | **BUILD LESS COMPLEXITY. CREATE MORE CAPABILITY.**
+1. Understand before building: know the real problem and how it affects the artist or client. Another feature is not automatically the answer.
+2. Inspect before creating: read existing code, components, workflows, integrations and docs first. Reuse what works, improve what needs it, never duplicate.
+3. Simplify before expanding: remove repeated actions, extra navigation, confusing screens and duplicate information. Two steps beat five.
+4. Consider the whole workflow: CRM, Consultations, Inquiry Assistant, Project Wall, Finance, Agent Queue and integrations should feel like one connected system.
+5. Verify before changing: identify effects on existing behavior, client information, privacy, authentication and data integrity. Use fictional data and the test project.
+6. Test before releasing: a passing build is not a working feature. Verify real workflows and edge cases; add regression tests for fixed problems.
+7. Release deliberately: keep development, testing and production separate. Approval rules in Working Rules 7 still apply.
+Exercise independent judgment within these boundaries: recommend better approaches, challenge assumptions, and make small safe improvements without bureaucracy. Thoughtfully engineered, not simply developed quickly.
+
 ## Stack
 React 19 + Vite + Tailwind CSS 3, React Router 7. Hosted on Vercel (macri.vercel.app). GitHub: saulgtattoos/macri (PUBLIC repository).
 Local project: ~/Desktop/macri

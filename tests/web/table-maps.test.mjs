@@ -2,7 +2,7 @@
 // real table structure (supabase/test/01_structure.sql + 06_missing_columns.sql) in an
 // in-memory Postgres. Catches fields the table does not have and values it refuses.
 
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'

@@ -1,4 +1,4 @@
-import { test, beforeEach } from 'node:test'
+import { test, beforeEach } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   setTestEnv, mockReq, mockRes, stubFetch, json, ownerHeaders, paidCalls, OTHER_TOKEN,

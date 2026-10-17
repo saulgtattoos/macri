@@ -2,7 +2,7 @@
 // rate limits, owner access, daily brief lockdown, synthetic seed) in PGlite configured like
 // a fresh Supabase project (default grants to anon/authenticated), then checks access.
 
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'

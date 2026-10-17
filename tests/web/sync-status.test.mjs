@@ -1,4 +1,4 @@
-import { test, beforeEach } from 'node:test'
+import { test, beforeEach, vi } from 'vitest'
 import assert from 'node:assert/strict'
 
 class MemoryStorage {
@@ -10,9 +10,10 @@ class MemoryStorage {
   removeItem(k) { this.m.delete(k) }
 }
 
-let n = 0
+// A new copy of the module each time, as after a page reload.
 async function freshModule() {
-  return import(`../../src/lib/syncStatus.js?fresh=${++n}`)
+  vi.resetModules()
+  return import('../../src/lib/syncStatus.js')
 }
 
 beforeEach(() => { globalThis.localStorage = new MemoryStorage() })

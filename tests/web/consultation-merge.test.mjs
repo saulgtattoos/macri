@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { mergeClientAnswers, sameConsultation } from '../../src/lib/clientResume.js'
 import { OWNER_ONLY_FIELDS, OWNER_MANAGED_FIELDS } from '../../src/constants/consultationFields.js'

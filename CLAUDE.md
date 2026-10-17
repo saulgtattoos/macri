@@ -32,7 +32,7 @@ React 19 + Vite + Tailwind CSS 3, React Router 7. Hosted on Vercel (macri.vercel
 Local project: ~/Desktop/macri
 Serverless functions in /api (Vercel): send-email.js (Resend), send-sms.js (Twilio), concierge.js (n8n relay), ai/claude.js, ai/tts.js, ai/stt.js, aftercare-link.js (all owner only), aftercare.js (public, signed links, rate limited). Shared helpers in api/_lib (not routes).
 Data: Supabase (13+ tables) with localStorage as fallback cache on reads.
-Commands: npm run dev (localhost:5173) with npm run dev:api (local /api on 3001), npm run build, npm run lint, npm test (server and database rule tests, no network).
+Commands: npm run dev (localhost:5173) with npm run dev:api (local /api on 3001), npm run build, npm run lint, npm test (Vitest: server, database rule, logic and rendered screen tests, no network; consultation screen snapshots in tests/web/__snapshots__ guard refactors).
 Test project: npm run dev:test and npm run dev:api:test use .env.test.local only (synthetic data); npm run check:access verifies database rules there.
 Local dev talks to the LIVE Supabase project. Treat saves during testing as real data.
 

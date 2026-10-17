@@ -2,7 +2,7 @@
 // set up like Supabase (roles, auth.uid from the JWT subject, owner rules from 02).
 // Synthetic data only. No real project is touched.
 
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'

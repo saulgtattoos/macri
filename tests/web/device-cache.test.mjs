@@ -1,4 +1,4 @@
-import { test, beforeEach } from 'node:test'
+import { test, beforeEach } from 'vitest'
 import assert from 'node:assert/strict'
 import { bindCacheToUser, settleUntaggedCache, wipeDeviceCache } from '../../src/lib/deviceCache.js'
 

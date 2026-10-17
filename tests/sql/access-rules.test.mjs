@@ -2,7 +2,7 @@
 // anon, authenticated and service_role roles, auth.users, auth.uid() from the JWT subject,
 // default grants to the API roles, and a leftover "allow all" policy. No real project is touched.
 
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'

@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { awaitingResponse, scheduledCounts, lowSupplies, recentActivity, periodRange, earnings, sessionDays } from '../../src/lib/homeGlance.js'
 import { localDateISO, addDaysISO, weekdayMondayFirst } from '../../src/lib/localDate.js'

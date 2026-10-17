@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   CLIENT_DRAFT_KEY, OWNER_DEVICE_KEY, MEMORY_ONLY_FIELDS, OWN_DEVICE_MAX_AGE_MS, SHARED_DEVICE_MAX_AGE_MS,

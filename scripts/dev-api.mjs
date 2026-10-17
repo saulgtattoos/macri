@@ -7,6 +7,13 @@ import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+// A local run is never a Vercel deployment, even if an env file (for example one pulled from
+// Vercel) says so. Only MACRI_LOCAL_OUTBOUND=allow can turn on email, texts, Concierge and AI here.
+for (const k of ['VERCEL', 'VERCEL_ENV']) {
+  if (process.env[k] !== undefined) console.warn(`[dev-api] ignoring ${k} from local env files`)
+  delete process.env[k]
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.API_PORT || 3001)
 const MAX_BODY = 5 * 1024 * 1024

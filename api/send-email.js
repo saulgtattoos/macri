@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { requireOwner } from './_lib/auth.js'
+import { guardOutbound } from './_lib/environment.js'
 
 const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/
 
@@ -8,6 +9,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  if (!guardOutbound(res, 'send-email')) return
   if (!(await requireOwner(req, res))) return
 
   const { to, subject, body } = req.body ?? {}

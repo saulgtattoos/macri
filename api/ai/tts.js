@@ -2,6 +2,7 @@
 
 import { allowPost, getBody, isStr } from '../_lib/http.js'
 import { requireOwner } from '../_lib/auth.js'
+import { guardOutbound } from '../_lib/environment.js'
 import { callTts, sendAudio, ASSISTANT_VOICE_ID, TTS_MODELS, NotConfiguredError } from '../_lib/upstream.js'
 
 function validSettings(v) {
@@ -13,6 +14,7 @@ function validSettings(v) {
 
 export default async function handler(req, res) {
   if (!allowPost(req, res)) return
+  if (!guardOutbound(res, 'ai/tts')) return
   if (!(await requireOwner(req, res))) return
 
   const body = getBody(req)

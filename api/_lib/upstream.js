@@ -1,4 +1,7 @@
 // Calls to paid services. Keys come only from server env (never VITE_).
+// Each call checks the production only guard first (api/_lib/environment.js).
+
+import { assertOutboundAllowed } from './environment.js'
 
 export const CLAUDE_MODELS = new Set(['claude-sonnet-4-20250514', 'claude-sonnet-4-6'])
 export const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-20250514'
@@ -14,6 +17,7 @@ export const STT_MODEL = 'scribe_v2'
 export class NotConfiguredError extends Error {}
 
 function key(name) {
+  assertOutboundAllowed()
   const v = process.env[name]
   if (!v) throw new NotConfiguredError(`${name} is not set`)
   return v

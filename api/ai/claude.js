@@ -2,12 +2,14 @@
 
 import { allowPost, getBody, isStr } from '../_lib/http.js'
 import { requireOwner } from '../_lib/auth.js'
+import { guardOutbound } from '../_lib/environment.js'
 import { callAnthropic, CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL, MAX_CLAUDE_TOKENS, NotConfiguredError } from '../_lib/upstream.js'
 
 const MAX_BODY_CHARS = 4_000_000
 
 export default async function handler(req, res) {
   if (!allowPost(req, res)) return
+  if (!guardOutbound(res, 'ai/claude', 'nested')) return
   if (!(await requireOwner(req, res))) return
 
   const body = getBody(req)

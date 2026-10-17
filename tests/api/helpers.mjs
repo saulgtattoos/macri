@@ -21,6 +21,10 @@ export function setTestEnv(extra = {}) {
     TWILIO_AUTH_TOKEN: 'test-twilio',
     TWILIO_PHONE_NUMBER: '+15555550100',
     RESEND_API_KEY: 're_test',
+    // Production deployment by default; outbound-guard.test.mjs covers the other environments.
+    VERCEL: '1',
+    VERCEL_ENV: 'production',
+    MACRI_LOCAL_OUTBOUND: undefined,
     ...extra,
   }
   for (const k of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY']) delete process.env[k]

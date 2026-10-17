@@ -3,12 +3,14 @@
 // Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER in env
 
 import { requireOwner } from './_lib/auth.js'
+import { guardOutbound } from './_lib/environment.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  if (!guardOutbound(res, 'send-sms')) return
   if (!(await requireOwner(req, res))) return
 
   const { to, body } = req.body ?? {}

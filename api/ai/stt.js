@@ -2,6 +2,7 @@
 
 import { allowPost, getBody } from '../_lib/http.js'
 import { requireOwner } from '../_lib/auth.js'
+import { guardOutbound } from '../_lib/environment.js'
 import { callStt, NotConfiguredError } from '../_lib/upstream.js'
 
 const MIME_RE = /^audio\/(webm|mp4|ogg|wav|mpeg)(;.*)?$/
@@ -9,6 +10,7 @@ const MAX_AUDIO_BYTES = 3_000_000
 
 export default async function handler(req, res) {
   if (!allowPost(req, res)) return
+  if (!guardOutbound(res, 'ai/stt')) return
   if (!(await requireOwner(req, res))) return
 
   const body = getBody(req)

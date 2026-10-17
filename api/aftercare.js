@@ -10,6 +10,7 @@ import {
   linkSecret, parseHealingResult, verifyLink,
 } from './_lib/aftercare.js'
 import { callAnthropic, callTts, sendAudio, AFTERCARE_VOICE_ID, NotConfiguredError } from './_lib/upstream.js'
+import { guardOutbound } from './_lib/environment.js'
 
 export const LIMITS = {
   ipPerHour: 20,
@@ -21,6 +22,7 @@ export const LIMITS = {
 export default async function handler(req, res) {
   if (!allowPost(req, res)) return
   res.setHeader('Cache-Control', 'no-store')
+  if (!guardOutbound(res, 'aftercare', 'public')) return
 
   const secret = linkSecret()
   if (!secret) return res.status(503).json({ error: 'unavailable' })

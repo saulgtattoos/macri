@@ -3,11 +3,13 @@
 
 import { allowPost, getBody, isStr } from './_lib/http.js'
 import { requireOwner } from './_lib/auth.js'
+import { guardOutbound } from './_lib/environment.js'
 
 const FIELDS = ['clientId', 'clientName', 'tattooIdea', 'style', 'placement', 'size', 'agentIntakeSummary']
 
 export default async function handler(req, res) {
   if (!allowPost(req, res)) return
+  if (!guardOutbound(res, 'concierge', 'message')) return
   if (!(await requireOwner(req, res))) return
 
   const url = process.env.CONCIERGE_WEBHOOK_URL

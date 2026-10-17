@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { mkClient } from './CRM'
 import { loadClients, saveClient } from '../lib/crmService'
 import { ttsFetch } from '../lib/api'
-import { CLIENT_DRAFT_KEY, OWNER_DRAFT_KEY, CHANNEL_NAME, SHARED_DEVICE_MAX_AGE_MS, writeDraft, readDraft, clearDraft, ageLabel } from '../lib/consultationDraft'
+import { CLIENT_DRAFT_KEY, OWNER_DRAFT_KEY, CHANNEL_NAME, SHARED_DEVICE_MAX_AGE_MS, writeDraft, readDraft, clearDraft, ageLabel, healthAnswersMissing } from '../lib/consultationDraft'
 import {
   createResumeHandoff, isFromOwnClientWindow, mergeClientAnswers, sameConsultation,
   MSG_CLIENT_READY, MSG_RESUME, MSG_OWNER_PAGE_READY, MSG_ANSWERS_RESENT,
@@ -266,6 +266,8 @@ export default function Consultation() {
   const [clientWinOpen, setClientWinOpen]   = useState(false)
   const [clientWinBlocked, setClientWinBlocked] = useState(false)
   const [resumeHandoff]                     = useState(createResumeHandoff)
+  // Save was pressed while health answers are missing after a reload: ask before saving.
+  const [healthSaveCheck, setHealthSaveCheck] = useState(false)
   const imageURLs                           = useRef({})
   const fileInputRef                        = useRef(null)
   const [searchParams]                      = useSearchParams()
@@ -565,7 +567,7 @@ export default function Consultation() {
     setSavedConsult(snapshot)
   }
 
-  async function saveConsultation() {
+  async function saveConsultation({ healthReviewed = false } = {}) {
     const ttsPlayer = new Audio()
     ttsPlayer.src = IOS_WAV
     ttsPlayer.play().catch(() => {})
@@ -576,6 +578,11 @@ export default function Consultation() {
       setCurrentStep(0)
       return
     }
+    if (healthAnswersMissing(formData, reloadedConsultation) && !healthReviewed) {
+      setHealthSaveCheck(true)
+      return
+    }
+    setHealthSaveCheck(false)
 
     savingRef.current = true
     try {
@@ -988,8 +995,7 @@ export default function Consultation() {
   }
 
   function renderStep4() {
-    const healthMissing = reloadedConsultation &&
-      !['allergies', 'skinConditions', 'medications', 'previousReactions'].some(k => formData[k]?.trim())
+    const healthMissing = healthAnswersMissing(formData, reloadedConsultation)
     return (
       <>
         {healthMissing && (
@@ -1596,8 +1602,23 @@ export default function Consultation() {
           </div>
         )}
 
+        {healthSaveCheck && healthAnswersMissing(formData, reloadedConsultation) ? (
+          <div role="alert" style={{ padding: '14px 16px', border: '1px solid rgba(240,149,149,0.45)', borderRadius: 8 }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#f09595', lineHeight: 1.6, margin: '0 0 12px' }}>
+              Health answers are missing. This page reloaded, so allergies, skin conditions, medications and previous reactions are empty, not confirmed. Please ask the client again before saving.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => { setHealthSaveCheck(false); setCurrentStep(3) }} style={{ minHeight: 48, flex: '1 1 200px', background: '#c9a96e', color: '#0e0e0d', border: 'none', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Go to Health and Skin
+              </button>
+              <button type="button" onClick={() => saveConsultation({ healthReviewed: true })} style={{ minHeight: 48, flex: '1 1 200px', background: 'transparent', color: '#e8e6df', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, fontFamily: 'var(--font-body)', fontSize: 14, cursor: 'pointer' }}>
+                Save without health answers
+              </button>
+            </div>
+          </div>
+        ) : (
         <button
-          onClick={saveConsultation}
+          onClick={() => saveConsultation()}
           style={{
             minHeight: 48,
             width: '100%',
@@ -1613,6 +1634,7 @@ export default function Consultation() {
         >
           Save to Studio Database
         </button>
+        )}
       </>
     )
   }

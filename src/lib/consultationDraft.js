@@ -66,3 +66,10 @@ export function ageLabel(updatedAt, now = Date.now()) {
   const hours = Math.round(mins / 60)
   return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
 }
+
+// After a reload, health answers (memory only) are gone. True when a reloaded consultation has
+// none of them, so the owner is asked to reconfirm before saving instead of saving them as empty.
+export const HEALTH_ANSWER_FIELDS = ['allergies', 'skinConditions', 'medications', 'previousReactions']
+export function healthAnswersMissing(form, reloadedConsultation) {
+  return !!reloadedConsultation && !HEALTH_ANSWER_FIELDS.some(k => typeof form?.[k] === 'string' && form[k].trim())
+}

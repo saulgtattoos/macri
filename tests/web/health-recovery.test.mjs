@@ -69,3 +69,14 @@ test('no consultation code logs form data to the console', () => {
     for (const l of logs) assert.ok(!/formData|payload|allerg|medic|health|comfort/i.test(l), `${f}: ${l}`)
   }
 })
+
+test('save asks first when a reloaded consultation has no health answers', async () => {
+  const { healthAnswersMissing } = await import('../../src/lib/consultationDraft.js')
+  assert.equal(healthAnswersMissing({ name: 'Synthetic', allergies: '' }, true), true)          // reloaded, none: ask
+  assert.equal(healthAnswersMissing({ name: 'Synthetic', allergies: '  ' }, true), true)        // blanks do not count
+  assert.equal(healthAnswersMissing({ name: 'Synthetic', medications: 'Synthetic' }, true), false)
+  assert.equal(healthAnswersMissing({ name: 'Synthetic' }, false), false)                       // not reloaded: normal form
+  assert.equal(healthAnswersMissing(null, true), true)
+  const page = readFileSync(new URL('../../src/pages/Consultation.jsx', import.meta.url), 'utf8')
+  assert.ok(page.includes('if (healthAnswersMissing(formData, reloadedConsultation) && !healthReviewed)'), 'save must check first')
+})

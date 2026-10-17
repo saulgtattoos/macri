@@ -268,6 +268,8 @@ export default function Consultation() {
   const [resumeHandoff]                     = useState(createResumeHandoff)
   // Save was pressed while health answers are missing after a reload: ask before saving.
   const [healthSaveCheck, setHealthSaveCheck] = useState(false)
+  // The last save did not reach the database: everything stays on screen to try again.
+  const [saveError, setSaveError]           = useState('')
   const imageURLs                           = useRef({})
   const fileInputRef                        = useRef(null)
   const [searchParams]                      = useSearchParams()
@@ -530,6 +532,17 @@ export default function Consultation() {
 
     const recordToSave = existingId !== null ? clients.find(c => c.id === existingId) : clients[0]
     const saveResult = recordToSave ? await saveClient(recordToSave) : { ok: false }
+    if (!saveResult.ok) {
+      // Keep the form, the drafts and the client window as they are, so nothing is lost and the
+      // answers kept only in memory (health and comfort) are still here for another try.
+      setSaveError(saveResult.deviceCopy
+        ? 'Not saved to the database. The client list could not be loaded from the database, so saving was stopped to avoid overwriting newer information. Your answers are still on this screen. Check the connection, then press Save again.'
+        : 'Not saved to the database. Your answers are still on this screen. Check the connection, then press Save again.')
+      setShowDupModal(false)
+      setDupClient(null)
+      return
+    }
+    setSaveError('')
     localStorage.removeItem(DRAFT_KEY)
     // Also clear the client form draft (client's name, phone, email) in case the client tab is closed.
     localStorage.removeItem('macri_consultation_client_draft')
@@ -1602,6 +1615,11 @@ export default function Consultation() {
           </div>
         )}
 
+        {saveError && (
+          <p role="alert" style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#f09595', lineHeight: 1.6, margin: '0 0 12px', padding: '12px 14px', border: '1px solid rgba(240,149,149,0.45)', borderRadius: 8 }}>
+            {saveError}
+          </p>
+        )}
         {healthSaveCheck && healthAnswersMissing(formData, reloadedConsultation) ? (
           <div role="alert" style={{ padding: '14px 16px', border: '1px solid rgba(240,149,149,0.45)', borderRadius: 8 }}>
             <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: '#f09595', lineHeight: 1.6, margin: '0 0 12px' }}>
